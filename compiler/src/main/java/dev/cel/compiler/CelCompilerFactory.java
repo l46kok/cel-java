@@ -14,12 +14,15 @@
 
 package dev.cel.compiler;
 
+
 import dev.cel.checker.CelChecker;
 import dev.cel.checker.CelCheckerBuilder;
 import dev.cel.checker.CelCheckerLegacyImpl;
 import dev.cel.common.CelOptions;
 import dev.cel.parser.CelParser;
+import dev.cel.parser.CelParserBuilder;
 import dev.cel.parser.CelParserImpl;
+import java.util.function.Supplier;
 
 /** Factory class for creating builders for type-checker and compiler instances. */
 public final class CelCompilerFactory {
@@ -51,6 +54,11 @@ public final class CelCompilerFactory {
   /** Combines a prebuilt {@link CelParser} and {@link CelChecker} into {@link CelCompiler}. */
   public static CelCompiler combine(CelParser celParser, CelChecker celChecker) {
     return CelCompilerImpl.combine(celParser, celChecker);
+  }
+
+  /** Combines a prebuilt {@link CelParser} and {@link CelChecker} into {@link CelCompiler}. */
+  public static Supplier<CelCompilerBuilder> combineBuilders(Supplier<CelParserBuilder> celParserBuilder, Supplier<CelCheckerBuilder> celCheckerBuilder) {
+    return CelCompilerImpl.combineBuilders(celParserBuilder, celCheckerBuilder);
   }
 
   private CelCompilerFactory() {}

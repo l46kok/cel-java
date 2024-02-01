@@ -17,18 +17,19 @@ package dev.cel.optimizer;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.collect.ImmutableSet;
-import dev.cel.bundle.Cel;
+import dev.cel.bundle.CelBuilder;
 import dev.cel.common.CelAbstractSyntaxTree;
 import dev.cel.common.CelValidationException;
 import dev.cel.common.navigation.CelNavigableAst;
 import java.util.Arrays;
+import java.util.function.Supplier;
 
 final class CelOptimizerImpl implements CelOptimizer {
-  private final Cel cel;
+  private final Supplier<CelBuilder> celBuilderFunction;
   private final ImmutableSet<CelAstOptimizer> astOptimizers;
 
-  CelOptimizerImpl(Cel cel, ImmutableSet<CelAstOptimizer> astOptimizers) {
-    this.cel = cel;
+  CelOptimizerImpl(Supplier<CelBuilder> celBuilder, ImmutableSet<CelAstOptimizer> astOptimizers) {
+    this.celBuilderFunction = celBuilder;
     this.astOptimizers = astOptimizers;
   }
 
@@ -42,8 +43,9 @@ final class CelOptimizerImpl implements CelOptimizer {
     try {
       for (CelAstOptimizer optimizer : astOptimizers) {
         CelNavigableAst navigableAst = CelNavigableAst.fromAst(ast);
-        optimizedAst = optimizer.optimize(navigableAst, cel);
-        optimizedAst = cel.check(optimizedAst).getAst();
+        CelBuilder celBuilder = celBuilderFunction.get();
+        optimizedAst = optimizer.optimize(navigableAst, celBuilder);
+        optimizedAst = celBuilder.build().check(optimizedAst).getAst();
       }
     } catch (CelValidationException e) {
       throw new CelOptimizationException(
@@ -56,17 +58,18 @@ final class CelOptimizerImpl implements CelOptimizer {
   }
 
   /** Create a new builder for constructing a {@link CelOptimizer} instance. */
-  static CelOptimizerImpl.Builder newBuilder(Cel cel) {
-    return new CelOptimizerImpl.Builder(cel);
+  static CelOptimizerImpl.Builder newBuilder(Supplier<CelBuilder> celBuilder) {
+    return new CelOptimizerImpl.Builder( celBuilder);
   }
+
 
   /** Builder class for {@link CelOptimizerImpl}. */
   static final class Builder implements CelOptimizerBuilder {
-    private final Cel cel;
+    private final Supplier<CelBuilder> celBuilder;
     private final ImmutableSet.Builder<CelAstOptimizer> astOptimizers;
 
-    private Builder(Cel cel) {
-      this.cel = cel;
+    private Builder(Supplier<CelBuilder> celBuilder) {
+      this.celBuilder = celBuilder;
       this.astOptimizers = ImmutableSet.builder();
     }
 
@@ -85,7 +88,7 @@ final class CelOptimizerImpl implements CelOptimizer {
 
     @Override
     public CelOptimizer build() {
-      return new CelOptimizerImpl(cel, astOptimizers.build());
+      return new CelOptimizerImpl(celBuilder, astOptimizers.build());
     }
   }
 }

@@ -14,34 +14,38 @@
 
 package dev.cel.optimizer;
 
-import dev.cel.bundle.Cel;
+import dev.cel.bundle.CelBuilder;
 import dev.cel.bundle.CelFactory;
-import dev.cel.checker.CelChecker;
-import dev.cel.compiler.CelCompiler;
+import dev.cel.checker.CelCheckerBuilder;
+import dev.cel.compiler.CelCompilerBuilder;
 import dev.cel.compiler.CelCompilerFactory;
-import dev.cel.parser.CelParser;
-import dev.cel.runtime.CelRuntime;
+import dev.cel.parser.CelParserBuilder;
+import dev.cel.runtime.CelRuntimeBuilder;
+import java.util.function.Supplier;
 
 /** Factory class for constructing an {@link CelOptimizer} instance. */
 public final class CelOptimizerFactory {
 
-  /** Create a new builder for constructing a {@link CelOptimizer} instance. */
-  public static CelOptimizerBuilder standardCelOptimizerBuilder(Cel cel) {
-    return CelOptimizerImpl.newBuilder(cel);
+  public static CelOptimizerBuilder standardCelOptimizerBuilder(
+      Supplier<CelBuilder> celBuilderFunction) {
+    return CelOptimizerImpl.newBuilder(celBuilderFunction);
   }
 
   /** Create a new builder for constructing a {@link CelOptimizer} instance. */
   public static CelOptimizerBuilder standardCelOptimizerBuilder(
-      CelCompiler celCompiler, CelRuntime celRuntime) {
-    return standardCelOptimizerBuilder(CelFactory.combine(celCompiler, celRuntime));
+      Supplier<CelCompilerBuilder> celCompiler, Supplier<CelRuntimeBuilder> celRuntime) {
+    return standardCelOptimizerBuilder(CelFactory.combineBuilders(celCompiler, celRuntime));
   }
 
   /** Create a new builder for constructing a {@link CelOptimizer} instance. */
   public static CelOptimizerBuilder standardCelOptimizerBuilder(
-      CelParser celParser, CelChecker celChecker, CelRuntime celRuntime) {
+      Supplier<CelParserBuilder> celParser, Supplier<CelCheckerBuilder> celChecker, Supplier<CelRuntimeBuilder> celRuntime) {
     return standardCelOptimizerBuilder(
-        CelCompilerFactory.combine(celParser, celChecker), celRuntime);
+        CelCompilerFactory.combineBuilders(celParser, celChecker), celRuntime);
   }
+
 
   private CelOptimizerFactory() {}
+
+
 }

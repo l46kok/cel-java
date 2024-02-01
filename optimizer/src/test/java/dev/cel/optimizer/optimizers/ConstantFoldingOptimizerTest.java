@@ -20,6 +20,7 @@ import static org.junit.Assert.assertThrows;
 import com.google.testing.junit.testparameterinjector.TestParameterInjector;
 import com.google.testing.junit.testparameterinjector.TestParameters;
 import dev.cel.bundle.Cel;
+import dev.cel.bundle.CelBuilder;
 import dev.cel.bundle.CelFactory;
 import dev.cel.common.CelAbstractSyntaxTree;
 import dev.cel.common.CelOptions;
@@ -40,7 +41,7 @@ import org.junit.runner.RunWith;
 
 @RunWith(TestParameterInjector.class)
 public class ConstantFoldingOptimizerTest {
-  private static final Cel CEL =
+  private static final CelBuilder CEL =
       CelFactory.standardCelBuilder()
           .addVar("x", SimpleType.DYN)
           .addVar("y", SimpleType.DYN)
@@ -49,11 +50,10 @@ public class ConstantFoldingOptimizerTest {
           .addMessageTypes(TestAllTypes.getDescriptor())
           .setContainer("dev.cel.testing.testdata.proto3")
           .addCompilerLibraries(CelOptionalLibrary.INSTANCE)
-          .addRuntimeLibraries(CelOptionalLibrary.INSTANCE)
-          .build();
+          .addRuntimeLibraries(CelOptionalLibrary.INSTANCE);
 
   private static final CelOptimizer CEL_OPTIMIZER =
-      CelOptimizerFactory.standardCelOptimizerBuilder(CEL)
+      CelOptimizerFactory.standardCelOptimizerBuilder(() -> CEL)
           .addAstOptimizers(ConstantFoldingOptimizer.getInstance())
           .build();
 
@@ -162,7 +162,7 @@ public class ConstantFoldingOptimizerTest {
   // TODO: Support folding lists with mixed types. This requires mutable lists.
   // @TestParameters("{source: 'dyn([1]) + [1.0]'}")
   public void constantFold_success(String source, String expected) throws Exception {
-    CelAbstractSyntaxTree ast = CEL.compile(source).getAst();
+    CelAbstractSyntaxTree ast = CEL.build().compile(source).getAst();
 
     CelAbstractSyntaxTree optimizedAst = CEL_OPTIMIZER.optimize(ast);
 
@@ -200,7 +200,7 @@ public class ConstantFoldingOptimizerTest {
           + " '[{}, {\"a\": 1}, {\"b\": 2}].filter(m, has(x.a))'}")
   public void constantFold_macros_macroCallMetadataPopulated(String source, String expected)
       throws Exception {
-    Cel cel =
+    CelBuilder cel =
         CelFactory.standardCelBuilder()
             .addVar("x", SimpleType.DYN)
             .addVar("y", SimpleType.DYN)
@@ -208,13 +208,12 @@ public class ConstantFoldingOptimizerTest {
             .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
             .setOptions(CelOptions.current().populateMacroCalls(true).build())
             .addCompilerLibraries(CelOptionalLibrary.INSTANCE)
-            .addRuntimeLibraries(CelOptionalLibrary.INSTANCE)
-            .build();
+            .addRuntimeLibraries(CelOptionalLibrary.INSTANCE);
     CelOptimizer celOptimizer =
-        CelOptimizerFactory.standardCelOptimizerBuilder(cel)
+        CelOptimizerFactory.standardCelOptimizerBuilder(() -> cel)
             .addAstOptimizers(ConstantFoldingOptimizer.getInstance())
             .build();
-    CelAbstractSyntaxTree ast = cel.compile(source).getAst();
+    CelAbstractSyntaxTree ast = cel.build().compile(source).getAst();
 
     CelAbstractSyntaxTree optimizedAst = celOptimizer.optimize(ast);
 
@@ -242,7 +241,7 @@ public class ConstantFoldingOptimizerTest {
       "{source: '[{}, {\"a\": 1}, {\"b\": 2}].filter(m, has({\"a\": true}.a)) == "
           + " [{}, {\"a\": 1}, {\"b\": 2}]'}")
   public void constantFold_macros_withoutMacroCallMetadata(String source) throws Exception {
-    Cel cel =
+    CelBuilder celBuilder =
         CelFactory.standardCelBuilder()
             .addVar("x", SimpleType.DYN)
             .addVar("y", SimpleType.DYN)
@@ -250,10 +249,10 @@ public class ConstantFoldingOptimizerTest {
             .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
             .setOptions(CelOptions.current().populateMacroCalls(false).build())
             .addCompilerLibraries(CelOptionalLibrary.INSTANCE)
-            .addRuntimeLibraries(CelOptionalLibrary.INSTANCE)
-            .build();
+            .addRuntimeLibraries(CelOptionalLibrary.INSTANCE);
+    Cel cel = celBuilder.build();
     CelOptimizer celOptimizer =
-        CelOptimizerFactory.standardCelOptimizerBuilder(cel)
+        CelOptimizerFactory.standardCelOptimizerBuilder(() -> celBuilder)
             .addAstOptimizers(ConstantFoldingOptimizer.getInstance())
             .build();
     CelAbstractSyntaxTree ast = cel.compile(source).getAst();
@@ -282,7 +281,7 @@ public class ConstantFoldingOptimizerTest {
   @TestParameters("{source: '[?x.?y]'}")
   @TestParameters("{source: 'TestAllTypes{single_int32: x, repeated_int32: [1, 2, 3]}'}")
   public void constantFold_noOp(String source) throws Exception {
-    CelAbstractSyntaxTree ast = CEL.compile(source).getAst();
+    CelAbstractSyntaxTree ast = CEL.build().compile(source).getAst();
 
     CelAbstractSyntaxTree optimizedAst = CEL_OPTIMIZER.optimize(ast);
 
@@ -292,14 +291,14 @@ public class ConstantFoldingOptimizerTest {
   @Test
   public void constantFold_withMacroCallPopulated_comprehensionsAreReplacedWithNotSet()
       throws Exception {
-    Cel cel =
+    CelBuilder celBuilder =
         CelFactory.standardCelBuilder()
             .addVar("x", SimpleType.DYN)
             .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
-            .setOptions(CelOptions.current().populateMacroCalls(true).build())
-            .build();
+            .setOptions(CelOptions.current().populateMacroCalls(true).build());
+    Cel cel = celBuilder.build();
     CelOptimizer celOptimizer =
-        CelOptimizerFactory.standardCelOptimizerBuilder(cel)
+        CelOptimizerFactory.standardCelOptimizerBuilder(() -> celBuilder)
             .addAstOptimizers(ConstantFoldingOptimizer.getInstance())
             .build();
     CelAbstractSyntaxTree ast =
@@ -366,7 +365,7 @@ public class ConstantFoldingOptimizerTest {
 
   @Test
   public void constantFold_astProducesConsistentlyNumberedIds() throws Exception {
-    CelAbstractSyntaxTree ast = CEL.compile("[1] + [2] + [3]").getAst();
+    CelAbstractSyntaxTree ast = CEL.build().compile("[1] + [2] + [3]").getAst();
 
     CelAbstractSyntaxTree optimizedAst = CEL_OPTIMIZER.optimize(ast);
 
@@ -388,13 +387,13 @@ public class ConstantFoldingOptimizerTest {
     for (int i = 1; i < 200; i++) {
       sb.append(" + ").append(i);
     } // 0 + 1 + 2 + 3 + ... 200
-    Cel cel =
+    CelBuilder celBuilder =
         CelFactory.standardCelBuilder()
-            .setOptions(CelOptions.current().maxParseRecursionDepth(200).build())
-            .build();
+            .setOptions(CelOptions.current().maxParseRecursionDepth(200).build());
+    Cel cel = celBuilder.build();
     CelAbstractSyntaxTree ast = cel.compile(sb.toString()).getAst();
     CelOptimizer optimizer =
-        CelOptimizerFactory.standardCelOptimizerBuilder(cel)
+        CelOptimizerFactory.standardCelOptimizerBuilder(() -> celBuilder)
             .addAstOptimizers(
                 ConstantFoldingOptimizer.newInstance(
                     ConstantFoldingOptions.newBuilder().maxIterationLimit(200).build()))

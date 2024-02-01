@@ -17,6 +17,7 @@ package dev.cel.common;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 
+import com.google.common.collect.ImmutableSet;
 import dev.cel.expr.Decl;
 import dev.cel.expr.Decl.FunctionDecl;
 import com.google.auto.value.AutoValue;
@@ -36,7 +37,7 @@ public abstract class CelFunctionDecl {
   public abstract String name();
 
   /** Required. List of function overloads. Must contain at least one overload. */
-  public abstract ImmutableList<CelOverloadDecl> overloads();
+  public abstract ImmutableSet<CelOverloadDecl> overloads();
 
   /** Builder for configuring the {@link CelFunctionDecl}. */
   @AutoValue.Builder
@@ -46,12 +47,12 @@ public abstract class CelFunctionDecl {
     /** Sets the function name {@link #name()} */
     public abstract Builder setName(String name);
 
-    public abstract ImmutableList<CelOverloadDecl> overloads();
+    public abstract ImmutableSet<CelOverloadDecl> overloads();
 
-    public abstract ImmutableList.Builder<CelOverloadDecl> overloadsBuilder();
+    public abstract ImmutableSet.Builder<CelOverloadDecl> overloadsBuilder();
 
     @CanIgnoreReturnValue
-    public abstract Builder setOverloads(ImmutableList<CelOverloadDecl> overloads);
+    public abstract Builder setOverloads(ImmutableSet<CelOverloadDecl> overloads);
 
     /** Adds one or more function overloads */
     @CanIgnoreReturnValue
@@ -77,7 +78,7 @@ public abstract class CelFunctionDecl {
 
   /** Create a new builder to construct a {@code CelFunctionDecl} instance. */
   public static Builder newBuilder() {
-    return new AutoValue_CelFunctionDecl.Builder().setOverloads(ImmutableList.of());
+    return new AutoValue_CelFunctionDecl.Builder().setOverloads(ImmutableSet.of());
   }
 
   /** Constructs a function declaration with any number of {@link CelOverloadDecl} */

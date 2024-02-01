@@ -16,6 +16,7 @@ package dev.cel.bundle;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import dev.cel.checker.CelCheckerLegacyImpl;
 import dev.cel.expr.Decl;
 import dev.cel.expr.Type;
 import com.google.common.base.Supplier;
@@ -49,6 +50,7 @@ import dev.cel.compiler.CelCompilerImpl;
 import dev.cel.compiler.CelCompilerLibrary;
 import dev.cel.parser.CelMacro;
 import dev.cel.parser.CelParserBuilder;
+import dev.cel.parser.CelParserImpl;
 import dev.cel.parser.CelStandardMacro;
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelRuntime;
@@ -107,13 +109,22 @@ final class CelImpl implements Cel, EnvVisitable {
     return new CelImpl(Suppliers.memoize(() -> compiler), Suppliers.memoize(() -> runtime));
   }
 
+
+  /** Combines the suppliers for {@link CelCompiler} and {@link CelRuntime} into {@link CelImpl}. */
+  static java.util.function.Supplier<CelBuilder> combineBuilders(
+      java.util.function.Supplier<? extends CelCompilerBuilder> compiler,
+      java.util.function.Supplier<? extends CelRuntimeBuilder> runtime) {
+    return () -> new CelImpl.Builder(compiler.get(), runtime.get());
+  }
+
   /**
    * Create a new builder for constructing a {@code CelImpl} instance.
    *
    * <p>By default, {@link CelOptions#DEFAULT} are enabled, as is the CEL standard environment.
    */
-  static CelBuilder newBuilder(CelParserBuilder parserBuilder, CelCheckerBuilder checkerBuilder) {
-    return new CelImpl.Builder(parserBuilder, checkerBuilder);
+  // static CelBuilder newBuilder(CelParserBuilder parserBuilder, CelCheckerBuilder checkerBuilder) {
+  static CelBuilder newBuilder(CelCompilerBuilder compilerBuilder) {
+    return new CelImpl.Builder(compilerBuilder, CelRuntimeLegacyImpl.newBuilder());
   }
 
   /** Builder class for CelImpl instances. */
@@ -122,9 +133,9 @@ final class CelImpl implements Cel, EnvVisitable {
     private final CelCompilerBuilder compilerBuilder;
     private final CelRuntimeBuilder runtimeBuilder;
 
-    private Builder(CelParserBuilder parserBuilder, CelCheckerBuilder checkerBuilder) {
-      this.compilerBuilder = CelCompilerImpl.newBuilder(parserBuilder, checkerBuilder);
-      this.runtimeBuilder = CelRuntimeLegacyImpl.newBuilder();
+    private Builder(CelCompilerBuilder celCompilerBuilder, CelRuntimeBuilder celRuntimeBuilder) {
+      this.compilerBuilder = celCompilerBuilder;
+      this.runtimeBuilder = celRuntimeBuilder;
     }
 
     @Override

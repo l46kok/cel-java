@@ -86,6 +86,13 @@ public final class CelCompilerImpl implements CelCompiler, EnvVisitable {
     return new CelCompilerImpl(parser, checker);
   }
 
+  static java.util.function.Supplier<CelCompilerBuilder> combineBuilders(
+      java.util.function.Supplier<? extends CelParserBuilder> parserBuilder,
+      java.util.function.Supplier<? extends CelCheckerBuilder> checkerBuilder) {
+    return () -> newBuilder(parserBuilder.get(), checkerBuilder.get());
+  }
+
+
   /**
    * Create a new builder for constructing a {@code CelCompiler} instance.
    *

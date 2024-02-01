@@ -62,8 +62,8 @@ public final class CelCheckerLegacyImpl implements CelChecker, EnvVisitable {
 
   private final CelOptions celOptions;
   private final String container;
-  private final ImmutableList<CelIdentDecl> identDeclarations;
-  private final ImmutableList<CelFunctionDecl> functionDeclarations;
+  private final ImmutableSet<CelIdentDecl> identDeclarations;
+  private final ImmutableSet<CelFunctionDecl> functionDeclarations;
   private final Optional<CelType> expectedResultType;
 
   @SuppressWarnings("Immutable")
@@ -132,9 +132,9 @@ public final class CelCheckerLegacyImpl implements CelChecker, EnvVisitable {
   /** Builder class for the legacy {@code CelChecker} implementation. */
   public static final class Builder implements CelCheckerBuilder {
 
-    private final ImmutableList.Builder<CelIdentDecl> identDeclarations;
-    private final ImmutableList.Builder<CelFunctionDecl> functionDeclarations;
-    private final ImmutableList.Builder<ProtoTypeMask> protoTypeMasks;
+    private final ImmutableSet.Builder<CelIdentDecl> identDeclarations;
+    private final ImmutableSet.Builder<CelFunctionDecl> functionDeclarations;
+    private final ImmutableSet.Builder<ProtoTypeMask> protoTypeMasks;
     private final ImmutableSet.Builder<Descriptor> messageTypes;
     private final ImmutableSet.Builder<FileDescriptor> fileTypes;
     private final ImmutableSet.Builder<CelCheckerLibrary> celCheckerLibraries;
@@ -348,13 +348,13 @@ public final class CelCheckerLegacyImpl implements CelChecker, EnvVisitable {
       // Configure the declaration set, and possibly alter the type provider if ProtoDecl values
       // are provided as they may prevent the use of certain field selection patterns against the
       // proto.
-      ImmutableList<CelIdentDecl> identDeclarationSet = identDeclarations.build();
-      ImmutableList<ProtoTypeMask> protoTypeMaskSet = protoTypeMasks.build();
+      ImmutableSet<CelIdentDecl> identDeclarationSet = identDeclarations.build();
+      ImmutableSet<ProtoTypeMask> protoTypeMaskSet = protoTypeMasks.build();
       if (!protoTypeMaskSet.isEmpty()) {
         ProtoTypeMaskTypeProvider protoTypeMaskTypeProvider =
             new ProtoTypeMaskTypeProvider(messageTypeProvider, protoTypeMaskSet);
         identDeclarationSet =
-            ImmutableList.<CelIdentDecl>builder()
+            ImmutableSet.<CelIdentDecl>builder()
                 .addAll(identDeclarationSet)
                 .addAll(protoTypeMaskTypeProvider.computeDeclsFromProtoTypeMasks())
                 .build();
@@ -380,11 +380,11 @@ public final class CelCheckerLegacyImpl implements CelChecker, EnvVisitable {
 
     private Builder() {
       this.celOptions = CelOptions.newBuilder().build();
-      this.identDeclarations = ImmutableList.builder();
-      this.functionDeclarations = ImmutableList.builder();
+      this.identDeclarations = ImmutableSet.builder();
+      this.functionDeclarations = ImmutableSet.builder();
       this.fileTypes = ImmutableSet.builder();
       this.messageTypes = ImmutableSet.builder();
-      this.protoTypeMasks = ImmutableList.builder();
+      this.protoTypeMasks = ImmutableSet.builder();
       this.celCheckerLibraries = ImmutableSet.builder();
       this.container = "";
     }
@@ -393,8 +393,8 @@ public final class CelCheckerLegacyImpl implements CelChecker, EnvVisitable {
   private CelCheckerLegacyImpl(
       CelOptions celOptions,
       String container,
-      ImmutableList<CelIdentDecl> identDeclarations,
-      ImmutableList<CelFunctionDecl> functionDeclarations,
+      ImmutableSet<CelIdentDecl> identDeclarations,
+      ImmutableSet<CelFunctionDecl> functionDeclarations,
       Optional<CelType> expectedResultType,
       TypeProvider typeProvider,
       boolean standardEnvironmentEnabled) {
