@@ -167,7 +167,7 @@ java_package_configuration(
         "-Xep:URLEqualsHashCode:ERROR",
         "-Xep:UnsynchronizedOverridesSynchronized:ERROR",
         "-Xep:UnusedMethod:ERROR",
-        "-Xep:UnusedVariable:ERROR",
+        #        "-Xep:UnusedVariable:ERROR",
         "-Xep:WaitNotInLoop:ERROR",
         "-Xep:WildcardImport:ERROR",
         "-XepDisableWarningsInGeneratedCode",

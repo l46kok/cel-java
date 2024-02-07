@@ -65,6 +65,9 @@ final class MutableExprVisitor {
     }
 
     root.setId(celExprIdGenerator.generate(root.id()));
+    // if (root.id() > 10000L) {
+    //   throw new RuntimeException("Something went wrong");
+    // }
 
     switch (root.exprKind().getKind()) {
       case SELECT:

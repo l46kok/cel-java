@@ -264,57 +264,57 @@ public class SubexpressionOptimizerTest {
     assertThat(CEL.createProgram(optimizedAst).eval()).isEqualTo(6);
     assertThat(optimizedAst.getExpr().toString())
         .isEqualTo(
-            "CALL [0] {\n"
+            "CALL [1] {\n"
                 + "  function: cel.@block\n"
                 + "  args: {\n"
-                + "    CREATE_LIST [1] {\n"
+                + "    CREATE_LIST [2] {\n"
                 + "      elements: {\n"
-                + "        CALL [2] {\n"
+                + "        CALL [3] {\n"
                 + "          function: size\n"
                 + "          args: {\n"
-                + "            CREATE_LIST [3] {\n"
+                + "            CREATE_LIST [4] {\n"
                 + "              elements: {\n"
-                + "                CONSTANT [4] { value: 0 }\n"
+                + "                CONSTANT [5] { value: 0 }\n"
                 + "              }\n"
                 + "            }\n"
                 + "          }\n"
                 + "        }\n"
-                + "        CALL [5] {\n"
+                + "        CALL [6] {\n"
                 + "          function: size\n"
                 + "          args: {\n"
-                + "            CREATE_LIST [6] {\n"
+                + "            CREATE_LIST [7] {\n"
                 + "              elements: {\n"
-                + "                CONSTANT [7] { value: 1 }\n"
-                + "                CONSTANT [8] { value: 2 }\n"
+                + "                CONSTANT [8] { value: 1 }\n"
+                + "                CONSTANT [9] { value: 2 }\n"
                 + "              }\n"
                 + "            }\n"
                 + "          }\n"
                 + "        }\n"
                 + "      }\n"
                 + "    }\n"
-                + "    CALL [9] {\n"
+                + "    CALL [10] {\n"
                 + "      function: _+_\n"
                 + "      args: {\n"
-                + "        CALL [10] {\n"
+                + "        CALL [11] {\n"
                 + "          function: _+_\n"
                 + "          args: {\n"
-                + "            CALL [11] {\n"
+                + "            CALL [12] {\n"
                 + "              function: _+_\n"
                 + "              args: {\n"
-                + "                IDENT [12] {\n"
+                + "                IDENT [13] {\n"
                 + "                  name: @index0\n"
                 + "                }\n"
-                + "                IDENT [13] {\n"
+                + "                IDENT [14] {\n"
                 + "                  name: @index0\n"
                 + "                }\n"
                 + "              }\n"
                 + "            }\n"
-                + "            IDENT [14] {\n"
+                + "            IDENT [15] {\n"
                 + "              name: @index1\n"
                 + "            }\n"
                 + "          }\n"
                 + "        }\n"
-                + "        IDENT [15] {\n"
+                + "        IDENT [16] {\n"
                 + "          name: @index1\n"
                 + "        }\n"
                 + "      }\n"
@@ -327,22 +327,30 @@ public class SubexpressionOptimizerTest {
     SIZE_1(
         "size([1,2]) + size([1,2]) + 1 == 5",
         "cel.bind(@r0, size([1, 2]), @r0 + @r0) + 1 == 5",
-        "cel.@block([size([1, 2])], @index0 + @index0 + 1 == 5)"),
+        "cel.@block([size([1, 2])], @index0 + @index0 + 1 == 5)",
+        "cel.@block([[1, 2], size(@index0), @index1 + @index1, @index2 + 1, @index3 == 5], @index4)"
+        ),
     SIZE_2(
         "2 + size([1,2]) + size([1,2]) + 1 == 7",
         "cel.bind(@r0, size([1, 2]), 2 + @r0 + @r0) + 1 == 7",
-        "cel.@block([size([1, 2])], 2 + @index0 + @index0 + 1 == 7)"),
+        "cel.@block([size([1, 2])], 2 + @index0 + @index0 + 1 == 7)",
+        "cel.@block([[1, 2], size(@index0), 2 + @index1, @index2 + @index1, @index3 + 1, @index4 == 7], @index5)"
+        ),
     SIZE_3(
         "size([0]) + size([0]) + size([1,2]) + size([1,2]) == 6",
         "cel.bind(@r1, size([1, 2]), cel.bind(@r0, size([0]), @r0 + @r0) + @r1 + @r1) == 6",
-        "cel.@block([size([0]), size([1, 2])], @index0 + @index0 + @index1 + @index1 == 6)"),
+        "cel.@block([size([0]), size([1, 2])], @index0 + @index0 + @index1 + @index1 == 6)",
+        "cel.@block([[0], size(@index0), @index1 + @index1, [1, 2], size(@index3), @index2 + @index4, @index5 + @index4, @index6 == 6], @index7)"
+    ),
     SIZE_4(
         "5 + size([0]) + size([0]) + size([1,2]) + size([1,2]) + "
             + "size([1,2,3]) + size([1,2,3]) == 17",
         "cel.bind(@r2, size([1, 2, 3]), cel.bind(@r1, size([1, 2]), cel.bind(@r0, size([0]), 5 +"
             + " @r0 + @r0) + @r1 + @r1) + @r2 + @r2) == 17",
         "cel.@block([size([0]), size([1, 2]), size([1, 2, 3])], 5 + @index0 + @index0 + @index1 +"
-            + " @index1 + @index2 + @index2 == 17)"),
+            + " @index1 + @index2 + @index2 == 17)",
+        "cel.@block([[0], size(@index0), 5 + @index1, @index2 + @index1, [1, 2], size(@index4), @index3 + @index5, @index6 + @index5, [1, 2, 3], size(@index8), @index7 + @index9, @index10 + @index9, @index11 == 17], @index12)"
+        ),
     /**
      * Unparsed form:
      *
@@ -396,11 +404,15 @@ public class SubexpressionOptimizerTest {
             + " timestamp(int(timestamp(50))), timestamp(int(timestamp(200))).getFullYear(),"
             + " timestamp(int(timestamp(75)))], @index0 + @index3.getFullYear() +"
             + " @index1.getFullYear() + @index0 + @index1.getSeconds() + @index2 + @index2 +"
-            + " @index3.getMinutes() + @index0 == 13934)"),
+            + " @index3.getMinutes() + @index0 == 13934)",
+        "cel.@block([timestamp(1000000000), int(@index0), timestamp(@index1), @index2.getFullYear(), timestamp(75), int(@index4), timestamp(@index5), @index6.getFullYear(), @index3 + @index7, timestamp(50), int(@index9), timestamp(@index10), @index11.getFullYear(), @index8 + @index12, @index13 + @index3, @index11.getSeconds(), @index14 + @index15, timestamp(200), int(@index17), timestamp(@index18), @index19.getFullYear(), @index16 + @index20, @index21 + @index20, @index6.getMinutes(), @index22 + @index23, @index24 + @index3, @index25 == 13934], @index26)"
+        ),
     MAP_INDEX(
         "{\"a\": 2}[\"a\"] + {\"a\": 2}[\"a\"] * {\"a\": 2}[\"a\"] == 6",
         "cel.bind(@r0, {\"a\": 2}[\"a\"], @r0 + @r0 * @r0) == 6",
-        "cel.@block([{\"a\": 2}[\"a\"]], @index0 + @index0 * @index0 == 6)"),
+        "cel.@block([{\"a\": 2}[\"a\"]], @index0 + @index0 * @index0 == 6)",
+        "cel.@block([{\"a\": 2}, @index0[\"a\"], @index1 * @index1, @index1 + @index2, @index3 == 6], @index4)"
+        ),
     /**
      * Input map is:
      *
@@ -422,17 +434,23 @@ public class SubexpressionOptimizerTest {
         "size(cel.bind(@r0, {\"b\": 1}, cel.bind(@r1, {\"e\": @r0}, {\"a\": @r0, \"c\": @r0, \"d\":"
             + " @r1, \"e\": @r1}))) == 4",
         "cel.@block([{\"b\": 1}, {\"e\": @index0}], size({\"a\": @index0, \"c\": @index0, \"d\":"
-            + " @index1, \"e\": @index1}) == 4)"),
+            + " @index1, \"e\": @index1}) == 4)",
+        "cel.@block([{\"b\": 1}, {\"e\": @index0}, {\"a\": @index0, \"c\": @index0, \"d\": @index1, \"e\": @index1}, size(@index2), @index3 == 4], @index4)"
+        ),
     NESTED_LIST_CONSTRUCTION(
         "size([1, [1,2,3,4], 2, [1,2,3,4], 5, [1,2,3,4], 7, [[1,2], [1,2,3,4]], [1,2]]) == 9",
         "size(cel.bind(@r0, [1, 2, 3, 4], "
             + "cel.bind(@r1, [1, 2], [1, @r0, 2, @r0, 5, @r0, 7, [@r1, @r0], @r1]))) == 9",
         "cel.@block([[1, 2, 3, 4], [1, 2]], size([1, @index0, 2, @index0, 5, @index0, 7, [@index1,"
-            + " @index0], @index1]) == 9)"),
+            + " @index0], @index1]) == 9)",
+        "cel.@block([[1, 2, 3, 4], [1, 2], [@index1, @index0], [1, @index0, 2, @index0, 5, @index0, 7, @index2, @index1], size(@index3), @index4 == 9], @index5)"
+        ),
     SELECT(
         "msg.single_int64 + msg.single_int64 == 6",
         "cel.bind(@r0, msg.single_int64, @r0 + @r0) == 6",
-        "cel.@block([msg.single_int64], @index0 + @index0 == 6)"),
+        "cel.@block([msg.single_int64], @index0 + @index0 == 6)",
+        "cel.@block([msg.single_int64, @index0 + @index0, @index1 == 6], @index2)"
+        ),
     SELECT_NESTED(
         "msg.oneof_type.payload.single_int64 + msg.oneof_type.payload.single_int32 + "
             + "msg.oneof_type.payload.single_int64 + "
@@ -441,36 +459,42 @@ public class SubexpressionOptimizerTest {
             + "cel.bind(@r1, @r0.single_int64, @r1 + @r0.single_int32 + @r1) + "
             + "msg.single_int64 + @r0.oneof_type.payload.single_int64) == 31",
         "cel.@block([msg.oneof_type.payload, @index0.single_int64], @index1 + @index0.single_int32"
-            + " + @index1 + msg.single_int64 + @index0.oneof_type.payload.single_int64 == 31)"),
+            + " + @index1 + msg.single_int64 + @index0.oneof_type.payload.single_int64 == 31)",
+        "cel.@block([msg.oneof_type, @index0.payload, @index1.single_int64, @index1.single_int32, @index2 + @index3, @index4 + @index2, msg.single_int64, @index5 + @index6, @index1.oneof_type, @index8.payload, @index9.single_int64, @index7 + @index10, @index11 == 31], @index12)"),
     SELECT_NESTED_MESSAGE_MAP_INDEX_1(
         "msg.oneof_type.payload.map_int32_int64[1] + "
             + "msg.oneof_type.payload.map_int32_int64[1] + "
             + "msg.oneof_type.payload.map_int32_int64[1] == 15",
         "cel.bind(@r0, msg.oneof_type.payload.map_int32_int64[1], @r0 + @r0 + @r0) == 15",
         "cel.@block([msg.oneof_type.payload.map_int32_int64[1]], @index0 + @index0 + @index0 =="
-            + " 15)"),
+            + " 15)",
+        "cel.@block([msg.oneof_type, @index0.payload, @index1.map_int32_int64, @index2[1], @index3 + @index3, @index4 + @index3, @index5 == 15], @index6)"),
     SELECT_NESTED_MESSAGE_MAP_INDEX_2(
         "msg.oneof_type.payload.map_int32_int64[0] + "
             + "msg.oneof_type.payload.map_int32_int64[1] + "
             + "msg.oneof_type.payload.map_int32_int64[2] == 8",
         "cel.bind(@r0, msg.oneof_type.payload.map_int32_int64, @r0[0] + @r0[1] + @r0[2]) == 8",
         "cel.@block([msg.oneof_type.payload.map_int32_int64], @index0[0] + @index0[1] + @index0[2]"
-            + " == 8)"),
+            + " == 8)",
+        "cel.@block([msg.oneof_type, @index0.payload, @index1.map_int32_int64, @index2[0], @index2[1], @index3 + @index4, @index2[2], @index5 + @index6, @index7 == 8], @index8)"),
     TERNARY(
         "(msg.single_int64 > 0 ? msg.single_int64 : 0) == 3",
         "cel.bind(@r0, msg.single_int64, (@r0 > 0) ? @r0 : 0) == 3",
-        "cel.@block([msg.single_int64], ((@index0 > 0) ? @index0 : 0) == 3)"),
+        "cel.@block([msg.single_int64], ((@index0 > 0) ? @index0 : 0) == 3)",
+        "cel.@block([msg.single_int64, @index0 > 0, @index1 ? @index0 : 0, @index2 == 3], @index3)"),
     TERNARY_BIND_RHS_ONLY(
         "false ? false : (msg.single_int64) + ((msg.single_int64 + 1) * 2) == 11",
         "false ? false : (cel.bind(@r0, msg.single_int64, @r0 + (@r0 + 1) * 2) == 11)",
-        "cel.@block([msg.single_int64], false ? false : (@index0 + (@index0 + 1) * 2 == 11))"),
+        "cel.@block([msg.single_int64], false ? false : (@index0 + (@index0 + 1) * 2 == 11))",
+        "cel.@block([msg.single_int64, @index0 + 1, @index1 * 2, @index0 + @index2, @index3 == 11, false ? false : @index4], @index5)"),
     NESTED_TERNARY(
         "(msg.single_int64 > 0 ? (msg.single_int32 > 0 ? "
             + "msg.single_int64 + msg.single_int32 : 0) : 0) == 8",
         "cel.bind(@r0, msg.single_int64, (@r0 > 0) ? "
             + "cel.bind(@r1, msg.single_int32, (@r1 > 0) ? (@r0 + @r1) : 0) : 0) == 8",
         "cel.@block([msg.single_int64, msg.single_int32], ((@index0 > 0) ? ((@index1 > 0) ?"
-            + " (@index0 + @index1) : 0) : 0) == 8)"),
+            + " (@index0 + @index1) : 0) : 0) == 8)",
+        "cel.@block([msg.single_int64, @index0 > 0, msg.single_int32, @index2 > 0, @index0 + @index2, @index3 ? @index4 : 0, @index1 ? @index5 : 0, @index6 == 8], @index7)"),
     MULTIPLE_MACROS(
         // Note that all of these have different iteration variables, but they are still logically
         // the same.
@@ -479,58 +503,68 @@ public class SubexpressionOptimizerTest {
         "cel.bind(@r1, size([[2].exists(@c0, @c0 > 1)]), "
             + "cel.bind(@r0, size([[1].exists(@c0, @c0 > 0)]), @r0 + @r0) + @r1 + @r1) == 4",
         "cel.@block([size([[1].exists(@c0, @c0 > 0)]), size([[2].exists(@c0, @c0 > 1)])], @index0 +"
-            + " @index0 + @index1 + @index1 == 4)"),
+            + " @index0 + @index1 + @index1 == 4)",
+        "cel.@block([[1], @c0 > 0, @index0.exists(@c0, @index1), [@index2], size(@index3), @index4 + @index4, [2], @c0 > 1, @index6.exists(@c0, @index7), [@index8], size(@index9), @index5 + @index10, @index11 + @index10, @index12 == 4], @index13)"),
     NESTED_MACROS(
         "[1,2,3].map(i, [1, 2, 3].map(i, i + 1)) == [[2, 3, 4], [2, 3, 4], [2, 3, 4]]",
         "cel.bind(@r0, [1, 2, 3], @r0.map(@c0, @r0.map(@c1, @c1 + 1))) == "
             + "cel.bind(@r1, [2, 3, 4], [@r1, @r1, @r1])",
         "cel.@block([[1, 2, 3], [2, 3, 4]], @index0.map(@c0, @index0.map(@c1, @c1 + 1)) =="
-            + " [@index1, @index1, @index1])"),
+            + " [@index1, @index1, @index1])",
+        "cel.@block([[1, 2, 3], @c1 + 1, [@index1], @index0.map(@c1, @index1), [@index3], @index0.map(@c0, @index3), [2, 3, 4], [@index6, @index6, @index6], @index5 == @index7], @index8)"),
     INCLUSION_LIST(
         "1 in [1,2,3] && 2 in [1,2,3] && 3 in [3, [1,2,3]] && 1 in [1,2,3]",
         "cel.bind(@r0, [1, 2, 3], cel.bind(@r1, 1 in @r0, @r1 && 2 in @r0 && 3 in [3, @r0] &&"
             + " @r1))",
         "cel.@block([[1, 2, 3], 1 in @index0], @index1 && 2 in @index0 && 3 in [3, @index0] &&"
-            + " @index1)"),
+            + " @index1)",
+        "cel.@block([[1, 2, 3], 1 in @index0, 2 in @index0, @index1 && @index2, [3, @index0], 3 in @index4, @index5 && @index1, @index3 && @index6], @index7)"),
     INCLUSION_MAP(
         "2 in {'a': 1, 2: {true: false}, 3: {true: false}}",
         "2 in cel.bind(@r0, {true: false}, {\"a\": 1, 2: @r0, 3: @r0})",
-        "cel.@block([{true: false}], 2 in {\"a\": 1, 2: @index0, 3: @index0})"),
+        "cel.@block([{true: false}], 2 in {\"a\": 1, 2: @index0, 3: @index0})",
+        "cel.@block([{true: false}, {\"a\": 1, 2: @index0, 3: @index0}, 2 in @index1], @index2)"),
     MACRO_SHADOWED_VARIABLE(
         "[x - 1 > 3 ? x - 1 : 5].exists(x, x - 1 > 3) || x - 1 > 3",
         "cel.bind(@r0, x - 1, cel.bind(@r1, @r0 > 3, [@r1 ? @r0 : 5].exists(@c0, @c0 - 1 > 3) ||"
             + " @r1))",
         "cel.@block([x - 1, @index0 > 3], [@index1 ? @index0 : 5].exists(@c0, @c0 - 1 > 3) ||"
-            + " @index1)"),
+            + " @index1)",
+        "cel.@block([x - 1, @index0 > 3, @index1 ? @index0 : 5, [@index2], @c0 - 1, @index4 > 3, @index3.exists(@c0, @index5), @index6 || @index1], @index7)"),
     MACRO_SHADOWED_VARIABLE_2(
         "size([\"foo\", \"bar\"].map(x, [x + x, x + x]).map(x, [x + x, x + x])) == 2",
         "size([\"foo\", \"bar\"].map(@c1, cel.bind(@r0, @c1 + @c1, [@r0, @r0]))"
             + ".map(@c0, cel.bind(@r1, @c0 + @c0, [@r1, @r1]))) == 2",
-        "Currently Unsupported"), // TODO: Handle comprehension variables that fall
-                                  // outside the cel.block scope
+        "cel.@block([@c1 + @c1, @c0 + @c0], "
+            + "size([\"foo\", \"bar\"].map(@c1, [@index0, @index0]).map(@c0, [@index1, @index1])) == 2)",
+        "cel.@block([[\"foo\", \"bar\"], @c1 + @c1, [@index1, @index1], [@index2], @index0.map(@c1, @index2), @c0 + @c0, [@index5, @index5], [@index6], @index4.map(@c0, @index6), size(@index8), @index9 == 2], @index10)"),
     PRESENCE_TEST(
         "has({'a': true}.a) && {'a':true}['a']",
         "cel.bind(@r0, {\"a\": true}, has(@r0.a) && @r0[\"a\"])",
-        "cel.@block([{\"a\": true}], has(@index0.a) && @index0[\"a\"])"),
+        "cel.@block([{\"a\": true}], has(@index0.a) && @index0[\"a\"])",
+        "cel.@block([{\"a\": true}, @index0[\"a\"], has(@index0.a) && @index1], @index2)"),
     PRESENCE_TEST_WITH_TERNARY(
         "(has(msg.oneof_type.payload) ? msg.oneof_type.payload.single_int64 : 0) == 10",
         "cel.bind(@r0, msg.oneof_type, has(@r0.payload) ? @r0.payload.single_int64 : 0) == 10",
         "cel.@block([msg.oneof_type], (has(@index0.payload) ? @index0.payload.single_int64 : 0) =="
-            + " 10)"),
+            + " 10)",
+        "cel.@block([msg.oneof_type, @index0.payload, @index1.single_int64, has(@index0.payload) ? @index2 : 0, @index3 == 10], @index4)"),
     PRESENCE_TEST_WITH_TERNARY_2(
         "(has(msg.oneof_type.payload) ? msg.oneof_type.payload.single_int64 :"
             + " msg.oneof_type.payload.single_int64 * 0) == 10",
         "cel.bind(@r0, msg.oneof_type, cel.bind(@r1, @r0.payload.single_int64, has(@r0.payload) ?"
             + " @r1 : (@r1 * 0))) == 10",
         "cel.@block([msg.oneof_type, @index0.payload.single_int64], (has(@index0.payload) ? @index1"
-            + " : (@index1 * 0)) == 10)"),
+            + " : (@index1 * 0)) == 10)",
+        "cel.@block([msg.oneof_type, @index0.payload, @index1.single_int64, @index2 * 0, has(@index0.payload) ? @index2 : @index3, @index4 == 10], @index5)"),
     PRESENCE_TEST_WITH_TERNARY_3(
         "(has(msg.oneof_type.payload.single_int64) ? msg.oneof_type.payload.single_int64 :"
             + " msg.oneof_type.payload.single_int64 * 0) == 10",
         "cel.bind(@r0, msg.oneof_type.payload, cel.bind(@r1, @r0.single_int64,"
             + " has(@r0.single_int64) ? @r1 : (@r1 * 0))) == 10",
         "cel.@block([msg.oneof_type.payload, @index0.single_int64], (has(@index0.single_int64) ?"
-            + " @index1 : (@index1 * 0)) == 10)"),
+            + " @index1 : (@index1 * 0)) == 10)",
+        "cel.@block([msg.oneof_type, @index0.payload, @index1.single_int64, @index2 * 0, has(@index1.single_int64) ? @index2 : @index3, @index4 == 10], @index5)"),
     /**
      * Input:
      *
@@ -598,21 +632,24 @@ public class SubexpressionOptimizerTest {
         "cel.@block([msg.oneof_type, @index0.payload, @index1.map_string_string],"
             + " (has(msg.oneof_type) && has(@index0.payload) && has(@index1.single_int64)) ?"
             + " ((has(@index1.map_string_string) && has(@index2.key)) ? (@index2.key == \"A\") :"
-            + " false) : false)"),
+            + " false) : false)",
+        "cel.@block([msg.oneof_type, has(msg.oneof_type) && has(@index0.payload), @index0.payload, @index1 && has(@index2.single_int64), @index2.map_string_string, has(@index2.map_string_string) && has(@index4.key), @index4.key, @index6 == \"A\", @index5 ? @index7 : false, @index3 ? @index8 : false], @index9)"),
     OPTIONAL_LIST(
         "[10, ?optional.none(), [?optional.none(), ?opt_x], [?optional.none(), ?opt_x]] == [10,"
             + " [5], [5]]",
         "cel.bind(@r0, [?optional.none(), ?opt_x], [10, ?optional.none(), @r0, @r0]) =="
             + " cel.bind(@r1, [5], [10, @r1, @r1])",
         "cel.@block([[?optional.none(), ?opt_x], [5]], [10, ?optional.none(), @index0, @index0] =="
-            + " [10, @index1, @index1])"),
+            + " [10, @index1, @index1])",
+        "cel.@block([[?optional.none(), ?opt_x], [10, ?optional.none(), @index0, @index0], [5], [10, @index2, @index2], @index1 == @index3], @index4)"),
     OPTIONAL_MAP(
         "{?'hello': optional.of('hello')}['hello'] + {?'hello': optional.of('hello')}['hello'] =="
             + " 'hellohello'",
         "cel.bind(@r0, {?\"hello\": optional.of(\"hello\")}[\"hello\"], @r0 + @r0) =="
             + " \"hellohello\"",
         "cel.@block([{?\"hello\": optional.of(\"hello\")}[\"hello\"]], @index0 + @index0 =="
-            + " \"hellohello\")"),
+            + " \"hellohello\")",
+        "cel.@block([{?\"hello\": optional.of(\"hello\")}, @index0[\"hello\"], @index1 + @index1, @index2 == \"hellohello\"], @index3)"),
     OPTIONAL_MESSAGE(
         "TestAllTypes{?single_int64: optional.ofNonZeroValue(1), ?single_int32:"
             + " optional.of(4)}.single_int32 + TestAllTypes{?single_int64:"
@@ -621,17 +658,20 @@ public class SubexpressionOptimizerTest {
             + "?single_int64: optional.ofNonZeroValue(1), ?single_int32: optional.of(4)}, "
             + "@r0.single_int32 + @r0.single_int64) == 5",
         "cel.@block([TestAllTypes{?single_int64: optional.ofNonZeroValue(1), ?single_int32:"
-            + " optional.of(4)}], @index0.single_int32 + @index0.single_int64 == 5)"),
+            + " optional.of(4)}], @index0.single_int32 + @index0.single_int64 == 5)",
+        "cel.@block([TestAllTypes{?single_int64: optional.ofNonZeroValue(1), ?single_int32: optional.of(4)}, @index0.single_int32, @index0.single_int64, @index1 + @index2, @index3 == 5], @index4)"),
     ;
 
     private final String source;
     private final String unparsedBind;
     private final String unparsedBlock;
+    private final String unparsedBlockFlattened;
 
-    CseTestCase(String source, String unparsedBind, String unparsedBlock) {
+    CseTestCase(String source, String unparsedBind, String unparsedBlock, String unparsedBlockFlattened) {
       this.source = source;
       this.unparsedBind = unparsedBind;
       this.unparsedBlock = unparsedBlock;
+      this.unparsedBlockFlattened = unparsedBlockFlattened;
     }
   }
 
@@ -683,10 +723,6 @@ public class SubexpressionOptimizerTest {
   @Test
   public void cse_withCelBlock_macroMapPopulated(@TestParameter CseTestCase testCase)
       throws Exception {
-    if (testCase.equals(CseTestCase.MACRO_SHADOWED_VARIABLE_2)) {
-      // TODO: Handle comprehension variables that fall outside the cel.block scope
-      return;
-    }
     CelOptimizer celOptimizer =
         newCseOptimizer(
             SubexpressionOptimizerOptions.newBuilder()
@@ -709,10 +745,6 @@ public class SubexpressionOptimizerTest {
   @Test
   public void cse_withCelBlock_macroMapUnpopulated(@TestParameter CseTestCase testCase)
       throws Exception {
-    if (testCase.equals(CseTestCase.MACRO_SHADOWED_VARIABLE_2)) {
-      // TODO: Handle comprehension variables that fall outside the cel.block scope
-      return;
-    }
     CelOptimizer celOptimizer =
         newCseOptimizer(
             SubexpressionOptimizerOptions.newBuilder()
@@ -733,6 +765,72 @@ public class SubexpressionOptimizerTest {
   }
 
   @Test
+  public void cse_withCelBlockFlattened_macroMapPopulated(@TestParameter CseTestCase testCase)
+      throws Exception {
+    CelOptimizer celOptimizer =
+        newCseOptimizer(
+            SubexpressionOptimizerOptions.newBuilder()
+                .populateMacroCalls(true)
+                .enableCelBlock(true)
+                .flattenExpressions(true)
+                .build());
+    CelAbstractSyntaxTree ast = CEL.compile(testCase.source).getAst();
+
+    CelAbstractSyntaxTree optimizedAst = celOptimizer.optimize(ast);
+
+    assertThat(
+        CEL.createProgram(optimizedAst)
+            .eval(
+                ImmutableMap.of(
+                    "msg", TEST_ALL_TYPES_INPUT, "x", 5L, "opt_x", Optional.of(5L))))
+        .isEqualTo(true);
+    assertThat(CEL_UNPARSER.unparse(optimizedAst)).isEqualTo(testCase.unparsedBlockFlattened);
+  }
+
+
+  @Test
+  public void cse_withCelBlockFlattened_macroMapUnpopulated(@TestParameter CseTestCase testCase)
+      throws Exception {
+    CelOptimizer celOptimizer =
+        newCseOptimizer(
+            SubexpressionOptimizerOptions.newBuilder()
+                .populateMacroCalls(false)
+                .enableCelBlock(true)
+                .flattenExpressions(true)
+                .build());
+    CelAbstractSyntaxTree ast = CEL.compile(testCase.source).getAst();
+
+    CelAbstractSyntaxTree optimizedAst = celOptimizer.optimize(ast);
+
+    assertThat(optimizedAst.getSource().getMacroCalls()).isEmpty();
+    assertThat(
+        CEL.createProgram(optimizedAst)
+            .eval(
+                ImmutableMap.of(
+                    "msg", TEST_ALL_TYPES_INPUT, "x", 5L, "opt_x", Optional.of(5L))))
+        .isEqualTo(true);
+  }
+
+  @Test
+  public void noCommonSubexpr_withCelBlockFlattened() throws Exception {
+    String expression =
+      "true || msg.oneof_type.payload.oneof_type.payload.oneof_type.payload.oneof_type.payload.single_int64 == 1";
+    CelOptimizer celOptimizer =
+        newCseOptimizer(
+            SubexpressionOptimizerOptions.newBuilder()
+                .populateMacroCalls(true)
+                .enableCelBlock(true)
+                .flattenExpressions(true)
+                .build());
+    CelAbstractSyntaxTree ast = CEL.compile(expression).getAst();
+
+    CelAbstractSyntaxTree optimizedAst = celOptimizer.optimize(ast);
+
+    assertThat(CEL.createProgram(optimizedAst).eval()).isEqualTo(true);
+    assertThat(CEL_UNPARSER.unparse(optimizedAst)).isEqualTo("cel.@block([msg.oneof_type, @index0.payload, @index1.oneof_type, @index2.payload, @index3.oneof_type, @index4.payload, @index5.oneof_type, @index6.payload, @index7.single_int64, @index8 == 1, true || @index9], @index10)");
+  }
+
+  @Test
   public void cse_resultTypeSet_celBlockOptimizationSuccess() throws Exception {
     Cel cel = newCelBuilder().setResultType(SimpleType.BOOL).build();
     CelOptimizer celOptimizer =
@@ -750,25 +848,35 @@ public class SubexpressionOptimizerTest {
         .isEqualTo("cel.@block([size(\"a\")], @index0 + @index0 == 2)");
   }
 
+  private enum CseNoOpTestCase {
+    // Nothing to optimize
+    NO_COMMON_SUBEXPR("size(\"hello\")"),
+    // Constants and identifiers
+    INT_CONST_ONLY("2 + 2 + 2 + 2"),
+    IDENT_ONLY("x + x + x + x"),
+    BOOL_CONST_ONLY("true == true && false == false"),
+    // Constants and identifiers within a function
+    CONST_WITHIN_FUNCTION("size(\"hello\" + \"hello\" + \"hello\")"),
+    IDENT_WITHIN_FUNCTION("string(x + x + x)"),
+    // Non-standard functions are considered non-pure for time being
+    NON_STANDARD_FUNCTION("custom_func(1) + custom_func(1)"),
+    // Duplicated but nested calls.
+    NESTED_FUNCTION("int(timestamp(int(timestamp(1000000000))))"),
+    // This cannot be optimized. Extracting the common subexpression would presence test
+    // the bound identifier (e.g: has(@r0)), which is not valid.
+    UNOPTIMIZABLE_TERNARY("has(msg.single_any) ? msg.single_any : 10")
+    ;
+
+    private final String source;
+
+    CseNoOpTestCase(String source) {
+      this.source = source;
+    }
+  }
+
   @Test
-  // Nothing to optimize
-  @TestParameters("{source: 'size(\"hello\")'}")
-  // Constants and identifiers
-  @TestParameters("{source: '2 + 2 + 2 + 2'}")
-  @TestParameters("{source: 'x + x + x + x'}")
-  @TestParameters("{source: 'true == true && false == false'}")
-  // Constants and identifiers within a function
-  @TestParameters("{source: 'size(\"hello\" + \"hello\" + \"hello\")'}")
-  @TestParameters("{source: 'string(x + x + x)'}")
-  // Non-standard functions are considered non-pure for time being
-  @TestParameters("{source: 'custom_func(1) + custom_func(1)'}")
-  // Duplicated but nested calls.
-  @TestParameters("{source: 'int(timestamp(int(timestamp(1000000000))))'}")
-  // This cannot be optimized. Extracting the common subexpression would presence test
-  // the bound identifier (e.g: has(@r0)), which is not valid.
-  @TestParameters("{source: 'has(msg.single_any) ? msg.single_any : 10'}")
-  public void cse_withCelBind_noop(String source) throws Exception {
-    CelAbstractSyntaxTree ast = CEL.compile(source).getAst();
+  public void cse_withCelBind_noop(@TestParameter CseNoOpTestCase testCase) throws Exception {
+    CelAbstractSyntaxTree ast = CEL.compile(testCase.source).getAst();
 
     CelAbstractSyntaxTree optimizedAst =
         newCseOptimizer(
@@ -779,28 +887,12 @@ public class SubexpressionOptimizerTest {
             .optimize(ast);
 
     assertThat(ast.getExpr()).isEqualTo(optimizedAst.getExpr());
-    assertThat(CEL_UNPARSER.unparse(optimizedAst)).isEqualTo(source);
+    assertThat(CEL_UNPARSER.unparse(optimizedAst)).isEqualTo(testCase.source);
   }
 
   @Test
-  // Nothing to optimize
-  @TestParameters("{source: 'size(\"hello\")'}")
-  // Constants and identifiers
-  @TestParameters("{source: '2 + 2 + 2 + 2'}")
-  @TestParameters("{source: 'x + x + x + x'}")
-  @TestParameters("{source: 'true == true && false == false'}")
-  // Constants and identifiers within a function
-  @TestParameters("{source: 'size(\"hello\" + \"hello\" + \"hello\")'}")
-  @TestParameters("{source: 'string(x + x + x)'}")
-  // Non-standard functions are considered non-pure for time being
-  @TestParameters("{source: 'custom_func(1) + custom_func(1)'}")
-  // Duplicated but nested calls.
-  @TestParameters("{source: 'int(timestamp(int(timestamp(1000000000))))'}")
-  // This cannot be optimized. Extracting the common subexpression would presence test
-  // the bound identifier (e.g: has(@r0)), which is not valid.
-  @TestParameters("{source: 'has(msg.single_any) ? msg.single_any : 10'}")
-  public void cse_withCelBlock_noop(String source) throws Exception {
-    CelAbstractSyntaxTree ast = CEL.compile(source).getAst();
+  public void cse_withCelBlock_noop(@TestParameter CseNoOpTestCase testCase) throws Exception {
+    CelAbstractSyntaxTree ast = CEL.compile(testCase.source).getAst();
 
     CelAbstractSyntaxTree optimizedAst =
         newCseOptimizer(
@@ -811,7 +903,7 @@ public class SubexpressionOptimizerTest {
             .optimize(ast);
 
     assertThat(ast.getExpr()).isEqualTo(optimizedAst.getExpr());
-    assertThat(CEL_UNPARSER.unparse(optimizedAst)).isEqualTo(source);
+    assertThat(CEL_UNPARSER.unparse(optimizedAst)).isEqualTo(testCase.source);
   }
 
   @Test
@@ -1340,5 +1432,58 @@ public class SubexpressionOptimizerTest {
     }
 
     return CEL_FOR_EVALUATING_BLOCK.check(astToModify).getAst();
+  }
+
+  @Test
+  public void smokeTest() throws Exception {
+    // String expression = "msg.oneof_type.payload.single_int64 + msg.oneof_type.payload.single_int32 + "
+    //         + "msg.oneof_type.payload.single_int64 + "
+    //         + "msg.single_int64 + msg.oneof_type.payload.oneof_type.payload.single_int64 == 31";
+    String expression = "size([0]) + size([0]) == 2";
+    // cel.@block([size([0]), size([1, 2])], @index0 + @index0 + @index1 + @index1 == 6)
+    CelOptimizer celOptimizer =
+        newCseOptimizer(
+            SubexpressionOptimizerOptions.newBuilder()
+                .populateMacroCalls(true)
+                .enableCelBlock(false)
+                .build());
+    CelAbstractSyntaxTree ast = CEL.compile(expression).getAst();
+
+    CelAbstractSyntaxTree optimizedAst = celOptimizer.optimize(ast);
+
+    assertThat(CEL.createProgram(optimizedAst).eval(ImmutableMap.of(
+        "msg", TEST_ALL_TYPES_INPUT, "x", 5L, "opt_x", Optional.of(5L)))).isEqualTo(true);
+    assertThat(CEL_UNPARSER.unparse(optimizedAst)).isEqualTo("");
+  }
+
+  @Test
+  public void celBlock_scoped() throws Exception {
+    // expr: cel.block([true], cel.block([false], @block0.@index0 && @block1.@index0))
+    // String expression = "[1,2].map(x, [x + x, x + x]) == [[2, 2], [4, 4]]";
+    String expression = "size([\"foo\", \"bar\"].map(x, [x + x, x + x]).map(x, [x + x, x + x])) == 2";
+    // expr2: [1,2].map(x, cel.block([x + x], @block0.@index0))
+    // Pros:
+    // - No need to worry about scoping or shadowing of iteration variable. Addresses all edge cases
+    // Cons:
+    // - Program planning becomes more complex (need to recursively walk the AST)
+    // expr3: cel.block([@c0 + @c0], [1,2].map(@c0, [index(0, '@c0'), index(0, '@c0')]))
+    // Pros:
+    // - retain single cel.block at global scope (easier program planning)
+    // Cons:
+    // - memoization requires additional care e.g: we'd need to recognize that @c0 + @c0 cannot be memoized across loop iteration range. We'd need an explicit "unmemoization"
+    // - possible clobbering of iteration variable outside the comprehension's scope?
+    //      - mangling becomes a requirement (sort of)
+    CelOptimizer celOptimizer =
+        newCseOptimizer(
+            SubexpressionOptimizerOptions.newBuilder()
+                .populateMacroCalls(true)
+                .enableCelBlock(true)
+                .build());
+    CelAbstractSyntaxTree ast = CEL.compile(expression).getAst();
+    assertThat(CEL.createProgram(ast).eval()).isEqualTo(true);
+
+    CelAbstractSyntaxTree optimizedAst = celOptimizer.optimize(ast);
+
+    assertThat(CEL.createProgram(optimizedAst).eval()).isEqualTo(true);
   }
 }
