@@ -22,6 +22,7 @@ import static org.junit.Assert.assertThrows;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.primitives.UnsignedLong;
+import com.google.testing.junit.testparameterinjector.TestParameter;
 import com.google.testing.junit.testparameterinjector.TestParameterInjector;
 import com.google.testing.junit.testparameterinjector.TestParameters;
 import dev.cel.common.CelAbstractSyntaxTree;
@@ -106,6 +107,74 @@ public class CelNavigableExprVisitorTest {
             CelExpr.ofIdentExpr(3, "a"),
             CelExpr.ofConstantExpr(5, CelConstant.ofValue(2)));
   }
+
+  @Test
+  public void add_preOrder_heightSet() throws Exception {
+    CelCompiler compiler =
+        CelCompilerFactory.standardCelCompilerBuilder().addVar("a", SimpleType.INT).build();
+    // Tree shape:
+    //           +
+    //      +         2
+    //  1        a
+    CelAbstractSyntaxTree ast = compiler.compile("1 + a + 2").getAst();
+    CelNavigableAst navigableAst = CelNavigableAst.fromAst(ast);
+
+    ImmutableList<Integer> allNodeHeights =
+        navigableAst.getRoot().allNodes(TraversalOrder.PRE_ORDER).map(CelNavigableExpr::height).collect(toImmutableList());
+    assertThat(allNodeHeights).containsExactly(2, 1, 0, 0, 0).inOrder(); // +, +, 1, a, 2
+  }
+
+  @Test
+  public void add_children_heightSet(@TestParameter TraversalOrder traversalOrder) throws Exception {
+    CelCompiler compiler =
+        CelCompilerFactory.standardCelCompilerBuilder().addVar("a", SimpleType.INT).build();
+    // Tree shape:
+    //              +
+    //         +         2
+    //     +        a
+    //  3
+    CelAbstractSyntaxTree ast = compiler.compile("1 + a + 2 + 3").getAst();
+    CelNavigableAst navigableAst = CelNavigableAst.fromAst(ast);
+
+    ImmutableList<Integer> allNodeHeights =
+        navigableAst.getRoot().children(traversalOrder).map(CelNavigableExpr::height).collect(toImmutableList());
+    assertThat(allNodeHeights).containsExactly(2 , 0).inOrder(); // + (2), 2 (0) regardless of order
+  }
+
+  @Test
+  public void add_postOrder_heightSet() throws Exception {
+    CelCompiler compiler =
+        CelCompilerFactory.standardCelCompilerBuilder().addVar("a", SimpleType.INT).build();
+    // Tree shape:
+    //           +
+    //      +         2
+    //  1        a
+    CelAbstractSyntaxTree ast = compiler.compile("1 + a + 2").getAst();
+    CelNavigableAst navigableAst = CelNavigableAst.fromAst(ast);
+
+    ImmutableList<Integer> allNodeHeights =
+        navigableAst.getRoot().allNodes(TraversalOrder.POST_ORDER).map(CelNavigableExpr::height).collect(toImmutableList());
+    assertThat(allNodeHeights).containsExactly(0, 0, 1, 0, 2).inOrder(); // 1, a, +, 2, +
+  }
+
+
+  @Test
+  public void add_fromLeaf_heightSetForParents() throws Exception {
+    CelCompiler compiler =
+        CelCompilerFactory.standardCelCompilerBuilder().addVar("a", SimpleType.INT).build();
+    // Tree shape:
+    //           +
+    //      +         2
+    //  1        a
+    CelAbstractSyntaxTree ast = compiler.compile("1 + a + 2").getAst();
+    CelNavigableAst navigableAst = CelNavigableAst.fromAst(ast);
+
+    CelNavigableExpr oneConst = navigableAst.getRoot().descendants().filter(node -> node.expr().constantOrDefault().int64Value() == 1).findAny().get();
+    assertThat(oneConst.height()).isEqualTo(0);
+    assertThat(oneConst.parent().get().height()).isEqualTo(1);
+    assertThat(oneConst.parent().get().parent().get().height()).isEqualTo(2);
+  }
+
 
   @Test
   public void add_filterConstants_allNodesReturned() throws Exception {
@@ -634,6 +703,44 @@ public class CelNavigableExprVisitorTest {
   }
 
   @Test
+  public void comprehension_preOrder_heightSet() throws Exception {
+    CelCompiler compiler =
+        CelCompilerFactory.standardCelCompilerBuilder()
+            .setStandardMacros(CelStandardMacro.EXISTS)
+            .build();
+    CelAbstractSyntaxTree ast = compiler.compile("[true].exists(i, i)").getAst();
+    CelNavigableAst navigableAst = CelNavigableAst.fromAst(ast);
+
+    ImmutableList<Integer> allNodes =
+        navigableAst
+            .getRoot()
+            .allNodes(TraversalOrder.PRE_ORDER)
+            .map(CelNavigableExpr::height)
+            .collect(toImmutableList());
+
+    assertThat(allNodes).containsExactly(3, 1, 0, 0, 2, 1, 0, 1, 0, 0, 0).inOrder();
+  }
+
+  @Test
+  public void comprehension_postOrder_heightSet() throws Exception {
+    CelCompiler compiler =
+        CelCompilerFactory.standardCelCompilerBuilder()
+            .setStandardMacros(CelStandardMacro.EXISTS)
+            .build();
+    CelAbstractSyntaxTree ast = compiler.compile("[true].exists(i, i)").getAst();
+    CelNavigableAst navigableAst = CelNavigableAst.fromAst(ast);
+
+    ImmutableList<Integer> allNodes =
+        navigableAst
+            .getRoot()
+            .allNodes(TraversalOrder.POST_ORDER)
+            .map(CelNavigableExpr::height)
+            .collect(toImmutableList());
+
+    assertThat(allNodes).containsExactly(0, 1, 0, 0, 1, 2, 0, 0, 1, 0, 3).inOrder();
+  }
+
+  @Test
   public void comprehension_allNodes_parentsPopulated() throws Exception {
     CelCompiler compiler =
         CelCompilerFactory.standardCelCompilerBuilder()
@@ -814,6 +921,60 @@ public class CelNavigableExprVisitorTest {
             CelExpr.ofCallExpr(
                 2, Optional.of(targetExpr), "test", ImmutableList.of(intArgExpr, uintArgExpr)))
         .inOrder();
+  }
+
+  @Test
+  public void callExpr_preOrder_heightSet() throws Exception {
+    CelCompiler compiler =
+        CelCompilerFactory.standardCelCompilerBuilder()
+            .addFunctionDeclarations(
+                newFunctionDeclaration(
+                    "test",
+                    newMemberOverload(
+                        "test_overload",
+                        SimpleType.STRING,
+                        SimpleType.STRING,
+                        SimpleType.INT,
+                        SimpleType.UINT)))
+            .build();
+    CelAbstractSyntaxTree ast = compiler.compile("('a' + 'b' + 'c' + 'd').test((1 + 2 + 3), 6u)").getAst();
+    CelNavigableAst navigableAst = CelNavigableAst.fromAst(ast);
+
+    ImmutableList<Integer> allNodes =
+        navigableAst
+            .getRoot()
+            .allNodes(TraversalOrder.PRE_ORDER)
+            .map(CelNavigableExpr::height)
+            .collect(toImmutableList());
+
+    assertThat(allNodes).containsExactly(4, 3, 2, 1, 0, 0, 0, 0, 2, 1, 0, 0, 0, 0).inOrder();
+  }
+
+  @Test
+  public void callExpr_postOrder_heightSet() throws Exception {
+    CelCompiler compiler =
+        CelCompilerFactory.standardCelCompilerBuilder()
+            .addFunctionDeclarations(
+                newFunctionDeclaration(
+                    "test",
+                    newMemberOverload(
+                        "test_overload",
+                        SimpleType.STRING,
+                        SimpleType.STRING,
+                        SimpleType.INT,
+                        SimpleType.UINT)))
+            .build();
+    CelAbstractSyntaxTree ast = compiler.compile("('a' + 'b' + 'c' + 'd').test((1 + 2 + 3), 6u)").getAst();
+    CelNavigableAst navigableAst = CelNavigableAst.fromAst(ast);
+
+    ImmutableList<Integer> allNodes =
+        navigableAst
+            .getRoot()
+            .allNodes(TraversalOrder.POST_ORDER)
+            .map(CelNavigableExpr::height)
+            .collect(toImmutableList());
+
+    assertThat(allNodes).containsExactly(0, 0, 1, 0, 2, 0, 3, 0, 0, 1, 0, 2, 0, 4).inOrder();
   }
 
   @Test

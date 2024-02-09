@@ -150,10 +150,10 @@ public class SubexpressionOptimizerTest {
 
     CelAbstractSyntaxTree optimizedAst =
         newCseOptimizer(
-                SubexpressionOptimizerOptions.newBuilder()
-                    .populateMacroCalls(false)
-                    .enableCelBlock(false)
-                    .build())
+            SubexpressionOptimizerOptions.newBuilder()
+                .populateMacroCalls(false)
+                .enableCelBlock(false)
+                .build())
             .optimize(ast);
 
     assertThat(CEL.createProgram(optimizedAst).eval()).isEqualTo(6);
@@ -329,13 +329,13 @@ public class SubexpressionOptimizerTest {
         "cel.bind(@r0, size([1, 2]), @r0 + @r0) + 1 == 5",
         "cel.@block([size([1, 2])], @index0 + @index0 + 1 == 5)",
         "cel.@block([[1, 2], size(@index0), @index1 + @index1, @index2 + 1, @index3 == 5], @index4)"
-        ),
+    ),
     SIZE_2(
         "2 + size([1,2]) + size([1,2]) + 1 == 7",
         "cel.bind(@r0, size([1, 2]), 2 + @r0 + @r0) + 1 == 7",
         "cel.@block([size([1, 2])], 2 + @index0 + @index0 + 1 == 7)",
         "cel.@block([[1, 2], size(@index0), 2 + @index1, @index2 + @index1, @index3 + 1, @index4 == 7], @index5)"
-        ),
+    ),
     SIZE_3(
         "size([0]) + size([0]) + size([1,2]) + size([1,2]) == 6",
         "cel.bind(@r1, size([1, 2]), cel.bind(@r0, size([0]), @r0 + @r0) + @r1 + @r1) == 6",
@@ -350,7 +350,7 @@ public class SubexpressionOptimizerTest {
         "cel.@block([size([0]), size([1, 2]), size([1, 2, 3])], 5 + @index0 + @index0 + @index1 +"
             + " @index1 + @index2 + @index2 == 17)",
         "cel.@block([[0], size(@index0), 5 + @index1, @index2 + @index1, [1, 2], size(@index4), @index3 + @index5, @index6 + @index5, [1, 2, 3], size(@index8), @index7 + @index9, @index10 + @index9, @index11 == 17], @index12)"
-        ),
+    ),
     /**
      * Unparsed form:
      *
@@ -406,13 +406,13 @@ public class SubexpressionOptimizerTest {
             + " @index1.getFullYear() + @index0 + @index1.getSeconds() + @index2 + @index2 +"
             + " @index3.getMinutes() + @index0 == 13934)",
         "cel.@block([timestamp(1000000000), int(@index0), timestamp(@index1), @index2.getFullYear(), timestamp(75), int(@index4), timestamp(@index5), @index6.getFullYear(), @index3 + @index7, timestamp(50), int(@index9), timestamp(@index10), @index11.getFullYear(), @index8 + @index12, @index13 + @index3, @index11.getSeconds(), @index14 + @index15, timestamp(200), int(@index17), timestamp(@index18), @index19.getFullYear(), @index16 + @index20, @index21 + @index20, @index6.getMinutes(), @index22 + @index23, @index24 + @index3, @index25 == 13934], @index26)"
-        ),
+    ),
     MAP_INDEX(
         "{\"a\": 2}[\"a\"] + {\"a\": 2}[\"a\"] * {\"a\": 2}[\"a\"] == 6",
         "cel.bind(@r0, {\"a\": 2}[\"a\"], @r0 + @r0 * @r0) == 6",
         "cel.@block([{\"a\": 2}[\"a\"]], @index0 + @index0 * @index0 == 6)",
         "cel.@block([{\"a\": 2}, @index0[\"a\"], @index1 * @index1, @index1 + @index2, @index3 == 6], @index4)"
-        ),
+    ),
     /**
      * Input map is:
      *
@@ -436,7 +436,7 @@ public class SubexpressionOptimizerTest {
         "cel.@block([{\"b\": 1}, {\"e\": @index0}], size({\"a\": @index0, \"c\": @index0, \"d\":"
             + " @index1, \"e\": @index1}) == 4)",
         "cel.@block([{\"b\": 1}, {\"e\": @index0}, {\"a\": @index0, \"c\": @index0, \"d\": @index1, \"e\": @index1}, size(@index2), @index3 == 4], @index4)"
-        ),
+    ),
     NESTED_LIST_CONSTRUCTION(
         "size([1, [1,2,3,4], 2, [1,2,3,4], 5, [1,2,3,4], 7, [[1,2], [1,2,3,4]], [1,2]]) == 9",
         "size(cel.bind(@r0, [1, 2, 3, 4], "
@@ -444,13 +444,13 @@ public class SubexpressionOptimizerTest {
         "cel.@block([[1, 2, 3, 4], [1, 2]], size([1, @index0, 2, @index0, 5, @index0, 7, [@index1,"
             + " @index0], @index1]) == 9)",
         "cel.@block([[1, 2, 3, 4], [1, 2], [@index1, @index0], [1, @index0, 2, @index0, 5, @index0, 7, @index2, @index1], size(@index3), @index4 == 9], @index5)"
-        ),
+    ),
     SELECT(
         "msg.single_int64 + msg.single_int64 == 6",
         "cel.bind(@r0, msg.single_int64, @r0 + @r0) == 6",
         "cel.@block([msg.single_int64], @index0 + @index0 == 6)",
         "cel.@block([msg.single_int64, @index0 + @index0, @index1 == 6], @index2)"
-        ),
+    ),
     SELECT_NESTED(
         "msg.oneof_type.payload.single_int64 + msg.oneof_type.payload.single_int32 + "
             + "msg.oneof_type.payload.single_int64 + "
@@ -495,23 +495,28 @@ public class SubexpressionOptimizerTest {
         "cel.@block([msg.single_int64, msg.single_int32], ((@index0 > 0) ? ((@index1 > 0) ?"
             + " (@index0 + @index1) : 0) : 0) == 8)",
         "cel.@block([msg.single_int64, @index0 > 0, msg.single_int32, @index2 > 0, @index0 + @index2, @index3 ? @index4 : 0, @index1 ? @index5 : 0, @index6 == 8], @index7)"),
-    MULTIPLE_MACROS(
+    MULTIPLE_MACROS_1(
         // Note that all of these have different iteration variables, but they are still logically
         // the same.
         "size([[1].exists(i, i > 0)]) + size([[1].exists(j, j > 0)]) + "
             + "size([[2].exists(k, k > 1)]) + size([[2].exists(l, l > 1)]) == 4",
-        "cel.bind(@r1, size([[2].exists(@c0, @c0 > 1)]), "
-            + "cel.bind(@r0, size([[1].exists(@c0, @c0 > 0)]), @r0 + @r0) + @r1 + @r1) == 4",
-        "cel.@block([size([[1].exists(@c0, @c0 > 0)]), size([[2].exists(@c0, @c0 > 1)])], @index0 +"
+        "cel.bind(@r1, size([[2].exists(@c0:0, @c0:0 > 1)]), "
+            + "cel.bind(@r0, size([[1].exists(@c0:0, @c0:0 > 0)]), @r0 + @r0) + @r1 + @r1) == 4",
+        "cel.@block([size([[1].exists(@c0:0, @c0:0 > 0)]), size([[2].exists(@c0:0, @c0:0 > 1)])], @index0 +"
             + " @index0 + @index1 + @index1 == 4)",
-        "cel.@block([[1], @c0 > 0, @index0.exists(@c0, @index1), [@index2], size(@index3), @index4 + @index4, [2], @c0 > 1, @index6.exists(@c0, @index7), [@index8], size(@index9), @index5 + @index10, @index11 + @index10, @index12 == 4], @index13)"),
+        "cel.@block([[1], @c0:0 > 0, @index0.exists(@c0:0, @index1), [@index2], size(@index3), @index4 + @index4, [2], @c0:0 > 1, @index6.exists(@c0:0, @index7), [@index8], size(@index9), @index5 + @index10, @index11 + @index10, @index12 == 4], @index13)"),
+    MULTIPLE_MACROS_2(
+        "[[1].exists(i, i > 0)] + [[1].exists(j, j > 0)] + [['a'].exists(k, k == 'a')] + [['a'].exists(l, l == 'a')] == [true, true, true, true]",
+        "cel.bind(@r1, [[\"a\"].exists(@c0:1, @c0:1 == \"a\")], cel.bind(@r0, [[1].exists(@c0:0, @c0:0 > 0)], @r0 + @r0) + @r1 + @r1) == [true, true, true, true]",
+        "cel.@block([[[1].exists(@c0:0, @c0:0 > 0)], [[\"a\"].exists(@c0:1, @c0:1 == \"a\")]], @index0 + @index0 + @index1 + @index1 == [true, true, true, true])",
+        "cel.@block([[1], @c0:0 > 0, @index0.exists(@c0:0, @index1), [@index2], @index3 + @index3, [\"a\"], @c0:1 == \"a\", @index5.exists(@c0:1, @index6), [@index7], @index4 + @index8, @index9 + @index8, [true, true, true, true], @index10 == @index11], @index12)"),
     NESTED_MACROS(
         "[1,2,3].map(i, [1, 2, 3].map(i, i + 1)) == [[2, 3, 4], [2, 3, 4], [2, 3, 4]]",
-        "cel.bind(@r0, [1, 2, 3], @r0.map(@c0, @r0.map(@c1, @c1 + 1))) == "
+        "cel.bind(@r0, [1, 2, 3], @r0.map(@c0:0, @r0.map(@c1:0, @c1:0 + 1))) == "
             + "cel.bind(@r1, [2, 3, 4], [@r1, @r1, @r1])",
-        "cel.@block([[1, 2, 3], [2, 3, 4]], @index0.map(@c0, @index0.map(@c1, @c1 + 1)) =="
+        "cel.@block([[1, 2, 3], [2, 3, 4]], @index0.map(@c0:0, @index0.map(@c1:0, @c1:0 + 1)) =="
             + " [@index1, @index1, @index1])",
-        "cel.@block([[1, 2, 3], @c1 + 1, [@index1], @index0.map(@c1, @index1), [@index3], @index0.map(@c0, @index3), [2, 3, 4], [@index6, @index6, @index6], @index5 == @index7], @index8)"),
+        "cel.@block([[1, 2, 3], @c1:0 + 1, [@index1], @index0.map(@c1:0, @index1), [@index3], @index0.map(@c0:0, @index3), [2, 3, 4], [@index6, @index6, @index6], @index5 == @index7], @index8)"),
     INCLUSION_LIST(
         "1 in [1,2,3] && 2 in [1,2,3] && 3 in [3, [1,2,3]] && 1 in [1,2,3]",
         "cel.bind(@r0, [1, 2, 3], cel.bind(@r1, 1 in @r0, @r1 && 2 in @r0 && 3 in [3, @r0] &&"
@@ -524,20 +529,26 @@ public class SubexpressionOptimizerTest {
         "2 in cel.bind(@r0, {true: false}, {\"a\": 1, 2: @r0, 3: @r0})",
         "cel.@block([{true: false}], 2 in {\"a\": 1, 2: @index0, 3: @index0})",
         "cel.@block([{true: false}, {\"a\": 1, 2: @index0, 3: @index0}, 2 in @index1], @index2)"),
+    MACRO_ITER_VAR_NOT_REFERENCED(
+        "[1,2].map(i, [1, 2].map(i, [3,4])) == [[[3, 4], [3, 4]], [[3, 4], [3, 4]]]",
+        "cel.bind(@r1, [3, 4], cel.bind(@r0, [1, 2], @r0.map(i, @r0.map(i, @r1))) == cel.bind(@r2, [@r1, @r1], [@r2, @r2]))",
+        "cel.@block([[1, 2], [3, 4], [@index1, @index1]], @index0.map(i, @index0.map(i, @index1)) == [@index2, @index2])",
+        "cel.@block([[1, 2], [3, 4], [@index1], @index0.map(i, @index1), [@index3], @index0.map(i, @index3), [@index1, @index1], [@index6, @index6], @index5 == @index7], @index8)"
+    ),
     MACRO_SHADOWED_VARIABLE(
         "[x - 1 > 3 ? x - 1 : 5].exists(x, x - 1 > 3) || x - 1 > 3",
-        "cel.bind(@r0, x - 1, cel.bind(@r1, @r0 > 3, [@r1 ? @r0 : 5].exists(@c0, @c0 - 1 > 3) ||"
+        "cel.bind(@r0, x - 1, cel.bind(@r1, @r0 > 3, [@r1 ? @r0 : 5].exists(@c0:0, @c0:0 - 1 > 3) ||"
             + " @r1))",
-        "cel.@block([x - 1, @index0 > 3], [@index1 ? @index0 : 5].exists(@c0, @c0 - 1 > 3) ||"
+        "cel.@block([x - 1, @index0 > 3], [@index1 ? @index0 : 5].exists(@c0:0, @c0:0 - 1 > 3) ||"
             + " @index1)",
-        "cel.@block([x - 1, @index0 > 3, @index1 ? @index0 : 5, [@index2], @c0 - 1, @index4 > 3, @index3.exists(@c0, @index5), @index6 || @index1], @index7)"),
+        "cel.@block([x - 1, @index0 > 3, @index1 ? @index0 : 5, [@index2], @c0:0 - 1, @index4 > 3, @index3.exists(@c0:0, @index5), @index6 || @index1], @index7)"),
     MACRO_SHADOWED_VARIABLE_2(
         "size([\"foo\", \"bar\"].map(x, [x + x, x + x]).map(x, [x + x, x + x])) == 2",
-        "size([\"foo\", \"bar\"].map(@c1, cel.bind(@r0, @c1 + @c1, [@r0, @r0]))"
-            + ".map(@c0, cel.bind(@r1, @c0 + @c0, [@r1, @r1]))) == 2",
-        "cel.@block([@c1 + @c1, @c0 + @c0], "
-            + "size([\"foo\", \"bar\"].map(@c1, [@index0, @index0]).map(@c0, [@index1, @index1])) == 2)",
-        "cel.@block([[\"foo\", \"bar\"], @c1 + @c1, [@index1, @index1], [@index2], @index0.map(@c1, @index2), @c0 + @c0, [@index5, @index5], [@index6], @index4.map(@c0, @index6), size(@index8), @index9 == 2], @index10)"),
+        "size([\"foo\", \"bar\"].map(@c1:0, cel.bind(@r0, @c1:0 + @c1:0, [@r0, @r0]))"
+            + ".map(@c0:0, cel.bind(@r1, @c0:0 + @c0:0, [@r1, @r1]))) == 2",
+        "cel.@block([@c1:0 + @c1:0, @c0:0 + @c0:0], "
+            + "size([\"foo\", \"bar\"].map(@c1:0, [@index0, @index0]).map(@c0:0, [@index1, @index1])) == 2)",
+        "cel.@block([[\"foo\", \"bar\"], @c1:0 + @c1:0, [@index1, @index1], [@index2], @index0.map(@c1:0, @index2), @c0:0 + @c0:0, [@index5, @index5], [@index6], @index4.map(@c0:0, @index6), size(@index8), @index9 == 2], @index10)"),
     PRESENCE_TEST(
         "has({'a': true}.a) && {'a':true}['a']",
         "cel.bind(@r0, {\"a\": true}, has(@r0.a) && @r0[\"a\"])",
@@ -682,17 +693,17 @@ public class SubexpressionOptimizerTest {
 
     CelAbstractSyntaxTree optimizedAst =
         newCseOptimizer(
-                SubexpressionOptimizerOptions.newBuilder()
-                    .populateMacroCalls(true)
-                    .enableCelBlock(false)
-                    .build())
+            SubexpressionOptimizerOptions.newBuilder()
+                .populateMacroCalls(true)
+                .enableCelBlock(false)
+                .build())
             .optimize(ast);
 
     assertThat(
-            CEL.createProgram(optimizedAst)
-                .eval(
-                    ImmutableMap.of(
-                        "msg", TEST_ALL_TYPES_INPUT, "x", 5L, "opt_x", Optional.of(5L))))
+        CEL.createProgram(optimizedAst)
+            .eval(
+                ImmutableMap.of(
+                    "msg", TEST_ALL_TYPES_INPUT, "x", 5L, "opt_x", Optional.of(5L))))
         .isEqualTo(true);
     assertThat(CEL_UNPARSER.unparse(optimizedAst)).isEqualTo(testCase.unparsedBind);
   }
@@ -706,17 +717,17 @@ public class SubexpressionOptimizerTest {
 
     CelAbstractSyntaxTree optimizedAst =
         newCseOptimizer(
-                SubexpressionOptimizerOptions.newBuilder().populateMacroCalls(false).build())
+            SubexpressionOptimizerOptions.newBuilder().populateMacroCalls(false).build())
             .optimize(ast);
 
     assertThat(optimizedAst.getSource().getMacroCalls()).isEmpty();
     assertThat(
-            celWithoutMacroMap
-                .build()
-                .createProgram(optimizedAst)
-                .eval(
-                    ImmutableMap.of(
-                        "msg", TEST_ALL_TYPES_INPUT, "x", 5L, "opt_x", Optional.of(5L))))
+        celWithoutMacroMap
+            .build()
+            .createProgram(optimizedAst)
+            .eval(
+                ImmutableMap.of(
+                    "msg", TEST_ALL_TYPES_INPUT, "x", 5L, "opt_x", Optional.of(5L))))
         .isEqualTo(true);
   }
 
@@ -734,10 +745,10 @@ public class SubexpressionOptimizerTest {
     CelAbstractSyntaxTree optimizedAst = celOptimizer.optimize(ast);
 
     assertThat(
-            CEL.createProgram(optimizedAst)
-                .eval(
-                    ImmutableMap.of(
-                        "msg", TEST_ALL_TYPES_INPUT, "x", 5L, "opt_x", Optional.of(5L))))
+        CEL.createProgram(optimizedAst)
+            .eval(
+                ImmutableMap.of(
+                    "msg", TEST_ALL_TYPES_INPUT, "x", 5L, "opt_x", Optional.of(5L))))
         .isEqualTo(true);
     assertThat(CEL_UNPARSER.unparse(optimizedAst)).isEqualTo(testCase.unparsedBlock);
   }
@@ -757,10 +768,10 @@ public class SubexpressionOptimizerTest {
 
     assertThat(optimizedAst.getSource().getMacroCalls()).isEmpty();
     assertThat(
-            CEL.createProgram(optimizedAst)
-                .eval(
-                    ImmutableMap.of(
-                        "msg", TEST_ALL_TYPES_INPUT, "x", 5L, "opt_x", Optional.of(5L))))
+        CEL.createProgram(optimizedAst)
+            .eval(
+                ImmutableMap.of(
+                    "msg", TEST_ALL_TYPES_INPUT, "x", 5L, "opt_x", Optional.of(5L))))
         .isEqualTo(true);
   }
 
@@ -772,7 +783,7 @@ public class SubexpressionOptimizerTest {
             SubexpressionOptimizerOptions.newBuilder()
                 .populateMacroCalls(true)
                 .enableCelBlock(true)
-                .flattenExpressions(true)
+                .maxNestingLevel(1)
                 .build());
     CelAbstractSyntaxTree ast = CEL.compile(testCase.source).getAst();
 
@@ -787,16 +798,17 @@ public class SubexpressionOptimizerTest {
     assertThat(CEL_UNPARSER.unparse(optimizedAst)).isEqualTo(testCase.unparsedBlockFlattened);
   }
 
-
   @Test
-  public void cse_withCelBlockFlattened_macroMapUnpopulated(@TestParameter CseTestCase testCase)
+  public void cse_withCelBlockVariousNestingLevels_macroMapUnpopulated(
+      @TestParameter CseTestCase testCase,
+      @TestParameter({"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"}) Integer maxNestingLevel)
       throws Exception {
     CelOptimizer celOptimizer =
         newCseOptimizer(
             SubexpressionOptimizerOptions.newBuilder()
                 .populateMacroCalls(false)
                 .enableCelBlock(true)
-                .flattenExpressions(true)
+                .maxNestingLevel(maxNestingLevel)
                 .build());
     CelAbstractSyntaxTree ast = CEL.compile(testCase.source).getAst();
 
@@ -812,25 +824,89 @@ public class SubexpressionOptimizerTest {
   }
 
   @Test
-  public void noCommonSubexpr_withCelBlockFlattened() throws Exception {
+  @TestParameters("{nestingLevel: 0, unparsed: 'true || msg.oneof_type.payload.oneof_type.payload.oneof_type.payload.oneof_type.payload.single_int64 == 1'}")
+  @TestParameters("{nestingLevel: 1, unparsed: 'cel.@block([msg.oneof_type, @index0.payload, @index1.oneof_type, @index2.payload, @index3.oneof_type, @index4.payload, @index5.oneof_type, @index6.payload, @index7.single_int64, @index8 == 1, true || @index9], @index10)'}")
+  @TestParameters("{nestingLevel: 2, unparsed: 'cel.@block([msg.oneof_type.payload, @index0.oneof_type.payload, @index1.oneof_type.payload, @index2.oneof_type.payload, @index3.single_int64 == 1], true || @index4)'}")
+  @TestParameters("{nestingLevel: 3, unparsed: 'cel.@block([msg.oneof_type.payload.oneof_type, @index0.payload.oneof_type.payload, @index1.oneof_type.payload.single_int64], true || @index2 == 1)'}")
+  @TestParameters("{nestingLevel: 4, unparsed: 'cel.@block([msg.oneof_type.payload.oneof_type.payload, @index0.oneof_type.payload.oneof_type.payload], true || @index1.single_int64 == 1)'}")
+  @TestParameters("{nestingLevel: 5, unparsed: 'cel.@block([msg.oneof_type.payload.oneof_type.payload.oneof_type, @index0.payload.oneof_type.payload.single_int64 == 1], true || @index1)'}")
+  @TestParameters("{nestingLevel: 6, unparsed: 'cel.@block([msg.oneof_type.payload.oneof_type.payload.oneof_type.payload], true || @index0.oneof_type.payload.single_int64 == 1)'}")
+  @TestParameters("{nestingLevel: 7, unparsed: 'cel.@block([msg.oneof_type.payload.oneof_type.payload.oneof_type.payload.oneof_type], true || @index0.payload.single_int64 == 1)'}")
+  @TestParameters("{nestingLevel: 8, unparsed: 'cel.@block([msg.oneof_type.payload.oneof_type.payload.oneof_type.payload.oneof_type.payload], true || @index0.single_int64 == 1)'}")
+  @TestParameters("{nestingLevel: 9, unparsed: 'cel.@block([msg.oneof_type.payload.oneof_type.payload.oneof_type.payload.oneof_type.payload.single_int64], true || @index0 == 1)'}")
+  @TestParameters("{nestingLevel: 10, unparsed: 'cel.@block([msg.oneof_type.payload.oneof_type.payload.oneof_type.payload.oneof_type.payload.single_int64 == 1], true || @index0)'}")
+  public void noCommonSubexpr_deeplyNestedSelect(int nestingLevel, String unparsed) throws Exception {
     String expression =
-      "true || msg.oneof_type.payload.oneof_type.payload.oneof_type.payload.oneof_type.payload.single_int64 == 1";
+        "true || msg.oneof_type.payload.oneof_type.payload.oneof_type.payload.oneof_type.payload.single_int64 == 1";
     CelOptimizer celOptimizer =
         newCseOptimizer(
             SubexpressionOptimizerOptions.newBuilder()
                 .populateMacroCalls(true)
                 .enableCelBlock(true)
-                .flattenExpressions(true)
+                .maxNestingLevel(nestingLevel)
                 .build());
     CelAbstractSyntaxTree ast = CEL.compile(expression).getAst();
 
     CelAbstractSyntaxTree optimizedAst = celOptimizer.optimize(ast);
 
     assertThat(CEL.createProgram(optimizedAst).eval()).isEqualTo(true);
-    assertThat(CEL_UNPARSER.unparse(optimizedAst)).isEqualTo("cel.@block([msg.oneof_type, @index0.payload, @index1.oneof_type, @index2.payload, @index3.oneof_type, @index4.payload, @index5.oneof_type, @index6.payload, @index7.single_int64, @index8 == 1, true || @index9], @index10)");
+    assertThat(CEL_UNPARSER.unparse(optimizedAst)).isEqualTo(unparsed);
   }
 
   @Test
+  @TestParameters("{nestingLevel: 0, unparsed: '\"hello world\".matches(\"h\" + \"e\" + \"l\" + \"l\" + \"o\") == true'}")
+  @TestParameters("{nestingLevel: 1, unparsed: 'cel.@block([\"h\" + \"e\", @index0 + \"l\", @index1 + \"l\", @index2 + \"o\", \"hello world\".matches(@index3), @index4 == true], @index5)'}")
+  @TestParameters("{nestingLevel: 2, unparsed: 'cel.@block([\"h\" + \"e\" + \"l\", @index0 + \"l\" + \"o\", \"hello world\".matches(@index1) == true], @index2)'}")
+  @TestParameters("{nestingLevel: 3, unparsed: 'cel.@block([\"h\" + \"e\" + \"l\" + \"l\", \"hello world\".matches(@index0 + \"o\") == true], @index1)'}")
+  @TestParameters("{nestingLevel: 4, unparsed: 'cel.@block([\"h\" + \"e\" + \"l\" + \"l\" + \"o\"], \"hello world\".matches(@index0) == true)'}")
+  @TestParameters("{nestingLevel: 5, unparsed: 'cel.@block([\"hello world\".matches(\"h\" + \"e\" + \"l\" + \"l\" + \"o\")], @index0 == true)'}")
+  @TestParameters("{nestingLevel: 6, unparsed: 'cel.@block([\"hello world\".matches(\"h\" + \"e\" + \"l\" + \"l\" + \"o\") == true], @index0)'}")
+  public void noCommonSubexpr_deeplyNestedCall_onArgs(int nestingLevel, String unparsed) throws Exception {
+    String expression =
+        "'hello world'.matches('h' + 'e' + 'l' + 'l' + 'o') == true";
+    CelOptimizer celOptimizer =
+        newCseOptimizer(
+            SubexpressionOptimizerOptions.newBuilder()
+                .populateMacroCalls(true)
+                .enableCelBlock(true)
+                .maxNestingLevel(nestingLevel)
+                .build());
+    CelAbstractSyntaxTree ast = CEL.compile(expression).getAst();
+
+    CelAbstractSyntaxTree optimizedAst = celOptimizer.optimize(ast);
+
+    assertThat(CEL.createProgram(optimizedAst).eval()).isEqualTo(true);
+    assertThat(CEL_UNPARSER.unparse(optimizedAst)).isEqualTo(unparsed);
+  }
+
+  @Test
+  @TestParameters("{nestingLevel: 0, unparsed: '(\"h\" + \"e\" + \"l\" + \"l\" + \"o\" + \" world\").matches(\"hello\") == true'}")
+  @TestParameters("{nestingLevel: 1, unparsed: 'cel.@block([\"h\" + \"e\", @index0 + \"l\", @index1 + \"l\", @index2 + \"o\", @index3 + \" world\", @index4.matches(\"hello\"), @index5 == true], @index6)'}")
+  @TestParameters("{nestingLevel: 2, unparsed: 'cel.@block([\"h\" + \"e\" + \"l\", @index0 + \"l\" + \"o\", (@index1 + \" world\").matches(\"hello\")], @index2 == true)'}")
+  @TestParameters("{nestingLevel: 3, unparsed: 'cel.@block([\"h\" + \"e\" + \"l\" + \"l\", (@index0 + \"o\" + \" world\").matches(\"hello\")], @index1 == true)'}")
+  @TestParameters("{nestingLevel: 4, unparsed: 'cel.@block([\"h\" + \"e\" + \"l\" + \"l\" + \"o\"], (@index0 + \" world\").matches(\"hello\") == true)'}")
+  @TestParameters("{nestingLevel: 5, unparsed: 'cel.@block([\"h\" + \"e\" + \"l\" + \"l\" + \"o\" + \" world\"], @index0.matches(\"hello\") == true)'}")
+  @TestParameters("{nestingLevel: 6, unparsed: 'cel.@block([(\"h\" + \"e\" + \"l\" + \"l\" + \"o\" + \" world\").matches(\"hello\")], @index0 == true)'}")
+  @TestParameters("{nestingLevel: 7, unparsed: 'cel.@block([(\"h\" + \"e\" + \"l\" + \"l\" + \"o\" + \" world\").matches(\"hello\") == true], @index0)'}")
+  public void noCommonSubexpr_deeplyNestedCall_onTarget(int nestingLevel, String unparsed) throws Exception {
+    String expression =
+        "('h' + 'e' + 'l' + 'l' + 'o' + ' world').matches('hello') == true";
+    CelOptimizer celOptimizer =
+        newCseOptimizer(
+            SubexpressionOptimizerOptions.newBuilder()
+                .populateMacroCalls(true)
+                .enableCelBlock(true)
+                .maxNestingLevel(nestingLevel)
+                .build());
+    CelAbstractSyntaxTree ast = CEL.compile(expression).getAst();
+
+    CelAbstractSyntaxTree optimizedAst = celOptimizer.optimize(ast);
+
+    assertThat(CEL.createProgram(optimizedAst).eval()).isEqualTo(true);
+    assertThat(CEL_UNPARSER.unparse(optimizedAst)).isEqualTo(unparsed);
+  }
+
+ @Test
   public void cse_resultTypeSet_celBlockOptimizationSuccess() throws Exception {
     Cel cel = newCelBuilder().setResultType(SimpleType.BOOL).build();
     CelOptimizer celOptimizer =
@@ -880,10 +956,10 @@ public class SubexpressionOptimizerTest {
 
     CelAbstractSyntaxTree optimizedAst =
         newCseOptimizer(
-                SubexpressionOptimizerOptions.newBuilder()
-                    .populateMacroCalls(true)
-                    .enableCelBlock(false)
-                    .build())
+            SubexpressionOptimizerOptions.newBuilder()
+                .populateMacroCalls(true)
+                .enableCelBlock(false)
+                .build())
             .optimize(ast);
 
     assertThat(ast.getExpr()).isEqualTo(optimizedAst.getExpr());
@@ -896,10 +972,10 @@ public class SubexpressionOptimizerTest {
 
     CelAbstractSyntaxTree optimizedAst =
         newCseOptimizer(
-                SubexpressionOptimizerOptions.newBuilder()
-                    .populateMacroCalls(true)
-                    .enableCelBlock(true)
-                    .build())
+            SubexpressionOptimizerOptions.newBuilder()
+                .populateMacroCalls(true)
+                .enableCelBlock(true)
+                .build())
             .optimize(ast);
 
     assertThat(ast.getExpr()).isEqualTo(optimizedAst.getExpr());
@@ -923,10 +999,10 @@ public class SubexpressionOptimizerTest {
 
     CelAbstractSyntaxTree optimizedAst =
         newCseOptimizer(
-                SubexpressionOptimizerOptions.newBuilder()
-                    .populateMacroCalls(true)
-                    .enableCelBlock(false)
-                    .build())
+            SubexpressionOptimizerOptions.newBuilder()
+                .populateMacroCalls(true)
+                .enableCelBlock(false)
+                .build())
             .optimize(ast);
 
     assertThat(CEL_UNPARSER.unparse(optimizedAst))
@@ -963,10 +1039,10 @@ public class SubexpressionOptimizerTest {
 
     CelAbstractSyntaxTree optimizedAst =
         newCseOptimizer(
-                SubexpressionOptimizerOptions.newBuilder()
-                    .populateMacroCalls(true)
-                    .enableCelBlock(false)
-                    .build())
+            SubexpressionOptimizerOptions.newBuilder()
+                .populateMacroCalls(true)
+                .enableCelBlock(false)
+                .build())
             .optimize(ast);
 
     assertThat(CEL_UNPARSER.unparse(optimizedAst))
@@ -1019,10 +1095,10 @@ public class SubexpressionOptimizerTest {
 
     CelAbstractSyntaxTree optimizedAst =
         newCseOptimizer(
-                SubexpressionOptimizerOptions.newBuilder()
-                    .populateMacroCalls(true)
-                    .enableCelBlock(true)
-                    .build())
+            SubexpressionOptimizerOptions.newBuilder()
+                .populateMacroCalls(true)
+                .enableCelBlock(true)
+                .build())
             .optimize(ast);
 
     assertThat(CEL_UNPARSER.unparse(optimizedAst))
@@ -1077,17 +1153,14 @@ public class SubexpressionOptimizerTest {
 
     CelAbstractSyntaxTree optimizedAst =
         newCseOptimizer(
-                SubexpressionOptimizerOptions.newBuilder()
-                    .populateMacroCalls(true)
-                    .enableCelBlock(false)
-                    .build())
+            SubexpressionOptimizerOptions.newBuilder()
+                .populateMacroCalls(true)
+                .enableCelBlock(false)
+                .build())
             .optimize(ast);
 
     assertThat(CEL_UNPARSER.unparse(optimizedAst))
-        .isEqualTo(
-            "cel.bind(@r0, [1, 2, 3], cel.bind(@r1, size(@r0.map(@c0, @r0.map(@c1, @r0.map(@c2, "
-                + "@r0.map(@c3, @r0.map(@c4, @r0.map(@c5, @r0.map(@c6, @r0.map(@c7, @r0))))))))), "
-                + "@r1 + @r1 + @r1 + @r1 + @r1 + @r1 + @r1 + @r1 + @r1))");
+        .isEqualTo("cel.bind(@r0, [1, 2, 3], cel.bind(@r1, size(@r0.map(i, @r0.map(i, @r0.map(i, @r0.map(i, @r0.map(i, @r0.map(i, @r0.map(i, @r0.map(i, @r0))))))))), @r1 + @r1 + @r1 + @r1 + @r1 + @r1 + @r1 + @r1 + @r1))");
     assertThat(CEL.createProgram(optimizedAst).eval()).isEqualTo(27);
   }
 
@@ -1113,18 +1186,14 @@ public class SubexpressionOptimizerTest {
 
     CelAbstractSyntaxTree optimizedAst =
         newCseOptimizer(
-                SubexpressionOptimizerOptions.newBuilder()
-                    .populateMacroCalls(true)
-                    .enableCelBlock(true)
-                    .build())
+            SubexpressionOptimizerOptions.newBuilder()
+                .populateMacroCalls(true)
+                .enableCelBlock(true)
+                .build())
             .optimize(ast);
 
     assertThat(CEL_UNPARSER.unparse(optimizedAst))
-        .isEqualTo(
-            "cel.@block([[1, 2, 3], size(@index0.map(@c0, @index0.map(@c1, @index0.map(@c2,"
-                + " @index0.map(@c3, @index0.map(@c4, @index0.map(@c5, @index0.map(@c6,"
-                + " @index0.map(@c7, @index0)))))))))], @index1 + @index1 + @index1 + @index1 +"
-                + " @index1 + @index1 + @index1 + @index1 + @index1)");
+        .isEqualTo("cel.@block([[1, 2, 3], size(@index0.map(i, @index0.map(i, @index0.map(i, @index0.map(i, @index0.map(i, @index0.map(i, @index0.map(i, @index0.map(i, @index0)))))))))], @index1 + @index1 + @index1 + @index1 + @index1 + @index1 + @index1 + @index1 + @index1)");
     assertThat(CEL.createProgram(optimizedAst).eval()).isEqualTo(27);
   }
 
@@ -1196,10 +1265,10 @@ public class SubexpressionOptimizerTest {
             CelOptimizationException.class,
             () ->
                 newCseOptimizer(
-                        SubexpressionOptimizerOptions.newBuilder()
-                            .iterationLimit(iterationLimit)
-                            .enableCelBlock(enableCelBlock)
-                            .build())
+                    SubexpressionOptimizerOptions.newBuilder()
+                        .iterationLimit(iterationLimit)
+                        .enableCelBlock(enableCelBlock)
+                        .build())
                     .optimize(ast));
     assertThat(e).hasMessageThat().isEqualTo("Optimization failure: Max iteration count reached.");
   }
@@ -1436,54 +1505,20 @@ public class SubexpressionOptimizerTest {
 
   @Test
   public void smokeTest() throws Exception {
-    // String expression = "msg.oneof_type.payload.single_int64 + msg.oneof_type.payload.single_int32 + "
-    //         + "msg.oneof_type.payload.single_int64 + "
-    //         + "msg.single_int64 + msg.oneof_type.payload.oneof_type.payload.single_int64 == 31";
-    String expression = "size([0]) + size([0]) == 2";
-    // cel.@block([size([0]), size([1, 2])], @index0 + @index0 + @index1 + @index1 == 6)
-    CelOptimizer celOptimizer =
-        newCseOptimizer(
-            SubexpressionOptimizerOptions.newBuilder()
-                .populateMacroCalls(true)
-                .enableCelBlock(false)
-                .build());
-    CelAbstractSyntaxTree ast = CEL.compile(expression).getAst();
+      String expression =
+          "[[], [], []].all(x, !x.exists(y, y in [1] + [2] + [3]))";
+      CelOptimizer celOptimizer =
+          newCseOptimizer(
+              SubexpressionOptimizerOptions.newBuilder()
+                  .populateMacroCalls(true)
+                  .enableCelBlock(true)
+                  .maxNestingLevel(3)
+                  .build());
+      CelAbstractSyntaxTree ast = CEL.compile(expression).getAst();
 
-    CelAbstractSyntaxTree optimizedAst = celOptimizer.optimize(ast);
+      CelAbstractSyntaxTree optimizedAst = celOptimizer.optimize(ast);
 
-    assertThat(CEL.createProgram(optimizedAst).eval(ImmutableMap.of(
-        "msg", TEST_ALL_TYPES_INPUT, "x", 5L, "opt_x", Optional.of(5L)))).isEqualTo(true);
-    assertThat(CEL_UNPARSER.unparse(optimizedAst)).isEqualTo("");
-  }
-
-  @Test
-  public void celBlock_scoped() throws Exception {
-    // expr: cel.block([true], cel.block([false], @block0.@index0 && @block1.@index0))
-    // String expression = "[1,2].map(x, [x + x, x + x]) == [[2, 2], [4, 4]]";
-    String expression = "size([\"foo\", \"bar\"].map(x, [x + x, x + x]).map(x, [x + x, x + x])) == 2";
-    // expr2: [1,2].map(x, cel.block([x + x], @block0.@index0))
-    // Pros:
-    // - No need to worry about scoping or shadowing of iteration variable. Addresses all edge cases
-    // Cons:
-    // - Program planning becomes more complex (need to recursively walk the AST)
-    // expr3: cel.block([@c0 + @c0], [1,2].map(@c0, [index(0, '@c0'), index(0, '@c0')]))
-    // Pros:
-    // - retain single cel.block at global scope (easier program planning)
-    // Cons:
-    // - memoization requires additional care e.g: we'd need to recognize that @c0 + @c0 cannot be memoized across loop iteration range. We'd need an explicit "unmemoization"
-    // - possible clobbering of iteration variable outside the comprehension's scope?
-    //      - mangling becomes a requirement (sort of)
-    CelOptimizer celOptimizer =
-        newCseOptimizer(
-            SubexpressionOptimizerOptions.newBuilder()
-                .populateMacroCalls(true)
-                .enableCelBlock(true)
-                .build());
-    CelAbstractSyntaxTree ast = CEL.compile(expression).getAst();
-    assertThat(CEL.createProgram(ast).eval()).isEqualTo(true);
-
-    CelAbstractSyntaxTree optimizedAst = celOptimizer.optimize(ast);
-
-    assertThat(CEL.createProgram(optimizedAst).eval()).isEqualTo(true);
+      assertThat(CEL.createProgram(optimizedAst).eval()).isEqualTo(true);
+    assertThat(CEL_UNPARSER.unparse(optimizedAst)).isEqualTo("cel.@block([[1] + [2] + [3], @c0:0.exists(@c1:0, @c1:0 in @index0), [[], [], []].all(@c0:0, !@index1)], @index2)");
   }
 }
