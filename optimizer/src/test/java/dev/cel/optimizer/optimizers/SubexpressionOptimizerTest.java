@@ -517,6 +517,12 @@ public class SubexpressionOptimizerTest {
         "cel.@block([[1, 2, 3], [2, 3, 4]], @index0.map(@c0:0, @index0.map(@c1:0, @c1:0 + 1)) =="
             + " [@index1, @index1, @index1])",
         "cel.@block([[1, 2, 3], @c1:0 + 1, [@index1], @index0.map(@c1:0, @index1), [@index3], @index0.map(@c0:0, @index3), [2, 3, 4], [@index6, @index6, @index6], @index5 == @index7], @index8)"),
+    NESTED_MACROS_2(
+        "[1, 2].map(y, [1, 2, 3].filter(x, x == y))",
+        "",
+        "",
+        ""
+    ),
     INCLUSION_LIST(
         "1 in [1,2,3] && 2 in [1,2,3] && 3 in [3, [1,2,3]] && 1 in [1,2,3]",
         "cel.bind(@r0, [1, 2, 3], cel.bind(@r1, 1 in @r0, @r1 && 2 in @r0 && 3 in [3, @r0] &&"
@@ -1506,19 +1512,31 @@ public class SubexpressionOptimizerTest {
   @Test
   public void smokeTest() throws Exception {
       String expression =
-          "[[], [], []].all(x, !x.exists(y, y in [1] + [2] + [3]))";
-      CelOptimizer celOptimizer =
-          newCseOptimizer(
-              SubexpressionOptimizerOptions.newBuilder()
-                  .populateMacroCalls(true)
-                  .enableCelBlock(true)
-                  .maxNestingLevel(3)
-                  .build());
-      CelAbstractSyntaxTree ast = CEL.compile(expression).getAst();
+          // "[1,2,3].map(i, [1, 2, 3].map(i, i + 1)) == [[2, 3, 4], [2, 3, 4], [2, 3, 4]]";
+    // "[1].map(i, [1].map(i, i + 1))";
+    // "[].map(y, [].map(x, 1 + 1))";
+    // "[1, 2].map(y, [1, 2, 3].filter(x, x == y))";
+    // "[].map(y, [].exists(x, x))";
+    CseTestCase.MACRO_SHADOWED_VARIABLE_2.source;
+      // for (int i = 0; i < 10; i++) {
+        CelOptimizer celOptimizer =
+            newCseOptimizer(
+                SubexpressionOptimizerOptions.newBuilder()
+                    .populateMacroCalls(true)
+                    .enableCelBlock(true)
+                    .maxNestingLevel(1)
+                    .build());
+        CelAbstractSyntaxTree ast = CEL.compile(expression).getAst();
 
-      CelAbstractSyntaxTree optimizedAst = celOptimizer.optimize(ast);
+        CelAbstractSyntaxTree optimizedAst = celOptimizer.optimize(ast);
+        assertThat(CEL.createProgram(optimizedAst).eval(ImmutableMap.of("x", 0))).isNotNull();
+        assertThat(CEL_UNPARSER.unparse(optimizedAst)).isEqualTo("");
 
-      assertThat(CEL.createProgram(optimizedAst).eval()).isEqualTo(true);
-    assertThat(CEL_UNPARSER.unparse(optimizedAst)).isEqualTo("cel.@block([[1] + [2] + [3], @c0:0.exists(@c1:0, @c1:0 in @index0), [[], [], []].all(@c0:0, !@index1)], @index2)");
+        try {
+        } catch (Exception e) {
+          // throw new IllegalStateException("Failed on index: " + i, e);
+        }
+      // }
   }
 }
+

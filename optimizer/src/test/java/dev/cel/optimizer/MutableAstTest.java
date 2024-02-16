@@ -382,6 +382,26 @@ public class MutableAstTest {
   }
 
   @Test
+  public void someTest() throws Exception {
+    // CelAbstractSyntaxTree ast = CEL.compile("[].map(y, [].map(x, 1))").getAst();
+    // CelAbstractSyntaxTree ast = CEL.compile("[].map(y, [])").getAst();
+    CelAbstractSyntaxTree ast = CEL.compile("[].map(y, true)").getAst();
+    CelAbstractSyntaxTree ast2 = CEL.compile("[].exists(y, true)").getAst();
+    // CelAbstractSyntaxTree ast3 = CEL.compile("[].all(y, true)").getAst();
+    // CelAbstractSyntaxTree ast4 = CEL.compile("[].exists_one(y, true)").getAst();
+    // CelAbstractSyntaxTree ast5 = CEL.compile("[].filter(y, true)").getAst();
+    CelExpr newIdentExpr =                 CelExpr.newBuilder()
+        .setIdent(CelIdent.newBuilder().setName("b").build())
+        .build();
+
+    CelAbstractSyntaxTree mutatedAst = MUTABLE_AST.replaceSubtree(ast, newIdentExpr, 8L);
+    // mutatedAst = CEL.check(mutatedAst).getAst();
+
+    // assertThat(CEL.createProgram(mutatedAst).eval()).isEqualTo("");
+    assertThat(CEL_UNPARSER.unparse(mutatedAst)).isEqualTo("[].map(y, b)");
+  }
+
+  @Test
   public void globalCallExpr_replaceRoot() throws Exception {
     // Tree shape (brackets are expr IDs):
     //           + [4]

@@ -35,7 +35,7 @@ import dev.cel.common.CelSource.Extension.Version;
 import dev.cel.common.CelValidationException;
 import dev.cel.common.CelVarDecl;
 import dev.cel.common.ast.CelExpr;
-import dev.cel.common.ast.CelExpr.CelCall;
+import dev.cel.common.ast.CelExpr.CelComprehension;
 import dev.cel.common.ast.CelExpr.CelIdent;
 import dev.cel.common.ast.CelExpr.ExprKind.Kind;
 import dev.cel.common.navigation.CelNavigableAst;
@@ -54,6 +54,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -195,7 +196,8 @@ public class SubexpressionOptimizer implements CelAstOptimizer {
       return astToModify;
     }
 
-    mangledComprehensionAst.mangledComprehensionIdents().forEach((identName,type) -> celBuilder.addVarDeclarations(CelVarDecl.newVarDeclaration(identName, type)));
+    mangledComprehensionAst.mangledComprehensionIdents().forEach((identName,type) -> celBuilder.addVarDeclarations(CelVarDecl.newVarDeclaration(identName.key(), type.key())));
+    mangledComprehensionAst.mangledComprehensionIdents().forEach((identName,type) -> celBuilder.addVarDeclarations(CelVarDecl.newVarDeclaration(identName.value(), type.value())));
     // Type-check all sub-expressions then add them as block identifiers to the CEL environment
     addBlockIdentsToEnv(celBuilder, subexpressions);
 
@@ -409,32 +411,78 @@ public class SubexpressionOptimizer implements CelAstOptimizer {
   }
 
   private static boolean canEliminate(CelNavigableExpr navigableExpr) {
-    return !navigableExpr.getKind().equals(Kind.CONSTANT)
+    boolean result = !navigableExpr.getKind().equals(Kind.CONSTANT)
         && !navigableExpr.getKind().equals(Kind.IDENT)
         && !navigableExpr.expr().identOrDefault().name().startsWith(BIND_IDENTIFIER_PREFIX)
         && !navigableExpr.expr().comprehensionOrDefault().accuVar().startsWith(BIND_IDENTIFIER_PREFIX)
         && !navigableExpr.expr().selectOrDefault().testOnly()
         && isAllowedFunction(navigableExpr)
         && isWithinInlineableComprehension(navigableExpr);
+
+    if (navigableExpr.id() == 34) {
+      // System.out.println();
+    }
+
+    return result;
   }
 
+  private static boolean isInlineableComprehensionList(CelNavigableExpr exprInLoopStep) {
+    return true;
+    // if (!exprInLoopStep.getKind().equals(Kind.CREATE_LIST)) {
+    //   return true;
+    // }
+    // if (!exprInLoopStep.parent().isPresent() ||
+    //     !exprInLoopStep.parent().get().getKind().equals(Kind.CALL)) {
+    //   return true;
+    // }
+    // CelComprehension comprehension = exprInLoopStep.parent().get().parent().filter(node -> node.getKind().equals(Kind.COMPREHENSION)).map(node -> node.expr().comprehension()).orElse(null);
+    // if (comprehension == null) {
+    //   return true;
+    // }
+    //
+    //
+    // boolean isExtraneousList = comprehension.accuInit().exprKind().getKind().equals(Kind.CREATE_LIST) &&
+    //     comprehension.accuInit().createList().elements().isEmpty() &&
+    //     CelNavigableExpr.fromExpr(comprehension.loopStep()).descendants().anyMatch(node -> node.expr().equals(exprInLoopStep.expr()));
+    //
+    // return !isExtraneousList;
+  }
+
+
   private static boolean isWithinInlineableComprehension(CelNavigableExpr expr) {
+    if (!isInlineableComprehensionList(expr)) {
+      return false;
+    }
     Optional<CelNavigableExpr> maybeParent = expr.parent();
     while (maybeParent.isPresent()) {
       CelNavigableExpr parent = maybeParent.get();
       if (parent.getKind().equals(Kind.COMPREHENSION)) {
+        // List<CelExpr> exprs = Streams.concat(
+        //         // If the expression is within a comprehension, it is eligible for CSE iff is in
+        //         // result, loopStep or iterRange. While result is not human authored, it needs to be
+        //         // included to extract subexpressions that are already in cel.bind macro.
+        //         CelNavigableExpr.fromExpr(parent.expr().comprehension().result()).descendants(),
+        //         CelNavigableExpr.fromExpr(parent.expr().comprehension().iterRange()).allNodes()
+        //             .filter(nodeInRange ->
+        //                 // Exclude empty lists (cel.bind sets this for iterRange).
+        //                 !nodeInRange.expr().exprKind().getKind().equals(Kind.CREATE_LIST) ||
+        //                     !nodeInRange.expr().createList().elements().isEmpty()),
+        //         CelNavigableExpr.fromExpr(parent.expr().comprehension().loopStep()).allNodes()
+        //     )
+        //     .map(CelNavigableExpr::expr)
+        //     .collect(Collectors.toList());
         return Streams.concat(
                 // If the expression is within a comprehension, it is eligible for CSE iff is in
                 // result, loopStep or iterRange. While result is not human authored, it needs to be
                 // included to extract subexpressions that are already in cel.bind macro.
                 CelNavigableExpr.fromExpr(parent.expr().comprehension().result()).descendants(),
-                CelNavigableExpr.fromExpr(parent.expr().comprehension().loopStep()).descendants(),
-                CelNavigableExpr.fromExpr(parent.expr().comprehension().iterRange()).allNodes())
-            .filter(
-                node ->
-                    // Exclude empty lists (cel.bind sets this for iterRange).
-                    !node.getKind().equals(Kind.CREATE_LIST)
-                        || !node.expr().createList().elements().isEmpty())
+                CelNavigableExpr.fromExpr(parent.expr().comprehension().iterRange()).allNodes()
+                    .filter(nodeInRange ->
+                        // Exclude empty lists (cel.bind sets this for iterRange).
+                        !nodeInRange.expr().exprKind().getKind().equals(Kind.CREATE_LIST) ||
+                            !nodeInRange.expr().createList().elements().isEmpty()),
+                CelNavigableExpr.fromExpr(parent.expr().comprehension().loopStep()).allNodes()
+            )
             .map(CelNavigableExpr::expr)
             .anyMatch(node -> node.equals(expr.expr()));
       }
