@@ -533,7 +533,6 @@ public class SubexpressionOptimizerBaselineTest extends BaselineTestCase {
     NESTED_MACROS(
         "[1,2,3].map(i, [1, 2, 3].map(i, [1, 2, 3].map(i, [1, 2, 3].map(i, [1, 2, 3].map(i,"
             + " [1, 2, 3].map(i, [1, 2, 3].map(i, [1, 2, 3].map(i, [1, 2, 3]))))))))");
-    ;
 
     private final String source;
 

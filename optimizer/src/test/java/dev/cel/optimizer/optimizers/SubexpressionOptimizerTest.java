@@ -14,10 +14,6 @@
 
 package dev.cel.optimizer.optimizers;
 
-import static com.google.common.truth.Truth.assertThat;
-import static dev.cel.common.CelOverloadDecl.newGlobalOverload;
-import static org.junit.Assert.assertThrows;
-
 import com.google.common.base.VerifyException;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -27,15 +23,10 @@ import com.google.testing.junit.testparameterinjector.TestParameters;
 import dev.cel.bundle.Cel;
 import dev.cel.bundle.CelBuilder;
 import dev.cel.bundle.CelFactory;
-import dev.cel.common.CelAbstractSyntaxTree;
-import dev.cel.common.CelFunctionDecl;
-import dev.cel.common.CelOptions;
-import dev.cel.common.CelOverloadDecl;
+import dev.cel.common.*;
 import dev.cel.common.CelSource.Extension;
 import dev.cel.common.CelSource.Extension.Component;
 import dev.cel.common.CelSource.Extension.Version;
-import dev.cel.common.CelValidationException;
-import dev.cel.common.CelVarDecl;
 import dev.cel.common.ast.CelConstant;
 import dev.cel.common.ast.CelExpr;
 import dev.cel.common.ast.CelExpr.ExprKind.Kind;
@@ -58,10 +49,15 @@ import dev.cel.runtime.CelRuntime;
 import dev.cel.runtime.CelRuntime.CelFunctionBinding;
 import dev.cel.runtime.CelRuntimeFactory;
 import dev.cel.testing.testdata.proto3.TestAllTypesProto.TestAllTypes;
-import java.util.Optional;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import static com.google.common.truth.Truth.assertThat;
+import static dev.cel.common.CelOverloadDecl.newGlobalOverload;
+import static org.junit.Assert.assertThrows;
 
 @RunWith(TestParameterInjector.class)
 public class SubexpressionOptimizerTest {
@@ -115,6 +111,7 @@ public class SubexpressionOptimizerTest {
                 "non_pure_custom_func",
                 newGlobalOverload("non_pure_custom_func_overload", SimpleType.INT, SimpleType.INT)))
         .addVar("x", SimpleType.DYN)
+            .addVar("a", SimpleType.DYN)
         .addVar("msg", StructTypeReference.create(TestAllTypes.getDescriptor().getFullName()));
   }
 
@@ -603,5 +600,25 @@ public class SubexpressionOptimizerTest {
     }
 
     return CEL_FOR_EVALUATING_BLOCK.check(astToModify).getAst();
+  }
+
+  @Test
+  public void subexpression_unparsed() throws Exception {
+//    String expression = "x.a.b + x.a.b + x.a.b + x.a.b + x.a.b";
+    String expression = "msg.oneof_type.payload.single_int64 + msg.oneof_type.payload.single_int32 + msg.oneof_type.payload.single_int64 + msg.single_int64 + msg.oneof_type.payload.oneof_type.payload.single_int64 == 31";
+//    String expression = "x.a.b + x.a.b.c.d";
+    CelAbstractSyntaxTree ast = CEL.compile(expression).getAst();
+
+    CelAbstractSyntaxTree optimizedAst =
+            newCseOptimizer(
+                    SubexpressionOptimizerOptions.newBuilder()
+                            .populateMacroCalls(true)
+                            .enableCelBlock(true)
+                            .subexpressionMaxRecursionDepth(2)
+                            .build())
+                    .optimize(ast);
+
+//    assertThat(ast.getExpr()).isEqualTo(optimizedAst.getExpr());
+    assertThat(CEL_UNPARSER.unparse(optimizedAst)).isEqualTo(expression);
   }
 }

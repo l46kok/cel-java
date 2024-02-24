@@ -55,13 +55,8 @@ import dev.cel.optimizer.CelAstOptimizer;
 import dev.cel.optimizer.MutableAst;
 import dev.cel.optimizer.MutableAst.MangledComprehensionAst;
 import dev.cel.parser.Operator;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.Optional;
+
+import java.util.*;
 import java.util.stream.Stream;
 
 /**
@@ -499,10 +494,11 @@ public class SubexpressionOptimizer implements CelAstOptimizer {
     ImmutableList<CelNavigableExpr> allNodes =
         CelNavigableAst.fromAst(ast)
             .getRoot()
-            .allNodes(TraversalOrder.POST_ORDER)
+            .allNodes(TraversalOrder.PRE_ORDER)
             .filter(this::canEliminate)
             .filter(node -> node.height() <= recursionLimit)
             .filter(node -> !areSemanticallyEqual(ast.getExpr(), node.expr()))
+            .sorted(Comparator.comparingInt(CelNavigableExpr::height).reversed())
             .collect(toImmutableList());
 
     if (allNodes.isEmpty()) {
@@ -513,9 +509,21 @@ public class SubexpressionOptimizer implements CelAstOptimizer {
     if (commonSubexpr.isPresent()) {
       return commonSubexpr;
     }
+
     // If there's no common subexpr, just return the one with the highest height that's still below
-    // the recursion limit.
-    return Optional.of(Iterables.getLast(allNodes));
+    // the recursion limit, but only if it actually needs to be extracted due to exceeding the recursion limit.
+    boolean astHasMoreExtractableSubexprs =
+            CelNavigableAst.fromAst(ast)
+                    .getRoot()
+                    .allNodes(TraversalOrder.POST_ORDER)
+                    .filter(node -> node.height() > recursionLimit)
+                    .anyMatch(this::canEliminate);
+    if (astHasMoreExtractableSubexprs) {
+      return Optional.of(allNodes.get(0));
+    }
+
+    // The height of the remaining subexpression is already below the recursion limit. No need to extract.
+    return Optional.empty();
   }
 
   private Optional<CelNavigableExpr> findCseCandidateWithCommonSubexpr(
