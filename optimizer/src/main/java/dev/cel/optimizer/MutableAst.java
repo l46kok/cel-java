@@ -128,9 +128,13 @@ public final class MutableAst {
    */
   public CelAbstractSyntaxTree replaceSubtree(
       CelAbstractSyntaxTree ast, CelExpr newExpr, long exprIdToReplace) {
+    CelSource.Builder newSourceBuilder = CelSource.newBuilder();
+    if (ast.getSource().getMacroCalls().containsKey(newExpr.id()) && newExpr.exprKind().getKind().equals(Kind.COMPREHENSION)) {
+      newSourceBuilder.addMacroCalls(newExpr.id(), ast.getSource().getMacroCalls().get(newExpr.id()));
+    }
     return replaceSubtreeWithNewAst(
         ast,
-        CelAbstractSyntaxTree.newParsedAst(newExpr, CelSource.newBuilder().build()),
+        CelAbstractSyntaxTree.newParsedAst(newExpr, newSourceBuilder.build()),
         exprIdToReplace);
   }
 
@@ -572,7 +576,10 @@ public final class MutableAst {
     macroMap.putAll(celSource1.getMacroCalls());
     macroMap.putAll(celSource2.getMacroCalls());
 
-    return CelSource.newBuilder().addAllMacroCalls(macroMap.buildOrThrow()).build();
+    return CelSource.newBuilder()
+        .addAllExtensions(celSource1.getExtensions())
+        .addAllExtensions(celSource2.getExtensions())
+        .addAllMacroCalls(macroMap.buildOrThrow()).build();
   }
 
   /**
@@ -590,7 +597,8 @@ public final class MutableAst {
       return CelAbstractSyntaxTree.newParsedAst(newExprBuilder.build(), ast.getSource());
     }
 
-    CelSource.Builder sourceBuilder = CelSource.newBuilder();
+    CelSource.Builder sourceBuilder = CelSource.newBuilder().addAllExtensions(ast.getSource()
+        .getExtensions());
     // Update the macro call IDs and their call IDs
     for (Entry<Long, CelExpr> macroCall : ast.getSource().getMacroCalls().entrySet()) {
       long macroId = macroCall.getKey();

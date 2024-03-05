@@ -126,7 +126,7 @@ public class MutableAstTest {
   }
 
   @Test
-  public void mutableAst_astContainsTaggedExtension_retained() throws Exception {
+  public void replaceSubtree_astContainsTaggedExtension_retained() throws Exception {
     CelAbstractSyntaxTree ast = CEL.compile("has(TestAllTypes{}.single_int32)").getAst();
     Extension extension = Extension.create("test", Version.of(1, 1));
     CelSource celSource = ast.getSource().toBuilder().addAllExtensions(extension).build();
@@ -139,6 +139,28 @@ public class MutableAstTest {
             ast, CelExpr.newBuilder().setConstant(CelConstant.ofValue(true)).build(), 1);
 
     assertThat(mutatedAst.getSource().getExtensions()).containsExactly(extension);
+  }
+
+  @Test
+  public void replaceSubtreeWithNewAst_astContainsTaggedExtension_retained() throws Exception {
+    CelAbstractSyntaxTree ast = CEL.compile("has(TestAllTypes{}.single_int32)").getAst();
+    Extension extension = Extension.create("test", Version.of(1, 1));
+    CelSource celSource = ast.getSource().toBuilder().addAllExtensions(extension).build();
+    ast =
+        CelAbstractSyntaxTree.newCheckedAst(
+            ast.getExpr(), celSource, ast.getReferenceMap(), ast.getTypeMap());
+
+    CelAbstractSyntaxTree astToReplaceWith = CEL.compile("cel.bind(a, true, a)").getAst();
+    Extension extension2 = Extension.create("test2", Version.of(2, 2));
+    CelSource celSource2 = astToReplaceWith.getSource().toBuilder().addAllExtensions(extension2).build();
+    astToReplaceWith =
+        CelAbstractSyntaxTree.newCheckedAst(
+            astToReplaceWith.getExpr(), celSource2, astToReplaceWith.getReferenceMap(), astToReplaceWith.getTypeMap());
+
+    CelAbstractSyntaxTree mutatedAst =
+        MUTABLE_AST.replaceSubtreeWithNewAst(ast, astToReplaceWith, ast.getExpr().id());
+
+    assertThat(mutatedAst.getSource().getExtensions()).containsExactly(extension, extension2);
   }
 
   @Test
@@ -158,6 +180,21 @@ public class MutableAstTest {
 
     assertThat(mutatedAst.getSource().getMacroCalls()).hasSize(expectedMacroCallSize);
     assertThat(CEL_UNPARSER.unparse(mutatedAst)).isEqualTo(source);
+    assertThat(CEL.createProgram(CEL.check(mutatedAst).getAst()).eval()).isEqualTo(true);
+  }
+
+  @Test
+  public void smokeTest() throws Exception {
+    // CelAbstractSyntaxTree ast = CEL.compile("false ? false : cel.bind(b, false, b)").getAst();
+    CelAbstractSyntaxTree ast = CEL.compile("1").getAst();
+    CelAbstractSyntaxTree ast2 = CEL.compile("cel.bind(a, true, a)").getAst();
+
+    CelAbstractSyntaxTree mutatedAst =
+        // MUTABLE_AST.replaceSubtreeWithNewBindMacro(ast, "a", CelExpr.ofConstantExpr(0, CelConstant.ofValue(true)), CelExpr.ofIdentExpr(0, "a"), 2L);
+        // MUTABLE_AST.replaceSubtree(ast, ast2.getExpr(), 1L);
+    MUTABLE_AST.replaceSubtreeWithNewAst(ast, ast2, 1L);
+
+    assertThat(CEL_UNPARSER.unparse(mutatedAst)).isEqualTo("cel.bind(a, true, a)");
     assertThat(CEL.createProgram(CEL.check(mutatedAst).getAst()).eval()).isEqualTo(true);
   }
 
