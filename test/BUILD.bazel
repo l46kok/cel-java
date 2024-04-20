@@ -58,6 +58,6 @@ ALL_TARGETS = [
 
 pom_file(
    name = "test",
-   targets = ALL_TARGETS,
+   targets = ["//checker/src/main/java/dev/cel/checker:proto_type_mask"],
    template_file = "pom_template.xml",
 )

@@ -68,7 +68,10 @@ pom_file(
         "PACKAGE_NAME": "CEL Java",
         "PACKAGE_DESC": "Common Expression Language for Java. This include both the compilation and runtime packages.",
     },
-    targets = ALL_TARGETS + ["@maven//:com_google_protobuf_protobuf_java","@maven//:com_google_protobuf_protobuf_java_util"],
+    targets = ALL_TARGETS + [
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:com_google_protobuf_protobuf_java_util",
+    ],
     template_file = "pom_template.xml",
 )
 

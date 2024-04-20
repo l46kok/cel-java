@@ -12,27 +12,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 module(
   name = "cel_java"
 )
 
 bazel_dep(name = "bazel_skylib", version = "1.4.2")
 bazel_dep(name = "rules_jvm_external", version = "6.0")
-# bazel_dep(name = "protobuf", repo_name="com_google_protobuf", version = "23.1")
-bazel_dep(name = "googleapis", repo_name="com_google_googleapis", version = "0.0.0-20240326-1c8d509c5")
+bazel_dep(name = "protobuf", repo_name="com_google_protobuf", version = "23.1")
 bazel_dep(name = "rules_pkg", version = "0.7.0")
 bazel_dep(name = "rules_license", version = "0.0.8")
 bazel_dep(name = "rules_java", version = "7.4.0")
 bazel_dep(name = "cel-spec", repo_name="cel_spec", version = "0.14.0")
 
-switched_rules = use_extension("@com_google_googleapis//:extensions.bzl", "switched_rules")
-switched_rules.use_languages(java = True)
-use_repo(switched_rules, "com_google_googleapis_imports")
+# switched_rules = use_extension("@com_google_googleapis//:extensions.bzl", "switched_rules")
+# switched_rules.use_languages(java = True)
+# use_repo(switched_rules, "com_google_googleapis_imports")
 
-maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
+cel_maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
 
 # run 'bazel run @unpinned_maven//:pin' after updating versions below to generate a new lock file.
-maven.install(
+cel_maven.install(
     # keep sorted
     artifacts = [
         "com.google.api.grpc:proto-google-common-protos:2.27.0",
@@ -42,8 +42,8 @@ maven.install(
         "com.google.errorprone:error_prone_annotations:2.23.0",
         "com.google.guava:guava-testlib:33.0.0-jre",
         "com.google.guava:guava:33.0.0-jre",
-        "com.google.protobuf:protobuf-java-util:4.26.1",
-        "com.google.protobuf:protobuf-java:4.26.1",
+        "com.google.protobuf:protobuf-java-util:3.24.4",
+        "com.google.protobuf:protobuf-java:3.24.4",
         "com.google.re2j:re2j:1.7",
         "com.google.testparameterinjector:test-parameter-injector:1.15",
         "com.google.truth.extensions:truth-java8-extension:1.4.0",
@@ -57,16 +57,35 @@ maven.install(
         "https://maven.google.com",
         "https://repo1.maven.org/maven2",
     ],
+    strict_visibility = True,
     lock_file = "//:maven_install.json",
     fail_if_repin_required=True
 )
-use_repo(maven, "maven", "unpinned_maven")
+use_repo(cel_maven, "maven", "unpinned_maven")
 
-non_module_dependencies = use_extension("//:repositories.bzl", "non_module_dependencies")
-use_repo(non_module_dependencies, "antlr4_jar")
-use_repo(non_module_dependencies, "bazel_common")
+non_module_dependencies = use_extension("//:extensions.bzl", "non_module_dependencies")
+use_repo(non_module_dependencies, "antlr4_jar", "bazel_common")
 
-# google_common_workspace_rules = use_extension("@bazel_common//:workspace_defs.bzl", "google_common_workspace_rules")
-# google_common_workspace_rules()
+GOOGLE_APIS_VERSION = "d73a41615b101c34c58b3534c2cc7ee1d89cccb0"
+
+bazel_dep(name = "com_google_googleapis", version = GOOGLE_APIS_VERSION)
+archive_override(
+    module_name = "com_google_googleapis",
+    integrity = "sha256-sOd1u3SXtn/7CtnH6dxze8ZEkSkRsOJHTusK/STVi0c=",
+    patch_strip = 1,
+    patches = [
+        "add_bzlmod_support.patch"
+    ],
+    strip_prefix = "googleapis-" + GOOGLE_APIS_VERSION,
+    urls = [
+        "https://github.com/googleapis/googleapis/archive/%s.zip" % GOOGLE_APIS_VERSION
+    ],
+)
+
+switched_rules = use_extension("@com_google_googleapis//:extensions.bzl", "switched_rules")
+switched_rules.use_languages(java = True)
+use_repo(switched_rules, "com_google_googleapis_imports")
+
+# bazel_dep(name = "googleapis", repo_name="com_google_googleapis", version = "0.0.0-20240326-1c8d509c5")
 
 

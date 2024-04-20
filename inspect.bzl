@@ -49,8 +49,9 @@ def _collect_maven_info_impl(_target, ctx):
     # for runtime_dep in exports:
         # print(runtime_dep)
 
-    # for dep in deps:
-        # print(dep)
+    for dep in deps:
+        print(dep)
+
 
     maven_artifacts = []
     for tag in tags:

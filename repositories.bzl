@@ -31,12 +31,13 @@ def bazel_common_dependency():
         url = "https://github.com/google/bazel-common/archive/%s.tar.gz" % bazel_common_tag,
     )
 
-def _non_module_dependencies_impl(_ctx):
-    antlr4_jar_dependency()
-    bazel_common_dependency()
-
-non_module_dependencies = module_extension(
-    implementation = _non_module_dependencies_impl,
-)
-
+def googleapis_dependency():
+    http_archive(
+        name = "com_google_googleapis",
+        sha256 = "8503282213779a3c230251218c924f385f457a053b4f82ff95d068f71815e558",
+        strip_prefix = "googleapis-d73a41615b101c34c58b3534c2cc7ee1d89cccb0",
+        urls = [
+            "https://github.com/googleapis/googleapis/archive/d73a41615b101c34c58b3534c2cc7ee1d89cccb0.tar.gz",
+        ],
+    )
 
