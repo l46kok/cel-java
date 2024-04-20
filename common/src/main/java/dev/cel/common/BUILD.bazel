@@ -3,6 +3,7 @@ package(
     default_visibility = [
         "//common:__pkg__",
         "//publish:__pkg__",
+        "//test:__pkg__",
     ],
 )
 

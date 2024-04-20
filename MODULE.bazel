@@ -18,7 +18,7 @@ module(
 
 bazel_dep(name = "bazel_skylib", version = "1.4.2")
 bazel_dep(name = "rules_jvm_external", version = "6.0")
-bazel_dep(name = "protobuf", repo_name="com_google_protobuf", version = "23.1")
+# bazel_dep(name = "protobuf", repo_name="com_google_protobuf", version = "23.1")
 bazel_dep(name = "googleapis", repo_name="com_google_googleapis", version = "0.0.0-20240326-1c8d509c5")
 bazel_dep(name = "rules_pkg", version = "0.7.0")
 bazel_dep(name = "rules_license", version = "0.0.8")
@@ -42,8 +42,8 @@ maven.install(
         "com.google.errorprone:error_prone_annotations:2.23.0",
         "com.google.guava:guava-testlib:33.0.0-jre",
         "com.google.guava:guava:33.0.0-jre",
-        "com.google.protobuf:protobuf-java-util:3.24.4",
-        "com.google.protobuf:protobuf-java:3.24.4",
+        "com.google.protobuf:protobuf-java-util:4.26.1",
+        "com.google.protobuf:protobuf-java:4.26.1",
         "com.google.re2j:re2j:1.7",
         "com.google.testparameterinjector:test-parameter-injector:1.15",
         "com.google.truth.extensions:truth-java8-extension:1.4.0",
