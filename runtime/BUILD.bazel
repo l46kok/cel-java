@@ -5,7 +5,12 @@ package(
 
 java_library(
     name = "runtime",
-    exports = ["//runtime/src/main/java/dev/cel/runtime"],
+    exports = [
+        "//runtime/src/main/java/dev/cel/runtime",
+        "//runtime/src/main/java/dev/cel/runtime:runtime_common",
+        "//runtime/src/main/java/dev/cel/runtime:runtime_factory",
+        "//runtime/src/main/java/dev/cel/runtime:runtime_legacy_impl",
+    ],
 )
 
 java_library(

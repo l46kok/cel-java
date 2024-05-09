@@ -130,16 +130,28 @@ java_library(
 )
 
 # keep sorted
-RUNTIME_SOURCES = [
+RUNTIME_COMMON_SOURCES = [
     "CelEvaluationException.java",
     "CelFunctionOverload.java",
-    "CelRuntime.java",
-    "CelRuntimeBuilder.java",
-    "CelRuntimeFactory.java",
-    "CelRuntimeLegacyImpl.java",
-    "CelRuntimeLibrary.java",
     "CelVariableResolver.java",
     "UnknownContext.java",
+]
+
+# keep sorted
+RUNTIME_FACTORY_SOURCES = [
+    "CelRuntimeFactory.java",
+]
+
+# keep sorted
+RUNTIME_LEGACY_IMPL_SOURCES = [
+    "CelRuntimeLegacyImpl.java",
+]
+
+# keep sorted
+RUNTIME_SOURCES = [
+    "CelRuntime.java",  # need to keep together with builder
+    "CelRuntimeBuilder.java",  # need to keep together with lib
+    "CelRuntimeLibrary.java",  # need to keep together with builder, runtime interface
 ]
 
 java_library(
@@ -149,11 +161,58 @@ java_library(
     ],
     deps = [
         ":evaluation_listener",
-        ":runtime_type_provider_legacy",
-        ":unknown_attributes",
+        ":interpreter",
+        ":runtime_common",
         "//:auto_value",
         "//common",
+        "//common:options",
+        "//common/values:cel_value_provider",
+        "@maven//:com_google_code_findbugs_annotations",
+        "@maven//:com_google_errorprone_error_prone_annotations",
+        "@maven//:com_google_guava_guava",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:org_jspecify_jspecify",
+    ],
+)
+
+java_library(
+    name = "runtime_common",
+    srcs = RUNTIME_COMMON_SOURCES,
+    tags = [
+    ],
+    deps = [
+        ":interpreter",
+        ":unknown_attributes",
+        "//common",
         "//common:error_codes",
+        "@maven//:com_google_errorprone_error_prone_annotations",
+        "@maven//:com_google_guava_guava",
+    ],
+)
+
+java_library(
+    name = "runtime_factory",
+    srcs = RUNTIME_FACTORY_SOURCES,
+    tags = [
+    ],
+    deps = [
+        ":runtime",
+        ":runtime_legacy_impl",
+        "//common:options",
+    ],
+)
+
+java_library(
+    name = "runtime_legacy_impl",
+    srcs = RUNTIME_LEGACY_IMPL_SOURCES,
+    tags = [
+    ],
+    deps = [
+        ":interpreter",
+        ":runtime",
+        ":runtime_common",
+        ":runtime_type_provider_legacy",
+        "//common",
         "//common:options",
         "//common/annotations",
         "//common/internal:cel_descriptor_pools",
@@ -163,7 +222,6 @@ java_library(
         "//common/types:cel_types",
         "//common/values:cel_value_provider",
         "//common/values:proto_message_value_provider",
-        "//runtime:interpreter",
         "@maven//:com_google_code_findbugs_annotations",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
