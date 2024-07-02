@@ -14,23 +14,23 @@
 
 package dev.cel.policy;
 
-import static com.google.common.collect.ImmutableList.toImmutableList;
+import static dev.cel.policy.YamlHelper.ERROR;
+import static dev.cel.policy.YamlHelper.assertYamlType;
 
-import com.google.common.base.Joiner;
 import dev.cel.common.CelIssue;
 import dev.cel.common.CelSourceLocation;
-import dev.cel.common.Source;
 import dev.cel.common.internal.CelCodePointArray;
+import dev.cel.policy.YamlHelper.YamlNodeType;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.nodes.Node;
 import org.yaml.snakeyaml.nodes.ScalarNode;
 
 /** Package-private class to assist with storing policy parsing context. */
 final class YamlParserContextImpl implements ParserContext<Node> {
-
-  private static final Joiner JOINER = Joiner.on('\n');
 
   private final ArrayList<CelIssue> issues;
   private final HashMap<Long, CelSourceLocation> idToLocationMap;
@@ -44,14 +44,26 @@ final class YamlParserContextImpl implements ParserContext<Node> {
   }
 
   @Override
-  public String getIssueString(Source source) {
-    return JOINER.join(
-        issues.stream().map(iss -> iss.toDisplayString(source)).collect(toImmutableList()));
+  public List<CelIssue> getIssues() {
+    return issues;
   }
 
   @Override
-  public boolean hasError() {
-    return !issues.isEmpty();
+  public Map<Long, Integer> getIdToOffsetMap() {
+    return idToOffsetMap;
+  }
+
+  @Override
+  public ValueString newValueString(Node node) {
+    long id = collectMetadata(node);
+    if (!assertYamlType(this, id, node, YamlNodeType.STRING, YamlNodeType.TEXT)) {
+      return ValueString.of(id, ERROR);
+    }
+
+    ScalarNode scalarNode = (ScalarNode) node;
+
+    // TODO: Compute relative source for multiline strings
+    return ValueString.of(id, scalarNode.getValue());
   }
 
   @Override

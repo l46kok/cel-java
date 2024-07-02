@@ -15,10 +15,13 @@
 package dev.cel.policy;
 
 import com.google.auto.value.AutoValue;
+import com.google.common.collect.ImmutableMap;
 import com.google.errorprone.annotations.CheckReturnValue;
 import dev.cel.common.CelSourceHelper;
+import dev.cel.common.CelSourceLocation;
 import dev.cel.common.Source;
 import dev.cel.common.internal.CelCodePointArray;
+import java.util.Map;
 import java.util.Optional;
 
 /** CelPolicySource represents the source content of a policy and its related metadata. */
@@ -32,8 +35,18 @@ public abstract class CelPolicySource implements Source {
   public abstract String getDescription();
 
   @Override
+  public abstract ImmutableMap<Long, Integer> getPositionsMap();
+
+  @Override
   public Optional<String> getSnippet(int line) {
     return CelSourceHelper.getSnippet(getContent(), line);
+  }
+
+  /**
+   * Get the line and column in the source expression text for the given code point {@code offset}.
+   */
+  public Optional<CelSourceLocation> getOffsetLocation(int offset) {
+    return CelSourceHelper.getOffsetLocation(getContent(), offset);
   }
 
   /** Builder for {@link CelPolicySource}. */
@@ -44,6 +57,8 @@ public abstract class CelPolicySource implements Source {
 
     public abstract Builder setDescription(String description);
 
+    public abstract Builder setPositionsMap(Map<Long, Integer> value);
+
     @CheckReturnValue
     public abstract CelPolicySource build();
   }
@@ -53,6 +68,7 @@ public abstract class CelPolicySource implements Source {
   public static Builder newBuilder(CelCodePointArray celCodePointArray) {
     return new AutoValue_CelPolicySource.Builder()
         .setDescription("")
-        .setContent(celCodePointArray);
+        .setContent(celCodePointArray)
+        .setPositionsMap(ImmutableMap.of());
   }
 }

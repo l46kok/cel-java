@@ -24,6 +24,7 @@ import static dev.cel.policy.YamlHelper.parseYamlSource;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import dev.cel.common.CelIssue;
 import dev.cel.common.internal.CelCodePointArray;
 import dev.cel.policy.CelPolicyConfig.ExtensionConfig;
 import dev.cel.policy.CelPolicyConfig.FunctionDecl;
@@ -334,10 +335,16 @@ final class CelPolicyYamlConfigParser implements CelPolicyConfigParser {
       ParserContext<Node> ctx = YamlParserContextImpl.newInstance(configCodePointArray);
       CelPolicyConfig.Builder policyConfig = parseConfig(ctx, node);
       CelPolicySource configSource =
-          CelPolicySource.newBuilder(configCodePointArray).setDescription(description).build();
-      if (ctx.hasError()) {
-        throw new CelPolicyValidationException(ctx.getIssueString(configSource));
+          CelPolicySource.newBuilder(configCodePointArray)
+              .setDescription(description)
+              .setPositionsMap(ctx.getIdToOffsetMap())
+              .build();
+
+      if (!ctx.getIssues().isEmpty()) {
+        throw new CelPolicyValidationException(
+            CelIssue.toDisplayString(ctx.getIssues(), configSource));
       }
+
       return policyConfig.setConfigSource(configSource).build();
     }
 
@@ -347,6 +354,7 @@ final class CelPolicyYamlConfigParser implements CelPolicyConfigParser {
       if (!assertYamlType(ctx, id, node, YamlNodeType.MAP)) {
         return builder;
       }
+
       MappingNode rootNode = (MappingNode) node;
       for (NodeTuple nodeTuple : rootNode.getValue()) {
         Node keyNode = nodeTuple.getKeyNode();
@@ -354,6 +362,7 @@ final class CelPolicyYamlConfigParser implements CelPolicyConfigParser {
         if (!assertYamlType(ctx, keyId, keyNode, YamlNodeType.STRING, YamlNodeType.TEXT)) {
           continue;
         }
+
         Node valueNode = nodeTuple.getValueNode();
         String fieldName = ((ScalarNode) keyNode).getValue();
         switch (fieldName) {
@@ -380,6 +389,7 @@ final class CelPolicyYamlConfigParser implements CelPolicyConfigParser {
             // continue handling the rest of the nodes
         }
       }
+
       return builder;
     }
   }
