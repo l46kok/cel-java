@@ -67,7 +67,7 @@ final class YamlParserContextImpl implements ParserContext<Node> {
     ScalarNode scalarNode = (ScalarNode) node;
     ScalarStyle style = scalarNode.getScalarStyle();
     if (style.equals(ScalarStyle.FOLDED) || style.equals(ScalarStyle.LITERAL)) {
-      int line =  scalarNode.getEndMark().getLine()+ 1;
+      int line =  scalarNode.getStartMark().getLine() + 2;
       String text = policySource.getSnippet(line).get();
       String indent = "";
       for (int i = 0; i < text.length(); i++) {
@@ -81,8 +81,10 @@ final class YamlParserContextImpl implements ParserContext<Node> {
       int column = indent.length();
 
       StringBuilder raw = new StringBuilder();
+      // raw.append(indent);
       while (text.startsWith(indent)) {
         line++;
+        // raw.append(text.trim());
         raw.append(text);
         text = policySource.getSnippet(line).orElse("");
         if (text.isEmpty()) {
@@ -96,8 +98,9 @@ final class YamlParserContextImpl implements ParserContext<Node> {
       // idToOffsetMap
       // int offset = getLocationOffsetImpl()
 
+      // idToOffsetMap.put(id, idToOffsetMap.get(id) - indent.length());
       // idToOffsetMap.put(id, idToOffsetMap.get(id) + indent.length());
-      // idToOffsetMap.put(id, idToOffsetMap.get(id) + indent.length());
+      // return ValueString.of(id, "        'test'\n.format(variables.missing])");
       return ValueString.of(id, raw.toString());
       // System.out.println(raw.toString());
     }

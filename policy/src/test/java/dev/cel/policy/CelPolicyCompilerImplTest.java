@@ -121,25 +121,61 @@ public final class CelPolicyCompilerImplTest {
                 + " | .......................^");
   }
 
+  private enum MultilineErrorTest {
+    SINGLE("name: \"errors\"\n"
+        + "rule:\n"
+        + "  match:\n"
+        + "    - output: >\n"
+        + "        'test'.format(variables.missing])", ""),
+    DOUBLE("name: \"errors\"\n"
+        + "rule:\n"
+        + "  match:\n"
+        + "    - output: >\n"
+        + "        'test'.format(\n"
+        + "        variables.missing])", ""),
+    TRIPLE("name: \"errors\"\n"
+        + "rule:\n"
+        + "  match:\n"
+        + "    - output: >\n"
+        + "        'test'.\n"
+        + "        format(\n"
+        + "        variables.missing])", ""),
+    ;
+
+    private final String yaml;
+    private final String expected;
+
+    private MultilineErrorTest(String yaml, String expected) {
+      this.yaml = yaml;
+      this.expected = expected;
+    }
+  }
+
   @Test
-  public void multilineTest() throws Exception {
+  public void smokeTest() throws Exception {
+    // String policyContent = "name: \"errors\"\n"
+    //     + "rule:\n"
+    //     + "  match:\n"
+    //     + "    - output: \"'missing one or more required labels: %s'.format(variables.missing])\"";
+    // String policyContent = "name: \"errors\"\"
+    //     + "rule:\n"
+    //     + "  match:\n"
+    //     + "    - output: >\n"
+    //     + "        'test'.format(variables.missing])";
     // String policyContent = "name: \"errors\"\n"
     //     + "rule:\n"
     //     + "  match:\n"
     //     + "    - output: >\n"
-    //     + "        'missing one or more required labels: %s'.format(variables.missing])";
+    //     + "        'test'.format(\n"
+    //     + "        variables.missing])";
     String policyContent = "name: \"errors\"\n"
         + "rule:\n"
         + "  match:\n"
         + "    - output: >\n"
-        + "        'test'.format(variables.missing])";
-    // String policyContent = "name: \"errors\"\n"
-    //     + "rule:\n"
-    //     + "  match:\n"
-    //     + "    - output: >\n"
-    //     + "        'test'\n"
-    //     + "        .format(variables.missing])";
-   CelPolicy policy = POLICY_PARSER.parse(policyContent);
+        + "        'test'\n"
+        + "        .format(\n"
+        + "        variables.missing])";
+    CelPolicy policy = POLICY_PARSER.parse(policyContent);
     CelPolicyValidationException e =
         assertThrows(
             CelPolicyValidationException.class,
@@ -149,10 +185,38 @@ public final class CelPolicyCompilerImplTest {
   }
 
   @Test
-  public void yamlLineTest() throws Exception {
-    CelCompiler compiler = CelCompilerFactory.standardCelCompilerBuilder().build();
+  public void compileYamlPolicy_multilineContainsError_throws(@TestParameter MultilineErrorTest testCase) throws Exception {
+    String policyContent = testCase.yaml;
+    // String policyContent = "name: \"errors\"\n"
+    //     + "rule:\n"
+    //     + "  match:\n"
+    //     + "    - output: >\n"
+    //     + "        'missing one or more required labels: %s'.format(variables.missing])";
+    // String policyContent = "name: \"errors\"\n"
+    //     + "rule:\n"
+    //     + "  match:\n"
+    //     + "    - output: >\n"
+    //     + "        'test'.format(variables.missing])";
+    // String policyContent = "name: \"errors\"\n"
+    //     + "rule:\n"
+    //     + "  match:\n"
+    //     + "    - output: >\n"
+    //     + "        'test'.format(\n"
+    //     + "        variables.missing])";
+    // String policyContent = "name: \"errors\"\n"
+    //     + "rule:\n"
+    //     + "  match:\n"
+    //     + "    - output: >\n"
+    //     + "        'test'\n"
+    //     + "        .format(\n"
+    //     + "        [variables.missing])";
+   CelPolicy policy = POLICY_PARSER.parse(policyContent);
+    CelPolicyValidationException e =
+        assertThrows(
+            CelPolicyValidationException.class,
+            () -> CelPolicyCompilerFactory.newPolicyCompiler(newCel()).build().compile(policy));
 
-    CelAbstractSyntaxTree ast = compiler.parse("\n  test2'").getAst();
+    assertThat(e).hasMessageThat().isEqualTo(testCase.expected);
   }
 
   @Test

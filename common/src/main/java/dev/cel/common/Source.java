@@ -49,4 +49,13 @@ public interface Source {
    * @param line the line number starting from 1.
    */
   Optional<String> getSnippet(int line);
+
+
+  /**
+   * Get the line and column in the source expression text for the given code point {@code
+   * offset}.
+   */
+  Optional<CelSourceLocation> getOffsetLocation(int offset);
+
+  Optional<Integer> getLocationOffset(int line, int column);
 }

@@ -148,9 +148,24 @@ final class CelPolicyCompilerImpl implements CelPolicyCompiler {
       for (CelIssue issue : issues) {
         // Compute relative source and add them into the issues set
         int position = Optional.ofNullable(celPolicySource.getPositionsMap().get(id)).orElse(-1);
-        for (int i = 0; i < issue.getSourceLocation().getLine();  i++) {
-          position += issue.getSourceLocation().getColumn();
-        }
+        int relativeOffset = celPolicySource.getLocationOffset(issue.getSourceLocation().getLine(), issue.getSourceLocation().getColumn()).get();
+        CelSourceLocation location = celPolicySource.getOffsetLocation(position).get();
+        CelSourceLocation normalizedLocation = celPolicySource.getOffsetLocation(position + issue.getSourceLocation().getColumn()).get();
+        int normalizedLine = normalizedLocation.getLine();
+        int offset = celPolicySource.getContent().lineOffsets().get(normalizedLine - 2);
+
+        position = offset + issue.getSourceLocation().getColumn();
+
+
+        // int position = Optional.ofNullable(celPolicySource.getPositionsMap().get(id)).orElse(-1);
+        // Optional<CelSourceLocation> location = celPolicySource.getOffsetLocation(position);
+        // System.out.println(location);
+        // for (int i = 0; i < issue.getSourceLocation().getLine();  i++) {
+        //   position += issue.getSourceLocation().getColumn();
+        // }
+
+        // TODO remove
+        // position = 85;
 
         // temp
         for (int i = 0; i < 150; i++) {

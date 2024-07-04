@@ -14,6 +14,8 @@
 
 package dev.cel.policy;
 
+import static com.google.common.base.Preconditions.checkArgument;
+
 import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableMap;
 import com.google.errorprone.annotations.CheckReturnValue;
@@ -45,10 +47,21 @@ public abstract class CelPolicySource implements Source {
   /**
    * Get the line and column in the source expression text for the given code point {@code offset}.
    */
+  @Override
   public Optional<CelSourceLocation> getOffsetLocation(int offset) {
     return CelSourceHelper.getOffsetLocation(getContent(), offset);
   }
 
+  @Override
+  public Optional<Integer> getLocationOffset(int line, int column) {
+    checkArgument(line > 0);
+    checkArgument(column >= 0);
+    int offset = CelSourceHelper.findLineOffset(getContent().lineOffsets(), line);
+    if (offset == -1) {
+      return Optional.empty();
+    }
+    return Optional.of(offset + column);
+  }
   /** Builder for {@link CelPolicySource}. */
   @AutoValue.Builder
   public abstract static class Builder {

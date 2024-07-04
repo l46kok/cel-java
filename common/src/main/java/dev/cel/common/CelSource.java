@@ -44,6 +44,8 @@ public final class CelSource implements Source {
   private final ImmutableMap<Long, Integer> positions;
   private final ImmutableMap<Long, CelExpr> macroCalls;
   private final ImmutableSet<Extension> extensions;
+  private final int baseLine;
+  private final int baseColumn;
 
   private CelSource(Builder builder) {
     this.codePoints = checkNotNull(builder.codePoints);
@@ -52,6 +54,8 @@ public final class CelSource implements Source {
     this.lineOffsets = checkNotNull(ImmutableList.copyOf(builder.lineOffsets));
     this.macroCalls = checkNotNull(ImmutableMap.copyOf(builder.macroCalls));
     this.extensions = checkNotNull(builder.extensions.build());
+    this.baseLine = builder.baseLine;
+    this.baseColumn = builder.baseColumn;
   }
 
   @Override
@@ -100,13 +104,15 @@ public final class CelSource implements Source {
    * @param line the line number starting from 1
    * @param column the column number starting from 0
    */
+  @Override
   public Optional<Integer> getLocationOffset(int line, int column) {
-    return getLocationOffsetImpl(lineOffsets, line, column);
+    return getLocationOffsetImpl(lineOffsets, baseLine + line, baseColumn + column);
   }
 
   /**
    * Get the line and column in the source expression text for the given code point {@code offset}.
    */
+  @Override
   public Optional<CelSourceLocation> getOffsetLocation(int offset) {
     return CelSourceHelper.getOffsetLocation(codePoints, offset);
   }
@@ -165,6 +171,8 @@ public final class CelSource implements Source {
 
     private final boolean lineOffsetsAlreadyComputed;
     private String description;
+    private int baseLine;
+    private int baseColumn;
 
     private Builder() {
       this(CelCodePointArray.fromString(""), new ArrayList<>());
@@ -178,6 +186,17 @@ public final class CelSource implements Source {
       this.extensions = ImmutableSet.builder();
       this.description = "";
       this.lineOffsetsAlreadyComputed = !lineOffsets.isEmpty();
+      this.baseLine = 0;
+      this.baseColumn = 0;
+    }
+
+    @CanIgnoreReturnValue
+    public Builder setBaseLocation(Source source) {
+      source.getOffsetLocation(0).ifPresent(loc -> {
+        this.baseLine = loc.getLine();
+        this.baseColumn = loc.getColumn();
+      });
+      return this;
     }
 
     @CanIgnoreReturnValue
@@ -279,7 +298,7 @@ public final class CelSource implements Source {
      * @param column the column number starting from 0
      */
     public Optional<Integer> getLocationOffset(int line, int column) {
-      return getLocationOffsetImpl(lineOffsets, line, column);
+      return getLocationOffsetImpl(lineOffsets, baseLine + line, baseColumn + column);
     }
 
     /**
