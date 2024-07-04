@@ -49,6 +49,8 @@ public abstract class CelPolicy {
         .setMetadata(ImmutableMap.of());
   }
 
+  public abstract Builder toBuilder();
+
   /** Builder for {@link CelPolicy}. */
   @AutoValue.Builder
   public abstract static class Builder {

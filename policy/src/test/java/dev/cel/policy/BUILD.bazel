@@ -17,6 +17,7 @@ java_library(
         "//common/internal",
         "//common/resources/testdata/proto3:test_all_types_java_proto",
         "//compiler",
+        "//compiler:compiler_builder",
         "//extensions:optional_library",
         "//parser",
         "//parser:macro",

@@ -14,18 +14,22 @@
 
 package dev.cel.policy;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static dev.cel.policy.YamlHelper.ERROR;
 import static dev.cel.policy.YamlHelper.assertYamlType;
 
 import dev.cel.common.CelIssue;
+import dev.cel.common.CelSourceHelper;
 import dev.cel.common.CelSourceLocation;
-import dev.cel.common.internal.CelCodePointArray;
+import dev.cel.common.Source;
 import dev.cel.policy.YamlHelper.YamlNodeType;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.yaml.snakeyaml.DumperOptions;
+import org.yaml.snakeyaml.DumperOptions.ScalarStyle;
 import org.yaml.snakeyaml.nodes.Node;
 import org.yaml.snakeyaml.nodes.ScalarNode;
 
@@ -35,7 +39,7 @@ final class YamlParserContextImpl implements ParserContext<Node> {
   private final ArrayList<CelIssue> issues;
   private final HashMap<Long, CelSourceLocation> idToLocationMap;
   private final HashMap<Long, Integer> idToOffsetMap;
-  private final CelCodePointArray policyContent;
+  private final Source policySource;
   private long id;
 
   @Override
@@ -61,9 +65,58 @@ final class YamlParserContextImpl implements ParserContext<Node> {
     }
 
     ScalarNode scalarNode = (ScalarNode) node;
+    ScalarStyle style = scalarNode.getScalarStyle();
+    if (style.equals(ScalarStyle.FOLDED) || style.equals(ScalarStyle.LITERAL)) {
+      int line =  scalarNode.getEndMark().getLine()+ 1;
+      String text = policySource.getSnippet(line).get();
+      String indent = "";
+      for (int i = 0; i < text.length(); i++) {
+        Character c = text.charAt(i);
+        if (!c.equals(' ')) {
+          break;
+        }
+
+        indent += " ";
+      }
+      int column = indent.length();
+
+      StringBuilder raw = new StringBuilder();
+      while (text.startsWith(indent)) {
+        line++;
+        raw.append(text);
+        text = policySource.getSnippet(line).orElse("");
+        if (text.isEmpty()) {
+          break;
+        }
+        if (text.startsWith(indent)) {
+          raw.append("\n");
+        }
+      }
+
+      // idToOffsetMap
+      // int offset = getLocationOffsetImpl()
+
+      // idToOffsetMap.put(id, idToOffsetMap.get(id) + indent.length());
+      // idToOffsetMap.put(id, idToOffsetMap.get(id) + indent.length());
+      return ValueString.of(id, raw.toString());
+      // System.out.println(raw.toString());
+    }
+
+
 
     // TODO: Compute relative source for multiline strings
     return ValueString.of(id, scalarNode.getValue());
+  }
+
+  private static Optional<Integer> getLocationOffsetImpl(
+      List<Integer> lineOffsets, int line, int column) {
+    checkArgument(line > 0);
+    checkArgument(column >= 0);
+    int offset = CelSourceHelper.findLineOffset(lineOffsets, line);
+    if (offset == -1) {
+      return Optional.empty();
+    }
+    return Optional.of(offset + column);
   }
 
   @Override
@@ -76,13 +129,30 @@ final class YamlParserContextImpl implements ParserContext<Node> {
       if (style.equals(DumperOptions.ScalarStyle.SINGLE_QUOTED)
           || style.equals(DumperOptions.ScalarStyle.DOUBLE_QUOTED)) {
         column++;
+      } else if (
+          style.equals(ScalarStyle.FOLDED) || style.equals(ScalarStyle.LITERAL)
+      ) {
+        // Actual string content for multiline YAML is below the indicator (| or >)
+        line++;
+        // Columns (indentations) need to be computed separately.
+        column = 0;
+        // int nodeLineCount = node.getEndMark().getLine() - node.getStartMark().getLine();
+        // String text = policySource.getSnippet(line).orElse("");
+        // for (char c : text.toCharArray()) {
+        //   if (!Character.isWhitespace(c)) {
+        //     break;
+        //   }
+        //   column++;
+        // }
+
+        // column *= nodeLineCount;
       }
     }
     idToLocationMap.put(id, CelSourceLocation.of(line, column));
 
     int offset = 0;
     if (line > 1) {
-      offset = policyContent.lineOffsets().get(line - 2) + column;
+      offset = policySource.getContent().lineOffsets().get(line - 2) + column;
     }
     idToOffsetMap.put(id, offset);
 
@@ -94,14 +164,14 @@ final class YamlParserContextImpl implements ParserContext<Node> {
     return ++id;
   }
 
-  static ParserContext<Node> newInstance(CelCodePointArray policyContent) {
-    return new YamlParserContextImpl(policyContent);
+  static ParserContext<Node> newInstance(Source source) {
+    return new YamlParserContextImpl(source);
   }
 
-  private YamlParserContextImpl(CelCodePointArray policyContent) {
+  private YamlParserContextImpl(Source source) {
     this.issues = new ArrayList<>();
     this.idToLocationMap = new HashMap<>();
     this.idToOffsetMap = new HashMap<>();
-    this.policyContent = policyContent;
+    this.policySource = source;
   }
 }

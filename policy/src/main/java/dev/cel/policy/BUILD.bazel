@@ -325,6 +325,7 @@ java_library(
         ":value_string",
         "//common",
         "//common:compiler_common",
+        "//common:source",
         "//common/internal",
         "@maven//:com_google_guava_guava",
         "@maven//:org_yaml_snakeyaml",

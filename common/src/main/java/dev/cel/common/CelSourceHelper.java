@@ -81,7 +81,7 @@ public final class CelSourceHelper {
     private final int offset;
   }
 
-  static int findLineOffset(List<Integer> lineOffsets, int line) {
+  public static int findLineOffset(List<Integer> lineOffsets, int line) {
     if (line == 1) {
       return 0;
     }

@@ -29,6 +29,8 @@ import dev.cel.bundle.Cel;
 import dev.cel.bundle.CelFactory;
 import dev.cel.common.CelAbstractSyntaxTree;
 import dev.cel.common.CelOptions;
+import dev.cel.compiler.CelCompiler;
+import dev.cel.compiler.CelCompilerFactory;
 import dev.cel.extensions.CelOptionalLibrary;
 import dev.cel.parser.CelStandardMacro;
 import dev.cel.parser.CelUnparserFactory;
@@ -117,6 +119,40 @@ public final class CelPolicyCompilerImplTest {
                 + " to '(bool, string)' (candidates: (%A0, %A0))\n"
                 + " |     - condition: false == \"0\"\n"
                 + " | .......................^");
+  }
+
+  @Test
+  public void multilineTest() throws Exception {
+    // String policyContent = "name: \"errors\"\n"
+    //     + "rule:\n"
+    //     + "  match:\n"
+    //     + "    - output: >\n"
+    //     + "        'missing one or more required labels: %s'.format(variables.missing])";
+    String policyContent = "name: \"errors\"\n"
+        + "rule:\n"
+        + "  match:\n"
+        + "    - output: >\n"
+        + "        'test'.format(variables.missing])";
+    // String policyContent = "name: \"errors\"\n"
+    //     + "rule:\n"
+    //     + "  match:\n"
+    //     + "    - output: >\n"
+    //     + "        'test'\n"
+    //     + "        .format(variables.missing])";
+   CelPolicy policy = POLICY_PARSER.parse(policyContent);
+    CelPolicyValidationException e =
+        assertThrows(
+            CelPolicyValidationException.class,
+            () -> CelPolicyCompilerFactory.newPolicyCompiler(newCel()).build().compile(policy));
+
+    assertThat(e).hasMessageThat().isEqualTo("");
+  }
+
+  @Test
+  public void yamlLineTest() throws Exception {
+    CelCompiler compiler = CelCompilerFactory.standardCelCompilerBuilder().build();
+
+    CelAbstractSyntaxTree ast = compiler.parse("\n  test2'").getAst();
   }
 
   @Test
