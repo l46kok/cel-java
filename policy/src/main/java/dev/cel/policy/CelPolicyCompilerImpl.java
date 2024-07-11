@@ -48,18 +48,22 @@ final class CelPolicyCompilerImpl implements CelPolicyCompiler {
   private final String variablesPrefix;
 
   @Override
-  public CelAbstractSyntaxTree compile(CelPolicy policy) throws CelPolicyValidationException {
+  public CelCompiledRule compileRule(CelPolicy policy) throws CelPolicyValidationException {
     CompilerContext compilerContext = new CompilerContext(policy.policySource());
-    CelCompiledRule compiledRule = compileRule(policy.rule(), cel, compilerContext);
+    CelCompiledRule compiledRule = compileRuleImpl(policy.rule(), cel, compilerContext);
     if (compilerContext.hasError()) {
       throw new CelPolicyValidationException(compilerContext.getIssueString());
     }
 
+    return compiledRule;
+  }
+
+  @Override
+  public CelAbstractSyntaxTree compose(CelCompiledRule compiledRule)
+      throws CelPolicyValidationException {
     CelOptimizer optimizer =
         CelOptimizerFactory.standardCelOptimizerBuilder(compiledRule.cel())
-            .addAstOptimizers(
-                RuleComposer.newInstance(
-                    compiledRule, compilerContext.newVariableDeclarations, variablesPrefix))
+            .addAstOptimizers(RuleComposer.newInstance(compiledRule, variablesPrefix))
             .build();
 
     CelAbstractSyntaxTree ast;
@@ -77,7 +81,7 @@ final class CelPolicyCompilerImpl implements CelPolicyCompiler {
     return ast;
   }
 
-  private CelCompiledRule compileRule(
+  private CelCompiledRule compileRuleImpl(
       CelPolicy.Rule rule, Cel ruleCel, CompilerContext compilerContext) {
     ImmutableList.Builder<CelCompiledVariable> variableBuilder = ImmutableList.builder();
     for (Variable variable : rule.variables()) {
@@ -95,9 +99,8 @@ final class CelPolicyCompilerImpl implements CelPolicyCompiler {
       String variableName = variable.name().value();
       CelVarDecl newVariable =
           CelVarDecl.newVarDeclaration(variablesPrefix + variableName, outputType);
-      compilerContext.addNewVarDecl(newVariable);
       ruleCel = ruleCel.toCelBuilder().addVarDeclarations(newVariable).build();
-      variableBuilder.add(CelCompiledVariable.create(variableName, varAst));
+      variableBuilder.add(CelCompiledVariable.create(variableName, varAst, newVariable));
     }
 
     ImmutableList.Builder<CelCompiledMatch> matchBuilder = ImmutableList.builder();
@@ -124,7 +127,8 @@ final class CelPolicyCompilerImpl implements CelPolicyCompiler {
           matchResult = Result.ofOutput(outputAst);
           break;
         case RULE:
-          CelCompiledRule nestedRule = compileRule(match.result().rule(), ruleCel, compilerContext);
+          CelCompiledRule nestedRule =
+              compileRuleImpl(match.result().rule(), ruleCel, compilerContext);
           matchResult = Result.ofRule(nestedRule);
           break;
         default:
@@ -144,22 +148,31 @@ final class CelPolicyCompilerImpl implements CelPolicyCompiler {
 
   private static final class CompilerContext {
     private final ArrayList<CelIssue> issues;
-    private final ArrayList<CelVarDecl> newVariableDeclarations;
     private final CelPolicySource celPolicySource;
 
     private void addIssue(long id, List<CelIssue> issues) {
       for (CelIssue issue : issues) {
-        // Compute relative source and add them into the issues set
-        int position = Optional.ofNullable(celPolicySource.getPositionsMap().get(id)).orElse(-1);
-        position += issue.getSourceLocation().getColumn();
-        CelSourceLocation loc =
-            celPolicySource.getOffsetLocation(position).orElse(CelSourceLocation.NONE);
-        this.issues.add(CelIssue.formatError(loc, issue.getMessage()));
+        CelSourceLocation absoluteLocation = computeAbsoluteLocation(id, issue);
+        this.issues.add(CelIssue.formatError(absoluteLocation, issue.getMessage()));
       }
     }
 
-    private void addNewVarDecl(CelVarDecl newVarDecl) {
-      newVariableDeclarations.add(newVarDecl);
+    private CelSourceLocation computeAbsoluteLocation(long id, CelIssue issue) {
+      int policySourceOffset =
+          Optional.ofNullable(celPolicySource.getPositionsMap().get(id)).orElse(-1);
+      CelSourceLocation policySourceLocation =
+          celPolicySource.getOffsetLocation(policySourceOffset).orElse(null);
+      if (policySourceLocation == null) {
+        return CelSourceLocation.NONE;
+      }
+
+      int absoluteLine = issue.getSourceLocation().getLine() + policySourceLocation.getLine() - 1;
+      int absoluteColumn = issue.getSourceLocation().getColumn() + policySourceLocation.getColumn();
+      int absoluteOffset = celPolicySource.getContent().lineOffsets().get(absoluteLine - 2);
+
+      return celPolicySource
+          .getOffsetLocation(absoluteOffset + absoluteColumn)
+          .orElse(CelSourceLocation.NONE);
     }
 
     private boolean hasError() {
@@ -172,7 +185,6 @@ final class CelPolicyCompilerImpl implements CelPolicyCompiler {
 
     private CompilerContext(CelPolicySource celPolicySource) {
       this.issues = new ArrayList<>();
-      this.newVariableDeclarations = new ArrayList<>();
       this.celPolicySource = celPolicySource;
     }
   }
