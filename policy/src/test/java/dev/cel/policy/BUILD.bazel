@@ -13,6 +13,7 @@ java_library(
         "//:java_truth",
         "//bundle:cel",
         "//common",
+        "//common:compiler_common",
         "//common:options",
         "//common/internal",
         "//common/resources/testdata/proto3:test_all_types_java_proto",

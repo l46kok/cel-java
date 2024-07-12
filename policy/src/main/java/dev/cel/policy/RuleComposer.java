@@ -18,18 +18,22 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 
 import com.google.auto.value.AutoValue;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import dev.cel.bundle.Cel;
 import dev.cel.common.CelAbstractSyntaxTree;
 import dev.cel.common.CelMutableAst;
+import dev.cel.common.CelValidationException;
 import dev.cel.common.ast.CelConstant.Kind;
 import dev.cel.extensions.CelOptionalLibrary.Function;
 import dev.cel.optimizer.AstMutator;
 import dev.cel.optimizer.CelAstOptimizer;
+import dev.cel.parser.CelUnparserFactory;
 import dev.cel.parser.Operator;
 import dev.cel.policy.CelCompiledRule.CelCompiledMatch;
+import dev.cel.policy.CelCompiledRule.CelCompiledMatch.OutputValue;
 import dev.cel.policy.CelCompiledRule.CelCompiledVariable;
+import java.util.Arrays;
+import java.util.List;
 
 /** Package-private class for composing various rules into a single expression using optimizer. */
 final class RuleComposer implements CelAstOptimizer {
@@ -40,13 +44,8 @@ final class RuleComposer implements CelAstOptimizer {
 
   @Override
   public OptimizationResult optimize(CelAbstractSyntaxTree ast, Cel cel) {
-    RuleOptimizationResult result = optimizeRule(compiledRule);
-    return OptimizationResult.create(
-        result.ast().toParsedAst(),
-        compiledRule.variables().stream()
-            .map(CelCompiledVariable::celVarDecl)
-            .collect(toImmutableList()),
-        ImmutableList.of());
+    RuleOptimizationResult result = optimizeRule(cel, compiledRule);
+    return OptimizationResult.create(result.ast().toParsedAst());
   }
 
   @AutoValue
@@ -60,9 +59,17 @@ final class RuleComposer implements CelAstOptimizer {
     }
   }
 
-  private RuleOptimizationResult optimizeRule(CelCompiledRule compiledRule) {
+  private RuleOptimizationResult optimizeRule(Cel cel, CelCompiledRule compiledRule)
+      throws RuleCompositionException {
+    cel = cel
+        .toCelBuilder()
+        .addVarDeclarations(compiledRule.variables().stream()
+            .map(CelCompiledVariable::celVarDecl)
+            .collect(toImmutableList())).build();
+
     CelMutableAst matchAst = astMutator.newGlobalCall(Function.OPTIONAL_NONE.getFunction());
     boolean isOptionalResult = true;
+    long lastOutputId = 0;
     for (CelCompiledMatch match : Lists.reverse(compiledRule.matches())) {
       CelAbstractSyntaxTree conditionAst = match.condition();
       boolean isTriviallyTrue =
@@ -70,10 +77,12 @@ final class RuleComposer implements CelAstOptimizer {
               && conditionAst.getExpr().constant().booleanValue();
       switch (match.result().kind()) {
         case OUTPUT:
-          CelMutableAst outAst = CelMutableAst.fromCelAst(match.result().output());
+          OutputValue matchOutput = match.result().output();
+          CelMutableAst outAst = CelMutableAst.fromCelAst(matchOutput.ast());
           if (isTriviallyTrue) {
             matchAst = outAst;
             isOptionalResult = false;
+            lastOutputId = matchOutput.id();
             continue;
           }
           if (isOptionalResult) {
@@ -86,9 +95,11 @@ final class RuleComposer implements CelAstOptimizer {
                   CelMutableAst.fromCelAst(conditionAst),
                   outAst,
                   matchAst);
+          assertComposedAstIsValid(cel, matchAst, "conflicting output types found.", matchOutput.id(), lastOutputId);
+          lastOutputId = matchOutput.id();
           continue;
         case RULE:
-          RuleOptimizationResult nestedRule = optimizeRule(match.result().rule());
+          RuleOptimizationResult nestedRule = optimizeRule(cel, match.result().rule());
           CelMutableAst nestedRuleAst = nestedRule.ast();
           if (isOptionalResult && !nestedRule.isOptionalResult()) {
             nestedRuleAst =
@@ -102,6 +113,7 @@ final class RuleComposer implements CelAstOptimizer {
             throw new IllegalArgumentException("Subrule early terminates policy");
           }
           matchAst = astMutator.newMemberCall(nestedRuleAst, Function.OR.getFunction(), matchAst);
+          assertComposedAstIsValid(cel, matchAst, "failed composing the subrule.", lastOutputId);
           break;
       }
     }
@@ -123,6 +135,16 @@ final class RuleComposer implements CelAstOptimizer {
     return RuleOptimizationResult.create(result, isOptionalResult);
   }
 
+  private void assertComposedAstIsValid(Cel cel, CelMutableAst composedAst, String failureMessage, Long... ids) {
+    try {
+      cel.check(composedAst.toParsedAst()).getAst();
+    } catch (CelValidationException e) {
+      String unparsed = CelUnparserFactory.newUnparser().unparse(composedAst.toParsedAst());
+      System.out.println(unparsed);
+      throw new RuleCompositionException(failureMessage, e, ids);
+    }
+  }
+
   static RuleComposer newInstance(CelCompiledRule compiledRule, String variablePrefix) {
     return new RuleComposer(compiledRule, variablePrefix);
   }
@@ -131,5 +153,18 @@ final class RuleComposer implements CelAstOptimizer {
     this.compiledRule = checkNotNull(compiledRule);
     this.variablePrefix = variablePrefix;
     this.astMutator = AstMutator.newInstance(AST_MUTATOR_ITERATION_LIMIT);
+  }
+
+  static final class RuleCompositionException extends RuntimeException {
+    final String failureReason;
+    final List<Long> errorIds;
+    final CelValidationException compileException;
+
+    private RuleCompositionException(String failureReason, CelValidationException e, Long... errorIds) {
+      super(e);
+      this.failureReason = failureReason;
+      this.errorIds = Arrays.asList(errorIds);
+      this.compileException = e;
+    }
   }
 }

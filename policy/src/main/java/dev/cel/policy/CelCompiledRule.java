@@ -63,14 +63,14 @@ public abstract class CelCompiledRule {
     /** Encapsulates the result of this match when condition is met. (either an output or a rule) */
     @AutoOneOf(CelCompiledMatch.Result.Kind.class)
     public abstract static class Result {
-      public abstract CelAbstractSyntaxTree output();
+      public abstract OutputValue output();
 
       public abstract CelCompiledRule rule();
 
       public abstract Kind kind();
 
-      static Result ofOutput(CelAbstractSyntaxTree value) {
-        return AutoOneOf_CelCompiledRule_CelCompiledMatch_Result.output(value);
+      static Result ofOutput(long id, CelAbstractSyntaxTree ast) {
+        return AutoOneOf_CelCompiledRule_CelCompiledMatch_Result.output(OutputValue.create(id, ast));
       }
 
       static Result ofRule(CelCompiledRule value) {
@@ -81,6 +81,19 @@ public abstract class CelCompiledRule {
       public enum Kind {
         OUTPUT,
         RULE
+      }
+    }
+
+    /**
+     * Encapsulates the output value of the match with its original ID that was used to compile with.
+     */
+    @AutoValue
+    public abstract static class OutputValue {
+      public abstract long id();
+      public abstract CelAbstractSyntaxTree ast();
+
+      public static OutputValue create(long id, CelAbstractSyntaxTree ast) {
+        return new AutoValue_CelCompiledRule_CelCompiledMatch_OutputValue(id, ast);
       }
     }
 

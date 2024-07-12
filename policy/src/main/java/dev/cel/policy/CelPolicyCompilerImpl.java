@@ -15,6 +15,7 @@
 package dev.cel.policy;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.collect.ImmutableList.toImmutableList;
 
 import com.google.common.collect.ImmutableList;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
@@ -37,7 +38,9 @@ import dev.cel.policy.CelCompiledRule.CelCompiledMatch.Result;
 import dev.cel.policy.CelCompiledRule.CelCompiledVariable;
 import dev.cel.policy.CelPolicy.Match;
 import dev.cel.policy.CelPolicy.Variable;
+import dev.cel.policy.RuleComposer.RuleCompositionException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
@@ -59,7 +62,7 @@ final class CelPolicyCompilerImpl implements CelPolicyCompiler {
   }
 
   @Override
-  public CelAbstractSyntaxTree compose(CelCompiledRule compiledRule)
+  public CelAbstractSyntaxTree compose(CelPolicy policy, CelCompiledRule compiledRule)
       throws CelPolicyValidationException {
     CelOptimizer optimizer =
         CelOptimizerFactory.standardCelOptimizerBuilder(compiledRule.cel())
@@ -74,8 +77,24 @@ final class CelPolicyCompilerImpl implements CelPolicyCompiler {
       ast = cel.compile("true").getAst();
       ast = optimizer.optimize(ast);
     } catch (CelValidationException | CelOptimizationException e) {
-      // TODO: Surface these errors better
-      throw new CelPolicyValidationException("Failed composing the rules", e);
+      if (e.getCause() instanceof RuleCompositionException) {
+        RuleCompositionException re = (RuleCompositionException) e.getCause();
+        CompilerContext compilerContext = new CompilerContext(policy.policySource());
+        // The exact CEL error message produced from composition failure isn't too useful for users.
+        // Ex: ERROR: :1:1: found no matching overload for '_?_:_' applied to '(bool, map(int, int), bool)' (candidates: (bool, %A0, %A0))
+        // Transform the error messages in a user-friendly way while retaining the original CelValidationException as its originating cause.
+
+        ImmutableList<CelIssue> transformedIssues =
+            re.compileException.getErrors().stream().map(x -> CelIssue.formatError(x.getSourceLocation(), re.failureReason)).collect(toImmutableList());
+        for (long id : re.errorIds) {
+          compilerContext.addIssue(id, transformedIssues);
+        }
+
+        throw new CelPolicyValidationException(compilerContext.getIssueString(), re.getCause());
+      }
+
+      // Something has gone seriously wrong.
+      throw new CelPolicyValidationException("Unexpected error while composing rules.", e);
     }
 
     return ast;
@@ -108,23 +127,29 @@ final class CelPolicyCompilerImpl implements CelPolicyCompiler {
       CelAbstractSyntaxTree conditionAst;
       try {
         conditionAst = ruleCel.compile(match.condition().value()).getAst();
+        if (!conditionAst.getResultType().equals(SimpleType.BOOL)) {
+          compilerContext.addIssue(match.condition().id(), CelIssue.formatError(1,0, "condition must produce a boolean output."));
+        }
       } catch (CelValidationException e) {
         compilerContext.addIssue(match.condition().id(), e.getErrors());
         continue;
       }
 
       Result matchResult;
+      long id = 0;
       switch (match.result().kind()) {
         case OUTPUT:
           CelAbstractSyntaxTree outputAst;
+          ValueString output = match.result().output();
+          id = output.id();
           try {
-            outputAst = ruleCel.compile(match.result().output().value()).getAst();
+            outputAst = ruleCel.compile(output.value()).getAst();
           } catch (CelValidationException e) {
-            compilerContext.addIssue(match.result().output().id(), e.getErrors());
+            compilerContext.addIssue(output.id(), e.getErrors());
             continue;
           }
 
-          matchResult = Result.ofOutput(outputAst);
+          matchResult = Result.ofOutput(output.id(), outputAst);
           break;
         case RULE:
           CelCompiledRule nestedRule =
@@ -150,6 +175,10 @@ final class CelPolicyCompilerImpl implements CelPolicyCompiler {
     private final ArrayList<CelIssue> issues;
     private final CelPolicySource celPolicySource;
 
+    private void addIssue(long id, CelIssue... issues) {
+      addIssue(id, Arrays.asList(issues));
+    }
+
     private void addIssue(long id, List<CelIssue> issues) {
       for (CelIssue issue : issues) {
         CelSourceLocation absoluteLocation = computeAbsoluteLocation(id, issue);
@@ -160,6 +189,9 @@ final class CelPolicyCompilerImpl implements CelPolicyCompiler {
     private CelSourceLocation computeAbsoluteLocation(long id, CelIssue issue) {
       int policySourceOffset =
           Optional.ofNullable(celPolicySource.getPositionsMap().get(id)).orElse(-1);
+      if (policySourceOffset == -1) {
+        return CelSourceLocation.NONE;
+      }
       CelSourceLocation policySourceLocation =
           celPolicySource.getOffsetLocation(policySourceOffset).orElse(null);
       if (policySourceLocation == null) {
