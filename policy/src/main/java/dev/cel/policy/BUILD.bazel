@@ -222,6 +222,7 @@ java_library(
     name = "compiled_rule",
     srcs = ["CelCompiledRule.java"],
     deps = [
+        ":value_string",
         "//:auto_value",
         "//bundle:cel",
         "//common",

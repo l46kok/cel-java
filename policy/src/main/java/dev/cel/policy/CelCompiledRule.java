@@ -20,6 +20,7 @@ import com.google.common.collect.ImmutableList;
 import dev.cel.bundle.Cel;
 import dev.cel.common.CelAbstractSyntaxTree;
 import dev.cel.common.CelVarDecl;
+import java.util.Optional;
 
 /**
  * Abstract representation of a compiled rule. This contains set of compiled variables and match
@@ -27,6 +28,8 @@ import dev.cel.common.CelVarDecl;
  */
 @AutoValue
 public abstract class CelCompiledRule {
+  public abstract Optional<ValueString> id();
+
   public abstract ImmutableList<CelCompiledVariable> variables();
 
   public abstract ImmutableList<CelCompiledMatch> matches();
@@ -104,9 +107,10 @@ public abstract class CelCompiledRule {
   }
 
   static CelCompiledRule create(
+      Optional<ValueString> id,
       ImmutableList<CelCompiledVariable> variables,
       ImmutableList<CelCompiledMatch> matches,
       Cel cel) {
-    return new AutoValue_CelCompiledRule(variables, matches, cel);
+    return new AutoValue_CelCompiledRule(id, variables, matches, cel);
   }
 }

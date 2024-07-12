@@ -23,6 +23,13 @@ public interface CelPolicyCompilerBuilder {
   @CanIgnoreReturnValue
   CelPolicyCompilerBuilder setVariablesPrefix(String prefix);
 
+  /**
+   * Limit the number of iteration while composing rules into a single AST. An exception is thrown
+   * if the iteration count exceeds the set value.
+   */
+  @CanIgnoreReturnValue
+  CelPolicyCompilerBuilder setIterationLimit(int iterationLimit);
+
   @CheckReturnValue
   CelPolicyCompiler build();
 }

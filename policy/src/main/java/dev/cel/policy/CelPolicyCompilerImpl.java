@@ -47,8 +47,10 @@ import java.util.Optional;
 /** Package-private implementation for policy compiler. */
 final class CelPolicyCompilerImpl implements CelPolicyCompiler {
   private static final String DEFAULT_VARIABLE_PREFIX = "variables.";
+  private static final int DEFAULT_ITERATION_LIMIT = 1000;
   private final Cel cel;
   private final String variablesPrefix;
+  private final int iterationLimit;
 
   @Override
   public CelCompiledRule compileRule(CelPolicy policy) throws CelPolicyValidationException {
@@ -66,7 +68,8 @@ final class CelPolicyCompilerImpl implements CelPolicyCompiler {
       throws CelPolicyValidationException {
     CelOptimizer optimizer =
         CelOptimizerFactory.standardCelOptimizerBuilder(compiledRule.cel())
-            .addAstOptimizers(RuleComposer.newInstance(compiledRule, variablesPrefix))
+            .addAstOptimizers(
+                RuleComposer.newInstance(compiledRule, variablesPrefix, iterationLimit))
             .build();
 
     CelAbstractSyntaxTree ast;
@@ -163,7 +166,7 @@ final class CelPolicyCompilerImpl implements CelPolicyCompiler {
       matchBuilder.add(CelCompiledMatch.create(conditionAst, matchResult));
     }
 
-    return CelCompiledRule.create(variableBuilder.build(), matchBuilder.build(), cel);
+    return CelCompiledRule.create(rule.id(), variableBuilder.build(), matchBuilder.build(), cel);
   }
 
   private static CelAbstractSyntaxTree newErrorAst() {
@@ -224,6 +227,7 @@ final class CelPolicyCompilerImpl implements CelPolicyCompiler {
   static final class Builder implements CelPolicyCompilerBuilder {
     private final Cel cel;
     private String variablesPrefix;
+    private int iterationLimit;
 
     private Builder(Cel cel) {
       this.cel = cel;
@@ -237,17 +241,27 @@ final class CelPolicyCompilerImpl implements CelPolicyCompiler {
     }
 
     @Override
+    @CanIgnoreReturnValue
+    public Builder setIterationLimit(int iterationLimit) {
+      this.iterationLimit = iterationLimit;
+      return this;
+    }
+
+    @Override
     public CelPolicyCompiler build() {
-      return new CelPolicyCompilerImpl(cel, this.variablesPrefix);
+      return new CelPolicyCompilerImpl(cel, this.variablesPrefix, this.iterationLimit);
     }
   }
 
   static Builder newBuilder(Cel cel) {
-    return new Builder(cel).setVariablesPrefix(DEFAULT_VARIABLE_PREFIX);
+    return new Builder(cel)
+        .setVariablesPrefix(DEFAULT_VARIABLE_PREFIX)
+        .setIterationLimit(DEFAULT_ITERATION_LIMIT);
   }
 
-  private CelPolicyCompilerImpl(Cel cel, String variablesPrefix) {
+  private CelPolicyCompilerImpl(Cel cel, String variablesPrefix, int iterationLimit) {
     this.cel = checkNotNull(cel);
     this.variablesPrefix = checkNotNull(variablesPrefix);
+    this.iterationLimit = iterationLimit;
   }
 }

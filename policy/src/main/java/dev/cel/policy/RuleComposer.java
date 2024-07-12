@@ -32,12 +32,12 @@ import dev.cel.parser.Operator;
 import dev.cel.policy.CelCompiledRule.CelCompiledMatch;
 import dev.cel.policy.CelCompiledRule.CelCompiledMatch.OutputValue;
 import dev.cel.policy.CelCompiledRule.CelCompiledVariable;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 /** Package-private class for composing various rules into a single expression using optimizer. */
 final class RuleComposer implements CelAstOptimizer {
-  private static final int AST_MUTATOR_ITERATION_LIMIT = 1000;
   private final CelCompiledRule compiledRule;
   private final String variablePrefix;
   private final AstMutator astMutator;
@@ -69,7 +69,7 @@ final class RuleComposer implements CelAstOptimizer {
 
     CelMutableAst matchAst = astMutator.newGlobalCall(Function.OPTIONAL_NONE.getFunction());
     boolean isOptionalResult = true;
-    long lastOutputId = 0;
+    long lastOutputId = 0; // Keep track of the last output ID that might cause type-check failure while attempting to compose the subgraphs.
     for (CelCompiledMatch match : Lists.reverse(compiledRule.matches())) {
       CelAbstractSyntaxTree conditionAst = match.condition();
       boolean isTriviallyTrue =
@@ -99,7 +99,8 @@ final class RuleComposer implements CelAstOptimizer {
           lastOutputId = matchOutput.id();
           continue;
         case RULE:
-          RuleOptimizationResult nestedRule = optimizeRule(cel, match.result().rule());
+          CelCompiledRule matchNestedRule = match.result().rule();
+          RuleOptimizationResult nestedRule = optimizeRule(cel, matchNestedRule);
           CelMutableAst nestedRuleAst = nestedRule.ast();
           if (isOptionalResult && !nestedRule.isOptionalResult()) {
             nestedRuleAst =
@@ -113,7 +114,10 @@ final class RuleComposer implements CelAstOptimizer {
             throw new IllegalArgumentException("Subrule early terminates policy");
           }
           matchAst = astMutator.newMemberCall(nestedRuleAst, Function.OR.getFunction(), matchAst);
-          assertComposedAstIsValid(cel, matchAst, "failed composing the subrule.", lastOutputId);
+          List<Long> errorIds = new ArrayList<>();
+          matchNestedRule.id().ifPresent(nestedRuleId -> errorIds.add(nestedRuleId.id()));
+          errorIds.add(lastOutputId);
+          assertComposedAstIsValid(cel, matchAst, "failed composing the subrule due to conflicting output types.", errorIds);
           break;
       }
     }
@@ -135,7 +139,16 @@ final class RuleComposer implements CelAstOptimizer {
     return RuleOptimizationResult.create(result, isOptionalResult);
   }
 
+  static RuleComposer newInstance(
+      CelCompiledRule compiledRule, String variablePrefix, int iterationLimit) {
+    return new RuleComposer(compiledRule, variablePrefix, iterationLimit);
+  }
+
   private void assertComposedAstIsValid(Cel cel, CelMutableAst composedAst, String failureMessage, Long... ids) {
+    assertComposedAstIsValid(cel, composedAst, failureMessage, Arrays.asList(ids));
+  }
+
+  private void assertComposedAstIsValid(Cel cel, CelMutableAst composedAst, String failureMessage, List<Long> ids) {
     try {
       cel.check(composedAst.toParsedAst()).getAst();
     } catch (CelValidationException e) {
@@ -145,14 +158,10 @@ final class RuleComposer implements CelAstOptimizer {
     }
   }
 
-  static RuleComposer newInstance(CelCompiledRule compiledRule, String variablePrefix) {
-    return new RuleComposer(compiledRule, variablePrefix);
-  }
-
-  private RuleComposer(CelCompiledRule compiledRule, String variablePrefix) {
+  private RuleComposer(CelCompiledRule compiledRule, String variablePrefix, int iterationLimit) {
     this.compiledRule = checkNotNull(compiledRule);
     this.variablePrefix = variablePrefix;
-    this.astMutator = AstMutator.newInstance(AST_MUTATOR_ITERATION_LIMIT);
+    this.astMutator = AstMutator.newInstance(iterationLimit);
   }
 
   static final class RuleCompositionException extends RuntimeException {
@@ -160,10 +169,10 @@ final class RuleComposer implements CelAstOptimizer {
     final List<Long> errorIds;
     final CelValidationException compileException;
 
-    private RuleCompositionException(String failureReason, CelValidationException e, Long... errorIds) {
+    private RuleCompositionException(String failureReason, CelValidationException e, List<Long> errorIds) {
       super(e);
       this.failureReason = failureReason;
-      this.errorIds = Arrays.asList(errorIds);
+      this.errorIds = errorIds;
       this.compileException = e;
     }
   }
