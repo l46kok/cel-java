@@ -69,14 +69,12 @@ ANTLR4_VERSION = "4.13.1"
 maven_install(
     # keep sorted
     artifacts = [
-        "com.google.api.grpc:proto-google-common-protos:2.38.0",
         "com.google.auto.value:auto-value:1.10.4",
         "com.google.auto.value:auto-value-annotations:1.10.4",
         "com.google.code.findbugs:annotations:3.0.1",
         "com.google.errorprone:error_prone_annotations:2.26.1",
         "com.google.guava:guava:33.1.0-jre",
         "com.google.guava:guava-testlib:33.1.0-jre",
-        "com.google.protobuf:protobuf-java:4.27.3",
         "com.google.protobuf:protobuf-java-util:4.27.3",
         "com.google.re2j:re2j:1.7",
         "com.google.testparameterinjector:test-parameter-injector:1.15",
