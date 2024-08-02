@@ -22,7 +22,7 @@ java_library(
         "//testing:line_differ",
         "//testing:sync",
         "@@protobuf~//java/core",
-        ,
+        "@com_google_googleapis//google/type:type_java_proto",
         "@maven//:com_google_guava_guava",
         "@maven//:junit_junit",
     ],

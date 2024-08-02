@@ -12,6 +12,7 @@ java_library(
     deps = [
         #         "//java/com/google/testing/testsize:annotations",
         "//:auto_value",
+        "@com_google_googleapis//google/rpc/context:attribute_context_java_proto",
         "//checker",
         "//checker:cel_ident_decl",
         "//checker:checker_builder",

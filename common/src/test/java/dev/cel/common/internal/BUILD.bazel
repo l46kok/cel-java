@@ -35,6 +35,7 @@ java_library(
         "//common/src/test/resources:single_file_java_proto",
         "//common/testing",
         "@@protobuf~//java/core",
+        "@com_google_googleapis//google/type:type_java_proto",
         "@maven//:com_google_guava_guava",
         "@maven//:com_google_testparameterinjector_test_parameter_injector",
         "@maven//:junit_junit",
