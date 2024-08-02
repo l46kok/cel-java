@@ -32,7 +32,6 @@ java_library(
         "//policy:validation_exception",
         "//policy:value_string",
         "//runtime",
-        "@maven//:com_google_api_grpc_proto_google_common_protos",
         "@maven//:com_google_guava_guava",
         "@maven//:com_google_testparameterinjector_test_parameter_injector",
         "@maven//:junit_junit",
