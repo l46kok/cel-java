@@ -47,7 +47,9 @@ final class PolicyTestHelper {
             + "!(resource.origin in variables.permitted_regions)) "
             + "? optional.of({\"banned\": true}) : optional.none()).or("
             + "optional.of((resource.origin in variables.permitted_regions)"
-            + " ? {\"banned\": false} : {\"banned\": true})))"),
+            + " ? {\"banned\": false} : {\"banned\": true})))",
+        ""
+        ),
     NESTED_RULE2(
         "nested_rule2",
         false,
@@ -57,7 +59,9 @@ final class PolicyTestHelper {
             + " (resource.origin in variables.banned_regions && !(resource.origin in"
             + " variables.permitted_regions)) ? {\"banned\": \"restricted_region\"} : {\"banned\":"
             + " \"bad_actor\"}) : (!(resource.origin in variables.permitted_regions) ? {\"banned\":"
-            + " \"unconfigured_region\"} : {}))"),
+            + " \"unconfigured_region\"} : {}))",
+        ""
+        ),
     NESTED_RULE3(
         "nested_rule3",
         true,
@@ -67,7 +71,9 @@ final class PolicyTestHelper {
             + " \"ir\": false}, (resource.origin in variables.banned_regions && !(resource.origin"
             + " in variables.permitted_regions)) ? {\"banned\": \"restricted_region\"} :"
             + " {\"banned\": \"bad_actor\"})) : (!(resource.origin in variables.permitted_regions)"
-            + " ? optional.of({\"banned\": \"unconfigured_region\"}) : optional.none()))"),
+            + " ? optional.of({\"banned\": \"unconfigured_region\"}) : optional.none()))",
+        ""
+        ),
     REQUIRED_LABELS(
         "required_labels",
         true,
@@ -79,7 +85,9 @@ final class PolicyTestHelper {
             + "optional.of(\"missing one or more required labels: [\"\" + "
             + "variables.missing.join(\",\") + \"\"]\") : ((variables.invalid.size() > 0) ? "
             + "optional.of(\"invalid values provided on one or more labels: [\"\" + "
-            + "variables.invalid.join(\",\") + \"\"]\") : optional.none()))))"),
+            + "variables.invalid.join(\",\") + \"\"]\") : optional.none()))))",
+        " cel.@block([spec.labels, variables.want.filter(l, !(l in resource.labels)), resource.labels.filter(l, l in variables.want && variables.want[l] != resource.labels[l])], (@index1.size() > 0) ? optional.of(\"missing one or more required labels: [\"\" + @index1.join(\",\") + \"\"]\") : ((@index2.size() > 0) ? optional.of(\"invalid values provided on one or more labels: [\"\" + @index2.join(\",\") + \"\"]\") : optional.none()))\n"
+        ),
     RESTRICTED_DESTINATIONS(
         "restricted_destinations",
         false,
@@ -93,7 +101,9 @@ final class PolicyTestHelper {
             + " variables.matches_dest_ip || variables.matches_dest_label,"
             + " (variables.matches_nationality && variables.matches_dest) ? true :"
             + " ((!variables.has_nationality && variables.matches_origin_ip &&"
-            + " variables.matches_dest) ? true : false)))))))"),
+            + " variables.matches_dest) ? true : false)))))))",
+        "cel.@block([locationCode(origin.ip) == spec.origin, has(request.auth.claims.nationality), @index1 && request.auth.claims.nationality == spec.origin, locationCode(destination.ip) in spec.restricted_destinations, resource.labels.location in spec.restricted_destinations, @index3 || @index4], (@index2 && @index5) ? true : ((!@index1 && @index0 && @index5) ? true : false))"
+        ),
     K8S(
         "k8s",
         true,
@@ -102,7 +112,9 @@ final class PolicyTestHelper {
             + " \"true\", !(variables.break_glass || resource.containers.all(c,"
             + " c.startsWith(variables.env + \".\"))) ? optional.of(\"only \" + variables.env + \""
             + " containers are allowed in namespace \" + resource.namespace) :"
-            + " optional.none()))"),
+            + " optional.none()))",
+        ""
+        ),
     PB(
         "pb",
         true,
@@ -122,16 +134,20 @@ final class PolicyTestHelper {
             + " variables.person, (now.getHours() < 21) ? optional.of(variables.message + \"!\") :"
             + " ((now.getHours() < 22) ? optional.of(variables.message + \"!!\") : ((now.getHours()"
             + " < 24) ? optional.of(variables.message + \"!!!\") : optional.none()))) :"
-            + " optional.of(variables.greeting + \", \" + variables.person)))))");
+            + " optional.of(variables.greeting + \", \" + variables.person)))))",
+        ""
+        );
 
     private final String name;
     private final boolean producesOptionalResult;
-    private final String unparsed;
+    private final String unparsedCelBind;
+    private final String unparsedCelBlock;
 
-    TestYamlPolicy(String name, boolean producesOptionalResult, String unparsed) {
+    TestYamlPolicy(String name, boolean producesOptionalResult, String unparsedCelBind, String unparsedCelBlock) {
       this.name = name;
       this.producesOptionalResult = producesOptionalResult;
-      this.unparsed = unparsed;
+      this.unparsedCelBind = unparsedCelBind;
+      this.unparsedCelBlock = unparsedCelBlock;
     }
 
     String getPolicyName() {
@@ -142,8 +158,12 @@ final class PolicyTestHelper {
       return this.producesOptionalResult;
     }
 
-    String getUnparsed() {
-      return unparsed;
+    String getUnparsedCelBind() {
+      return unparsedCelBind;
+    }
+
+    String getUnparsedCelBlock() {
+      return unparsedCelBlock;
     }
 
     String readPolicyYamlContent() throws IOException {
