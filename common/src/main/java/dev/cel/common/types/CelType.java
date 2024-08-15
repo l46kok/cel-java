@@ -58,7 +58,26 @@ public abstract class CelType {
    * <p>Defaults to an equality test.
    */
   public boolean isAssignableFrom(CelType other) {
-    return this.equals(other);
+    if (this.equals(other) || this.kind().equals(CelKind.DYN)) {
+      return true;
+    }
+
+    if (this.kind() != other.kind() ||
+        !this.name().equals(other.name()) ||
+        this.parameters().size() != other.parameters().size()) {
+      return false;
+    }
+
+    ImmutableList<CelType> thisParameters = this.parameters();
+    for (int i = 0; i < thisParameters.size(); i++) {
+      CelType thisCelType = thisParameters.get(i);
+      CelType otherCelType = other.parameters().get(i);
+      if (!thisCelType.isAssignableFrom(otherCelType)) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   /**

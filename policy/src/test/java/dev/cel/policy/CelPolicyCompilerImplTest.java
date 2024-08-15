@@ -81,21 +81,8 @@ public final class CelPolicyCompilerImplTest {
 
   @Test
   public void smokeTest() throws Exception {
-    // Cel cel = newCel();
-    // // Read the policy source
-    // String policySource = "name: nested_rule\n" +
-    //         "rule:\n" +
-    //         "  variables:\n" +
-    //         "    - name: \"permitted_regions\"\n" +
-    //         "      expression: \"['us', 'uk', 'es']\"\n" +
-    //         "    - name: \"temp_regions\"\n" +
-    //         "      expression: \"['bz'] + variables.permitted_regions\"\n" +
-    //         "  match:\n" +
-    //         "    - output: \"{'banned': variables.temp_regions}\"";
-    // CelPolicy policy = POLICY_PARSER.parse(policySource);
-
     // Read config and produce an environment to compile policies
-    TestYamlPolicy yamlPolicy = TestYamlPolicy.NESTED_RULE;
+    TestYamlPolicy yamlPolicy = TestYamlPolicy.NESTED_RULE2;
     String configSource = yamlPolicy.readConfigYamlContent();
     CelPolicyConfig policyConfig = POLICY_CONFIG_PARSER.parse(configSource);
     Cel cel = policyConfig.extend(newCel(), CEL_OPTIONS);
@@ -204,7 +191,9 @@ public final class CelPolicyCompilerImplTest {
   @SuppressWarnings("unchecked")
   public void evaluateYamlPolicy_withCanonicalTestData(
       @TestParameter(valuesProvider = EvaluablePolicyTestDataProvider.class)
-          EvaluablePolicyTestData testData)
+          EvaluablePolicyTestData testData,
+      @TestParameter boolean withCelBlockEnabled
+      )
       throws Exception {
     // Setup
     // Read config and produce an environment to compile policies
@@ -220,7 +209,7 @@ public final class CelPolicyCompilerImplTest {
     // Act
     // Compile then evaluate the policy
     CelAbstractSyntaxTree compiledPolicyAst =
-        CelPolicyCompilerFactory.newPolicyCompiler(cel).build().compile(policy);
+        CelPolicyCompilerFactory.newPolicyCompiler(cel).enableCelBlock(withCelBlockEnabled).build().compile(policy);
     ImmutableMap.Builder<String, Object> inputBuilder = ImmutableMap.builder();
     for (Map.Entry<String, PolicyTestInput> entry : testData.testCase.getInput().entrySet()) {
       String exprInput = entry.getValue().getExpr();
