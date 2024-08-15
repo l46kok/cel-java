@@ -38,6 +38,14 @@ public interface CelPolicyCompilerBuilder {
   @CanIgnoreReturnValue
   CelPolicyCompilerBuilder setAstDepthLimit(int iterationLimit);
 
+
+  /**
+   * TODO
+   */
+  @CanIgnoreReturnValue
+  CelPolicyCompilerBuilder enableCelBlock(boolean enableCelBlock);
+
+
   @CheckReturnValue
   CelPolicyCompiler build();
 }
