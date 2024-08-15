@@ -41,6 +41,7 @@ final class RuleComposer implements CelAstOptimizer {
   private final CelCompiledRule compiledRule;
   private final String variablePrefix;
   private final AstMutator astMutator;
+  private final boolean enableCelBlock;
 
   @Override
   public OptimizationResult optimize(CelAbstractSyntaxTree ast, Cel cel) {
@@ -52,10 +53,8 @@ final class RuleComposer implements CelAstOptimizer {
   abstract static class RuleOptimizationResult {
     abstract CelMutableAst ast();
 
-    abstract boolean isOptionalResult();
-
-    static RuleOptimizationResult create(CelMutableAst ast, boolean isOptionalResult) {
-      return new AutoValue_RuleComposer_RuleOptimizationResult(ast, isOptionalResult);
+    static RuleOptimizationResult create(CelMutableAst ast) {
+      return new AutoValue_RuleComposer_RuleOptimizationResult(ast);
     }
   }
 
@@ -165,12 +164,12 @@ final class RuleComposer implements CelAstOptimizer {
 
     result = astMutator.renumberIdsConsecutively(result);
 
-    return RuleOptimizationResult.create(result, isOptionalResult);
+    return RuleOptimizationResult.create(result);
   }
 
   static RuleComposer newInstance(
-      CelCompiledRule compiledRule, String variablePrefix, int iterationLimit) {
-    return new RuleComposer(compiledRule, variablePrefix, iterationLimit);
+      CelCompiledRule compiledRule, String variablePrefix, int iterationLimit, boolean enableCelBlock) {
+    return new RuleComposer(compiledRule, variablePrefix, iterationLimit, enableCelBlock);
   }
 
   private void assertComposedAstIsValid(
@@ -188,10 +187,11 @@ final class RuleComposer implements CelAstOptimizer {
     }
   }
 
-  private RuleComposer(CelCompiledRule compiledRule, String variablePrefix, int iterationLimit) {
+  private RuleComposer(CelCompiledRule compiledRule, String variablePrefix, int iterationLimit, boolean enableCelBlock) {
     this.compiledRule = checkNotNull(compiledRule);
     this.variablePrefix = variablePrefix;
     this.astMutator = AstMutator.newInstance(iterationLimit);
+    this.enableCelBlock = enableCelBlock;
   }
 
   static final class RuleCompositionException extends RuntimeException {

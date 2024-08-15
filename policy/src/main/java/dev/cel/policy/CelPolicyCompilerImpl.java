@@ -61,6 +61,7 @@ final class CelPolicyCompilerImpl implements CelPolicyCompiler {
   private final String variablesPrefix;
   private final int iterationLimit;
   private final Optional<CelAstValidator> astDepthValidator;
+  private final boolean enableCelBlock;
 
   @Override
   public CelCompiledRule compileRule(CelPolicy policy) throws CelPolicyValidationException {
@@ -101,7 +102,7 @@ final class CelPolicyCompilerImpl implements CelPolicyCompiler {
     CelOptimizer optimizer =
         CelOptimizerFactory.standardCelOptimizerBuilder(cel)
             .addAstOptimizers(
-                RuleComposer.newInstance(compiledRule, variablesPrefix, iterationLimit))
+                RuleComposer.newInstance(compiledRule, variablesPrefix, iterationLimit, enableCelBlock))
             .build();
 
     CelAbstractSyntaxTree ast;
@@ -315,6 +316,7 @@ final class CelPolicyCompilerImpl implements CelPolicyCompiler {
     private String variablesPrefix;
     private int iterationLimit;
     private Optional<CelAstValidator> astDepthLimitValidator;
+    private boolean enableCelBlock;
 
     private Builder(Cel cel) {
       this.cel = cel;
@@ -345,11 +347,16 @@ final class CelPolicyCompilerImpl implements CelPolicyCompiler {
       }
       return this;
     }
+    @Override
+    public CelPolicyCompilerBuilder enableCelBlock(boolean enableCelBlock) {
+      this.enableCelBlock = enableCelBlock;
+      return this;
+    }
 
     @Override
     public CelPolicyCompiler build() {
       return new CelPolicyCompilerImpl(
-          cel, this.variablesPrefix, this.iterationLimit, astDepthLimitValidator);
+          cel, this.variablesPrefix, this.iterationLimit, astDepthLimitValidator, enableCelBlock);
     }
   }
 
@@ -363,10 +370,12 @@ final class CelPolicyCompilerImpl implements CelPolicyCompiler {
       Cel cel,
       String variablesPrefix,
       int iterationLimit,
-      Optional<CelAstValidator> astDepthValidator) {
+      Optional<CelAstValidator> astDepthValidator,
+      boolean enableCelBlock) {
     this.cel = checkNotNull(cel);
     this.variablesPrefix = checkNotNull(variablesPrefix);
     this.iterationLimit = iterationLimit;
     this.astDepthValidator = astDepthValidator;
+    this.enableCelBlock = enableCelBlock;
   }
 }
