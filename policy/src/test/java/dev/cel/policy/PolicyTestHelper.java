@@ -60,7 +60,7 @@ final class PolicyTestHelper {
             + " variables.permitted_regions)) ? {\"banned\": \"restricted_region\"} : {\"banned\":"
             + " \"bad_actor\"}) : (!(resource.origin in variables.permitted_regions) ? {\"banned\":"
             + " \"unconfigured_region\"} : {}))",
-        "cel.@block([[\"us\", \"uk\", \"es\"], {\"us\": false, \"ru\": false, \"ir\": false}], resource.?user.orValue(\"\").startsWith(\"bad\") ? ((resource.origin in @index1 && !(resource.origin in @index0)) ? {\"banned\": \"restricted_region\"} : {\"banned\": \"bad_actor\"}) : (!(resource.origin in @index0) ? {\"banned\": \"unconfigured_region\"} : {}))\n"
+        "cel.@block([[\"us\", \"uk\", \"es\"], {\"us\": false, \"ru\": false, \"ir\": false}], resource.?user.orValue(\"\").startsWith(\"bad\") ? ((resource.origin in @index1 && !(resource.origin in @index0)) ? {\"banned\": \"restricted_region\"} : {\"banned\": \"bad_actor\"}) : (!(resource.origin in @index0) ? {\"banned\": \"unconfigured_region\"} : {}))"
         ),
     NESTED_RULE3(
         "nested_rule3",
