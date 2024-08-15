@@ -14,17 +14,20 @@
 
 package dev.cel.policy;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-import static com.google.common.collect.ImmutableList.toImmutableList;
-import static java.util.stream.Collectors.toCollection;
-
-import com.google.auto.value.AutoValue;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import dev.cel.bundle.Cel;
 import dev.cel.common.CelAbstractSyntaxTree;
+import dev.cel.common.CelFunctionDecl;
 import dev.cel.common.CelMutableAst;
+import dev.cel.common.CelOverloadDecl;
 import dev.cel.common.CelValidationException;
-import dev.cel.common.formats.ValueString;
+import dev.cel.common.CelVarDecl;
+import dev.cel.common.ast.CelExpr;
+import dev.cel.common.navigation.CelNavigableMutableAst;
+import dev.cel.common.types.CelType;
+import dev.cel.common.types.ListType;
+import dev.cel.common.types.SimpleType;
 import dev.cel.extensions.CelOptionalLibrary.Function;
 import dev.cel.optimizer.AstMutator;
 import dev.cel.optimizer.CelAstOptimizer;
@@ -32,9 +35,15 @@ import dev.cel.parser.Operator;
 import dev.cel.policy.CelCompiledRule.CelCompiledMatch;
 import dev.cel.policy.CelCompiledRule.CelCompiledMatch.OutputValue;
 import dev.cel.policy.CelCompiledRule.CelCompiledVariable;
+
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.collect.ImmutableList.toImmutableList;
+import static java.util.stream.Collectors.toCollection;
 
 /** Package-private class for composing various rules into a single expression using optimizer. */
 final class RuleComposer implements CelAstOptimizer {
@@ -45,20 +54,59 @@ final class RuleComposer implements CelAstOptimizer {
 
   @Override
   public OptimizationResult optimize(CelAbstractSyntaxTree ast, Cel cel) {
-    RuleOptimizationResult result = optimizeRule(cel, compiledRule);
-    return OptimizationResult.create(result.ast().toParsedAst());
-  }
+    CelMutableAst mutableOptimizedAst = optimizeRule(cel, compiledRule);
+    if (enableCelBlock) {
+      ImmutableList<CelCompiledVariable> policyVariables = collectAllPolicyVariables(compiledRule);
+      ImmutableList.Builder<CelVarDecl> newBlockIndexDecls = ImmutableList.builder();
+      ImmutableList.Builder<CelMutableAst> subexpressions = ImmutableList.builder();
+      HashMap<String, String> replacedVars = new HashMap<>();
+      for (int i = 0; i < policyVariables.size(); i++) {
+        String blockIdentifier = "@index" + i;
+        CelCompiledVariable variable = policyVariables.get(i);
+        String policyVariableName = variablePrefix + variable.name();
+        CelMutableAst varMutableAst = CelMutableAst.fromCelAst(variable.ast());
+        replacedVars.put(policyVariableName, blockIdentifier);
 
-  @AutoValue
-  abstract static class RuleOptimizationResult {
-    abstract CelMutableAst ast();
+        // Replace index in subexpression
+        CelNavigableMutableAst.fromAst(varMutableAst).getRoot().allNodes()
+                .filter(node -> node.getKind().equals(CelExpr.ExprKind.Kind.IDENT))
+                .filter(node -> replacedVars.containsKey(node.expr().ident().name()))
+                .forEach(policyVar -> policyVar.expr().ident().setName(replacedVars.get(policyVar.expr().ident().name())));
 
-    static RuleOptimizationResult create(CelMutableAst ast) {
-      return new AutoValue_RuleComposer_RuleOptimizationResult(ast);
+        // Replace index in main ast
+        CelNavigableMutableAst.fromAst(mutableOptimizedAst).getRoot().allNodes()
+                .filter(node -> node.getKind().equals(CelExpr.ExprKind.Kind.IDENT))
+                .filter(node -> node.expr().ident().name().equals(policyVariableName))
+                .forEach(policyVar -> policyVar.expr().ident().setName(blockIdentifier));
+
+        subexpressions.add(CelMutableAst.fromCelAst(varMutableAst.toParsedAst()));
+
+        // TODO: Typecheck subexpressions
+        newBlockIndexDecls.add(CelVarDecl.newVarDeclaration(blockIdentifier, SimpleType.DYN));
+      }
+
+      mutableOptimizedAst = astMutator.wrapAstWithNewCelBlock(mutableOptimizedAst, subexpressions.build());
+
+      CelAbstractSyntaxTree optimizedAst = mutableOptimizedAst.toParsedAst();
+      return OptimizationResult.create(optimizedAst, newBlockIndexDecls.build(), ImmutableList.of(newCelBlockFunctionDecl(optimizedAst.getResultType())));
+    } else {
+      return OptimizationResult.create(mutableOptimizedAst.toParsedAst());
     }
   }
 
-  private RuleOptimizationResult optimizeRule(Cel cel, CelCompiledRule compiledRule) {
+  private ImmutableList<CelCompiledVariable> collectAllPolicyVariables(CelCompiledRule compiledRule) {
+    ImmutableList.Builder<CelCompiledVariable> builder = ImmutableList.builder();
+    builder.addAll(compiledRule.variables());
+    for (CelCompiledMatch match : compiledRule.matches()) {
+      if (match.result().kind().equals(CelCompiledMatch.Result.Kind.RULE)) {
+        builder.addAll(collectAllPolicyVariables(match.result().rule()));
+      }
+    }
+
+    return builder.build();
+  }
+
+  private CelMutableAst optimizeRule(Cel cel, CelCompiledRule compiledRule) {
     cel =
         cel.toCelBuilder()
             .addVarDeclarations(
@@ -113,9 +161,8 @@ final class RuleComposer implements CelAstOptimizer {
           // If the match has a nested rule, then compute the rule and whether it has
           // an optional return value.
           CelCompiledRule matchNestedRule = match.result().rule();
-          RuleOptimizationResult nestedRule = optimizeRule(cel, matchNestedRule);
+          CelMutableAst nestedRuleAst = optimizeRule(cel, matchNestedRule);
           boolean nestedHasOptional = matchNestedRule.hasOptionalOutput();
-          CelMutableAst nestedRuleAst = nestedRule.ast();
           if (isOptionalResult && !nestedHasOptional) {
             nestedRuleAst =
                 astMutator.newGlobalCall(Function.OPTIONAL_OF.getFunction(), nestedRuleAst);
@@ -151,20 +198,30 @@ final class RuleComposer implements CelAstOptimizer {
     }
 
     CelMutableAst result = matchAst;
-    for (CelCompiledVariable variable : Lists.reverse(compiledRule.variables())) {
-      result =
-          astMutator.replaceSubtreeWithNewBindMacro(
-              result,
-              variablePrefix + variable.name(),
-              CelMutableAst.fromCelAst(variable.ast()),
-              result.expr(),
-              result.expr().id(),
-              true);
+    if (!enableCelBlock) {
+        for (CelCompiledVariable variable : Lists.reverse(compiledRule.variables())) {
+          String policyVariableName = variablePrefix + variable.name();
+          result =
+                  astMutator.replaceSubtreeWithNewBindMacro(
+                          result,
+                          policyVariableName,
+                          CelMutableAst.fromCelAst(variable.ast()),
+                          result.expr(),
+                          result.expr().id(),
+                          true);
+      }
     }
 
     result = astMutator.renumberIdsConsecutively(result);
 
-    return RuleOptimizationResult.create(result);
+    return result;
+  }
+
+  private static CelFunctionDecl newCelBlockFunctionDecl(CelType resultType) {
+    return CelFunctionDecl.newFunctionDeclaration(
+            "cel.@block",
+            CelOverloadDecl.newGlobalOverload(
+                    "cel_block_list", resultType, ListType.create(SimpleType.DYN), resultType));
   }
 
   static RuleComposer newInstance(

@@ -14,6 +14,7 @@
 
 package dev.cel.optimizer;
 
+import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static java.lang.Math.max;
 import static java.util.stream.Collectors.toCollection;
@@ -83,6 +84,31 @@ public final class AstMutator {
   public CelMutableExpr clearExprIds(CelMutableExpr expr) {
     return renumberExprIds(UNSET_ID_GENERATOR, expr);
   }
+
+  /** Wraps the given AST and its subexpressions with a new cel.@block call. */
+  public CelMutableAst wrapAstWithNewCelBlock(
+          CelMutableAst ast, Collection<CelMutableAst> subexpressions) {
+    long maxId = getMaxId(ast);
+    CelMutableSource combinedSource = CelMutableSource.newInstance();
+    for (CelMutableAst subexpr : subexpressions) {
+      CelMutableAst stableArg = stabilizeAst(subexpr, maxId);
+      maxId = getMaxId(stableArg);
+      combinedSource = combine(combinedSource, stableArg.source());
+    }
+//    newGlobalCall("cel.@block", CelMutableExpr.ofList(++maxId,
+//            CelMutableList.create(subexpressions.stream().map(CelMutableAst::expr).collect(toImmutableList()))), ast)
+    CelMutableExpr blockExpr =
+            CelMutableExpr.ofCall(
+                    ++maxId,
+                    CelMutableCall.create(
+                            "cel.@block",
+                            CelMutableExpr.ofList(++maxId,
+                                    CelMutableList.create(subexpressions.stream().map(CelMutableAst::expr).collect(toImmutableList()))),
+                            ast.expr()));
+
+    return CelMutableAst.of(blockExpr, combinedSource);
+  }
+
 
   /** Wraps the given AST and its subexpressions with a new cel.@block call. */
   public CelMutableAst wrapAstWithNewCelBlock(

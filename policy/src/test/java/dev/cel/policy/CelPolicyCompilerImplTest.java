@@ -80,25 +80,46 @@ public final class CelPolicyCompilerImplTest {
   }
 
   @Test
-  public void compileYamlPolicy_withImportsOnNestedRules() throws Exception {
-    String policySource =
-        "imports:\n"
-            + "  - name: cel.expr.conformance.proto3.TestAllTypes\n"
-            + "  - name: dev.cel.testing.testdata.SingleFile\n"
-            + "rule:\n"
-            + "  match:\n"
-            + "  - rule:\n"
-            + "      id: 'nested rule with imports'\n"
-            + "      match:\n"
-            + "        - condition: 'TestAllTypes{}.single_string == SingleFile{}.name'\n"
-            + "          output: 'true'\n";
+  public void smokeTest() throws Exception {
     Cel cel = newCel();
+    // Read the policy source
+    String policySource = "name: nested_rule\n" +
+            "rule:\n" +
+            "  variables:\n" +
+            "    - name: \"permitted_regions\"\n" +
+            "      expression: \"['us', 'uk', 'es']\"\n" +
+            "    - name: \"temp_regions\"\n" +
+            "      expression: \"['bz'] + variables.permitted_regions\"\n" +
+            "  match:\n" +
+            "    - output: \"{'banned': variables.temp_regions}\"";
+    CelPolicy policy = POLICY_PARSER.parse(policySource);
+
+    CelAbstractSyntaxTree astWithBinds =
+            CelPolicyCompilerFactory.newPolicyCompiler(cel).enableCelBlock(false).build().compile(policy);
+    CelAbstractSyntaxTree astWithBlock =
+            CelPolicyCompilerFactory.newPolicyCompiler(cel).enableCelBlock(true).build().compile(policy);
+
+    assertThat(CelUnparserFactory.newUnparser().unparse(astWithBinds)).isEqualTo("cel.bind(variables.permitted_regions, [\"us\", \"uk\", \"es\"], cel.bind(variables.temp_regions, [\"bz\"] + variables.permitted_regions, {\"banned\": variables.temp_regions}))");
+    assertThat(CelUnparserFactory.newUnparser().unparse(astWithBlock)).isEqualTo("cel.@block([[\"us\", \"uk\", \"es\"]], {\"banned\": @index0})");
+
+    Object result =cel.createProgram(astWithBlock).eval();
+    System.out.println(result);
+  }
+
+  @Test
+  public void compileYamlPolicy_withCelBlock_success(@TestParameter TestYamlPolicy yamlPolicy) throws Exception {
+    // Read config and produce an environment to compile policies
+    String configSource = yamlPolicy.readConfigYamlContent();
+    CelPolicyConfig policyConfig = POLICY_CONFIG_PARSER.parse(configSource);
+    Cel cel = policyConfig.extend(newCel(), CEL_OPTIONS);
+    // Read the policy source
+    String policySource = yamlPolicy.readPolicyYamlContent();
     CelPolicy policy = POLICY_PARSER.parse(policySource);
 
     CelAbstractSyntaxTree ast =
-        CelPolicyCompilerFactory.newPolicyCompiler(cel).build().compile(policy);
+        CelPolicyCompilerFactory.newPolicyCompiler(cel).enableCelBlock(true).build().compile(policy);
 
-    assertThat(ast.getResultType()).isEqualTo(OptionalType.create(SimpleType.BOOL));
+    assertThat(CelUnparserFactory.newUnparser().unparse(ast)).isEqualTo(yamlPolicy.getUnparsed());
   }
 
   @Test
