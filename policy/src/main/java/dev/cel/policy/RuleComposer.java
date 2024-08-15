@@ -262,7 +262,10 @@ final class RuleComposer implements CelAstOptimizer {
       }
 
       CelType matchOutputType = matchOutput.ast().getResultType();
-      if (!matchOutputType.isAssignableFrom(expectedOutputType) || !expectedOutputType.isAssignableFrom(matchOutputType)) {
+      // Handle assignability as the output type is assignable to the match output or vice versa.
+      // During composition, this is roughly how the type-checker will handle the type agreement check.
+      boolean outputTypesAgree = matchOutputType.isAssignableFrom(expectedOutputType) || expectedOutputType.isAssignableFrom(matchOutputType);
+      if (!outputTypesAgree) {
         throw new RuleCompositionException("Incompatible output types");
       }
     }
