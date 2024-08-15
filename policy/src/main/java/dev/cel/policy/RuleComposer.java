@@ -21,6 +21,7 @@ import dev.cel.common.CelAbstractSyntaxTree;
 import dev.cel.common.CelFunctionDecl;
 import dev.cel.common.CelMutableAst;
 import dev.cel.common.CelOverloadDecl;
+import dev.cel.common.CelSource;
 import dev.cel.common.CelValidationException;
 import dev.cel.common.CelVarDecl;
 import dev.cel.common.ast.CelExpr;
@@ -34,6 +35,7 @@ import dev.cel.optimizer.CelAstOptimizer;
 import dev.cel.parser.Operator;
 import dev.cel.policy.CelCompiledRule.CelCompiledMatch;
 import dev.cel.policy.CelCompiledRule.CelCompiledMatch.OutputValue;
+import dev.cel.policy.CelCompiledRule.CelCompiledMatch.Result.Kind;
 import dev.cel.policy.CelCompiledRule.CelCompiledVariable;
 
 import java.util.ArrayList;
@@ -186,13 +188,15 @@ final class RuleComposer implements CelAstOptimizer {
                     matchAst);
           }
 
-          assertComposedAstIsValid(
-              cel,
-              matchAst,
-              String.format(
-                  "failed composing the subrule '%s' due to conflicting output types.",
-                  matchNestedRule.ruleId().map(ValueString::value).orElse("")),
-              lastOutputId);
+          // assertComposedAstIsValid(
+          //     cel,
+          //     matchAst,
+          //     String.format(
+          //         "failed composing the subrule '%s' due to conflicting output types.",
+          //         matchNestedRule.ruleId().map(ValueString::value).orElse("")),
+          //     lastOutputId);
+
+          assertComposedAstResultTypesAgree(compiledRule);
           break;
       }
     }
@@ -244,6 +248,26 @@ final class RuleComposer implements CelAstOptimizer {
     }
   }
 
+  private void assertComposedAstResultTypesAgree(CelCompiledRule rule) {
+    CelType expectedOutputType = null;
+    for (CelCompiledMatch match : rule.matches()) {
+      if (!match.result().kind().equals(Kind.OUTPUT)) {
+        continue;
+      }
+
+      OutputValue matchOutput = match.result().output();
+      if (expectedOutputType == null) {
+        expectedOutputType = matchOutput.ast().getResultType();
+        continue;
+      }
+
+      CelType matchOutputType = matchOutput.ast().getResultType();
+      if (!matchOutputType.isAssignableFrom(expectedOutputType) || !expectedOutputType.isAssignableFrom(matchOutputType)) {
+        throw new RuleCompositionException("Incompatible output types");
+      }
+    }
+  }
+
   private RuleComposer(CelCompiledRule compiledRule, String variablePrefix, int iterationLimit, boolean enableCelBlock) {
     this.compiledRule = checkNotNull(compiledRule);
     this.variablePrefix = variablePrefix;
@@ -255,6 +279,12 @@ final class RuleComposer implements CelAstOptimizer {
     final String failureReason;
     final List<Long> errorIds;
     final CelValidationException compileException;
+
+    private RuleCompositionException(String failureReason) {
+      this.failureReason = failureReason;
+      this.errorIds = ImmutableList.of();
+      this.compileException = new CelValidationException(CelSource.newBuilder().build(), ImmutableList.of());
+    }
 
     private RuleCompositionException(
         String failureReason, CelValidationException e, List<Long> errorIds) {

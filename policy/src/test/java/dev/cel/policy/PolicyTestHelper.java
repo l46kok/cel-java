@@ -48,7 +48,7 @@ final class PolicyTestHelper {
             + "? optional.of({\"banned\": true}) : optional.none()).or("
             + "optional.of((resource.origin in variables.permitted_regions)"
             + " ? {\"banned\": false} : {\"banned\": true})))",
-        ""
+        "cel.@block([[\"us\", \"uk\", \"es\"], {\"us\": false, \"ru\": false, \"ir\": false}], ((resource.origin in @index1 && !(resource.origin in @index0)) ? optional.of({\"banned\": true}) : optional.none()).or(optional.of((resource.origin in @index0) ? {\"banned\": false} : {\"banned\": true})))"
         ),
     NESTED_RULE2(
         "nested_rule2",
@@ -72,13 +72,12 @@ final class PolicyTestHelper {
             + " in variables.permitted_regions)) ? {\"banned\": \"restricted_region\"} :"
             + " {\"banned\": \"bad_actor\"})) : (!(resource.origin in variables.permitted_regions)"
             + " ? optional.of({\"banned\": \"unconfigured_region\"}) : optional.none()))",
-        ""
+        "cel.@block([[\"us\", \"uk\", \"es\"], {\"us\": false, \"ru\": false, \"ir\": false}], resource.?user.orValue(\"\").startsWith(\"bad\") ? optional.of((resource.origin in @index1 && !(resource.origin in @index0)) ? {\"banned\": \"restricted_region\"} : {\"banned\": \"bad_actor\"}) : (!(resource.origin in @index0) ? optional.of({\"banned\": \"unconfigured_region\"}) : optional.none()))"
         ),
     REQUIRED_LABELS(
         "required_labels",
         true,
-        ""
-            + "cel.bind(variables.want, spec.labels, cel.bind(variables.missing, "
+            "cel.bind(variables.want, spec.labels, cel.bind(variables.missing, "
             + "variables.want.filter(l, !(l in resource.labels)), cel.bind(variables.invalid, "
             + "resource.labels.filter(l, l in variables.want && variables.want[l] != "
             + "resource.labels[l]), (variables.missing.size() > 0) ? "
@@ -86,7 +85,7 @@ final class PolicyTestHelper {
             + "variables.missing.join(\",\") + \"\"]\") : ((variables.invalid.size() > 0) ? "
             + "optional.of(\"invalid values provided on one or more labels: [\"\" + "
             + "variables.invalid.join(\",\") + \"\"]\") : optional.none()))))",
-        " cel.@block([spec.labels, variables.want.filter(l, !(l in resource.labels)), resource.labels.filter(l, l in variables.want && variables.want[l] != resource.labels[l])], (@index1.size() > 0) ? optional.of(\"missing one or more required labels: [\"\" + @index1.join(\",\") + \"\"]\") : ((@index2.size() > 0) ? optional.of(\"invalid values provided on one or more labels: [\"\" + @index2.join(\",\") + \"\"]\") : optional.none()))\n"
+        "cel.@block([spec.labels, variables.want.filter(l, !(l in resource.labels)), resource.labels.filter(l, l in variables.want && variables.want[l] != resource.labels[l])], (@index1.size() > 0) ? optional.of(\"missing one or more required labels: [\"\" + @index1.join(\",\") + \"\"]\") : ((@index2.size() > 0) ? optional.of(\"invalid values provided on one or more labels: [\"\" + @index2.join(\",\") + \"\"]\") : optional.none()))"
         ),
     RESTRICTED_DESTINATIONS(
         "restricted_destinations",
@@ -135,7 +134,7 @@ final class PolicyTestHelper {
             + " ((now.getHours() < 22) ? optional.of(variables.message + \"!!\") : ((now.getHours()"
             + " < 24) ? optional.of(variables.message + \"!!!\") : optional.none()))) :"
             + " optional.of(variables.greeting + \", \" + variables.person)))))",
-        ""
+        "cel.@block([\"hello\", \"goodbye\", \"me\", \"%s, %s\", @index1 + \", \" + @index2], (now.getHours() >= 20) ? ((now.getHours() < 21) ? optional.of(@index4 + \"!\") : ((now.getHours() < 22) ? optional.of(@index4 + \"!!\") : ((now.getHours() < 24) ? optional.of(@index4 + \"!!!\") : optional.none()))) : optional.of(@index0 + \", \" + @index2))"
         );
 
     private final String name;
