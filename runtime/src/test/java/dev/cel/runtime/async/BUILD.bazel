@@ -12,10 +12,7 @@ java_library(
     deps = [
         "//:java_truth",
         "//bundle:cel",
-        "//common",
-        "//common:options",
         "//common/testing",
-        "//common/types",
         "//runtime",
         "//runtime:unknown_attributes",
         "//runtime:unknown_options",
@@ -24,6 +21,7 @@ java_library(
         "@cel_spec//proto/test/v1/proto3:test_all_types_java_proto",
         "@maven//:com_google_guava_guava",
         "@maven//:com_google_testparameterinjector_test_parameter_injector",
+        "@maven//:dev_cel_common",
         "@maven//:junit_junit",
     ],
 )
