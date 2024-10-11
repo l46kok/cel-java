@@ -8,6 +8,8 @@ bazel-testlogs
 
 MODULE.bazel*
 
+*.swp
+
 # IntelliJ IDEA
 .idea
 *.iml

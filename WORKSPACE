@@ -84,11 +84,13 @@ maven_install(
         "com.google.truth.extensions:truth-proto-extension:1.4.4",
         "com.google.truth:truth:1.4.4",
         "org.antlr:antlr4-runtime:" + ANTLR4_VERSION,
+        "dev.cel:common:0.9.0-ATEST-SNAPSHOT",
         "org.jspecify:jspecify:1.0.0",
         "org.threeten:threeten-extra:1.8.0",
         "org.yaml:snakeyaml:2.3",
     ],
     repositories = [
+        "file:///Users/sokwhan/.m2/repository",
         "https://maven.google.com",
         "https://repo1.maven.org/maven2",
     ],

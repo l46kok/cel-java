@@ -5,6 +5,49 @@ load("//publish:cel_version.bzl", "CEL_VERSION")
 # Note: These targets must reference the build targets in `src` directly in
 # order to properly generate the maven dependencies in pom.xml.
 
+COMMON_TARGETS = [
+    "//common/src/main/java/dev/cel/common",
+    "//common/src/main/java/dev/cel/common:compiler_common",
+    "//common/src/main/java/dev/cel/common:options",
+    "//common/src/main/java/dev/cel/common:proto_ast",
+    "//common/src/main/java/dev/cel/common:error_codes",
+    "//common/src/main/java/dev/cel/common:runtime_exception",
+    "//common/src/main/java/dev/cel/common:mutable_ast",
+    "//common/src/main/java/dev/cel/common:mutable_source",
+    "//common/src/main/java/dev/cel/common:proto_json_adapter",
+    "//common/src/main/java/dev/cel/common:source_location",
+    "//common/src/main/java/dev/cel/common:source",
+    "//common/src/main/java/dev/cel/common/annotations",
+    "//common/src/main/java/dev/cel/common/ast",
+    "//common/src/main/java/dev/cel/common/ast:expr_converter",
+    "//common/src/main/java/dev/cel/common/ast:expr_factory",
+    "//common/src/main/java/dev/cel/common/ast:expr_util",
+    "//common/src/main/java/dev/cel/common/ast:mutable_expr",
+    "//common/src/main/java/dev/cel/common/internal",
+    "//common/src/main/java/dev/cel/common/internal:comparison_functions",
+    "//common/src/main/java/dev/cel/common/internal:converter",
+    "//common/src/main/java/dev/cel/common/internal:dynamic_proto",
+    "//common/src/main/java/dev/cel/common/internal:proto_equality",
+    "//common/src/main/java/dev/cel/common/internal:file_descriptor_converter",
+    "//common/src/main/java/dev/cel/common/internal:errors",
+    "//common/src/main/java/dev/cel/common/internal:env_visitor",
+    "//common/src/main/java/dev/cel/common/internal:default_instance_message_factory",
+    "//common/src/main/java/dev/cel/common/internal:well_known_proto",
+    "//common/src/main/java/dev/cel/common/internal:proto_message_factory",
+    "//common/src/main/java/dev/cel/common/internal:default_message_factory",
+    "//common/src/main/java/dev/cel/common/internal:cel_descriptor_pools",
+    "//common/src/main/java/dev/cel/common/internal:safe_string_formatter",
+    "//common/src/main/java/dev/cel/common/types",
+    "//common/src/main/java/dev/cel/common/types:cel_types",
+    "//common/src/main/java/dev/cel/common/types:type_providers",
+    "//common/src/main/java/dev/cel/common/values",
+    "//common/src/main/java/dev/cel/common/values:cel_value",
+    "//common/src/main/java/dev/cel/common/values:cel_value_provider",
+    "//common/src/main/java/dev/cel/common/values:cel_byte_string",
+    "//common/src/main/java/dev/cel/common/values:proto_message_value",
+    "//common/src/main/java/dev/cel/common/values:proto_message_value_provider"
+]
+
 RUNTIME_TARGETS = [
     "//runtime/src/main/java/dev/cel/runtime",
     "//runtime/src/main/java/dev/cel/runtime:base",
@@ -59,6 +102,28 @@ EXTENSION_TARGETS = [
 ALL_TARGETS = [
     "//bundle/src/main/java/dev/cel/bundle:cel",
 ] + RUNTIME_TARGETS + COMPILER_TARGETS + EXTENSION_TARGETS + V1ALPHA1_UTILITY_TARGETS + OPTIMIZER_TARGETS + VALIDATOR_TARGETS
+
+pom_file(
+    name = "cel_common_pom",
+    substitutions = {
+        "CEL_VERSION": CEL_VERSION,
+        "CEL_ARTIFACT_ID": "common",
+        "PACKAGE_NAME": "CEL Java Common",
+        "PACKAGE_DESC": "Common Expression Language for Java. This includes the common dependencies required to leverage CEL.",
+    },
+    targets = COMMON_TARGETS,
+    template_file = "pom_template.xml",
+)
+
+java_export(
+    name = "cel_common",
+    deploy_env = [
+        "@com_google_googleapis//google/api/expr/v1alpha1:expr_java_proto",
+    ],
+    maven_coordinates = "dev.cel:common:%s" % CEL_VERSION,
+    pom_template = ":cel_common_pom",
+    runtime_deps = COMMON_TARGETS,
+)
 
 pom_file(
     name = "cel_pom",
