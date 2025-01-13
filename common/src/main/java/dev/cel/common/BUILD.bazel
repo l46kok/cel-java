@@ -10,11 +10,9 @@ package(
 
 # keep sorted
 COMMON_SOURCES = [
-    "CelAbstractSyntaxTree.java",
     "CelDescriptorUtil.java",
     "CelDescriptors.java",
     "CelException.java",
-    "CelSource.java",
 ]
 
 # keep sorted
@@ -49,6 +47,8 @@ java_library(
     tags = [
     ],
     deps = [
+        ":cel_ast",
+        ":cel_source",
         ":error_codes",
         ":source",
         ":source_location",
@@ -72,6 +72,8 @@ java_library(
     tags = [
     ],
     deps = [
+        ":cel_ast",
+        ":cel_source",
         ":common",
         ":source",
         ":source_location",
@@ -116,7 +118,8 @@ java_library(
     tags = [
     ],
     deps = [
-        "//common",
+        "//common:cel_ast",
+        "//common:cel_source",
         "//common/ast:expr_converter",
         "//common/types:cel_proto_types",
         "@cel_spec//proto/cel/expr:expr_java_proto",
@@ -131,6 +134,8 @@ java_library(
     tags = [
     ],
     deps = [
+        ":cel_ast",
+        ":cel_source",
         ":common",
         "//common/ast:expr_v1alpha1_converter",
         "//common/types:cel_v1alpha1_types",
@@ -164,6 +169,7 @@ java_library(
     tags = [
     ],
     deps = [
+        ":cel_ast",
         ":mutable_source",
         "//common",
         "//common/ast",
@@ -178,6 +184,7 @@ java_library(
     tags = [
     ],
     deps = [
+        ":cel_source",
         ":common",
         "//:auto_value",
         "//common/ast:mutable_expr",
@@ -220,6 +227,35 @@ java_library(
         ":source_location",
         "//common/annotations",
         "//common/internal",
+        "@maven//:com_google_guava_guava",
+    ],
+)
+
+java_library(
+    name = "cel_source",
+    srcs = ["CelSource.java"],
+    deps = [
+        ":source",
+        ":source_location",
+        "//:auto_value",
+        "//common/ast",
+        "//common/internal",
+        "@maven//:com_google_errorprone_error_prone_annotations",
+        "@maven//:com_google_guava_guava",
+    ],
+)
+
+java_library(
+    name = "cel_ast",
+    srcs = ["CelAbstractSyntaxTree.java"],
+    deps = [
+        ":cel_source",
+        "//:auto_value",
+        "//common/annotations",
+        "//common/ast",
+        "//common/types",
+        "//common/types:type_providers",
+        "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
     ],
 )

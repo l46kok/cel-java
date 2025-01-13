@@ -7,7 +7,21 @@ package(
 
 java_library(
     name = "common",
-    exports = ["//common/src/main/java/dev/cel/common"],
+    exports = [
+        ":cel_ast",
+        ":cel_source",
+        "//common/src/main/java/dev/cel/common",
+    ],
+)
+
+java_library(
+    name = "cel_source",
+    exports = ["//common/src/main/java/dev/cel/common:cel_source"],
+)
+
+java_library(
+    name = "cel_ast",
+    exports = ["//common/src/main/java/dev/cel/common:cel_ast"],
 )
 
 java_library(
