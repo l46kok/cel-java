@@ -1,11 +1,27 @@
 load("@rules_java//java:defs.bzl", "java_library")
 
+load("//:cel_android_library.bzl", "cel_android_library")
+
 package(
     default_applicable_licenses = [
         "//:license",
     ],
     default_visibility = [
         "//common/ast:__pkg__",
+    ],
+)
+
+cel_android_library(
+    name = "foo",
+    srcs = ["CelConstant.java"],
+    tags = [
+    ],
+    deps = [
+        "//:auto_value",
+        "//common/annotations",
+        "@maven//:com_google_errorprone_error_prone_annotations",
+        "@maven//:com_google_guava_guava",
+        "@maven//:com_google_protobuf_protobuf_java",
     ],
 )
 
@@ -42,6 +58,21 @@ MUTABLE_EXPR_SOURCES = [
 
 java_library(
     name = "ast",
+    srcs = AST_SOURCES,
+    tags = [
+    ],
+    deps = [
+        "//:auto_value",
+        "//common/annotations",
+        "@maven//:com_google_errorprone_error_prone_annotations",
+        "@maven//:com_google_guava_guava",
+        "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:org_jspecify_jspecify",
+    ],
+)
+
+cel_android_library(
+    name = "ast_android",
     srcs = AST_SOURCES,
     tags = [
     ],
