@@ -1,0 +1,34 @@
+[versions]
+antlr4-runtime = "4.13.2"
+auto-value = "1.11.0"
+error-prone-annotations = "2.36.0"
+findbugs-annotations = "3.0.1"
+guava = "33.4.0-jre"
+jspecify = "1.0.0"
+junit = "4.13.2"
+protobuf = "4.29.3"
+re2j = "1.8"
+snakeyaml = "2.3"
+test-parameter-injector = "1.18"
+threeten-extra = "1.8.0"
+truth = "1.4.4"
+
+[libraries]
+auto-value = { module = "com.google.auto.value:auto-value", version.ref = "auto-value" }
+auto-value-annotations = { module = "com.google.auto.value:auto-value-annotations", version.ref = "auto-value" }
+findbugs-annotations = { module = "com.google.code.findbugs:annotations", version.ref = "findbugs-annotations" }
+error-prone-annotations = { module = "com.google.errorprone:error_prone_annotations", version.ref = "error-prone-annotations" }
+junit = { module = "junit:junit", version.ref = "junit" }
+guava = { module = "com.google.guava:guava", version.ref = "guava" }
+guava-testlib = { module = "com.google.guava:guava-testlib", version.ref = "guava" }
+protobuf-java = { module = "com.google.protobuf:protobuf-java", version.ref = "protobuf" }
+protobuf-java-util = { module = "com.google.protobuf:protobuf-java-util", version.ref = "protobuf" }
+re2j = { module = "com.google.re2j:re2j", version.ref = "re2j" }
+test-parameter-injector = { module = "com.google.testparameterinjector:test-parameter-injector", version.ref = "test-parameter-injector" }
+truth = { module = "com.google.truth:truth", version.ref = "truth" }
+truth-java8-extension = { module = "com.google.truth.extensions:truth-java8-extension", version.ref = "truth" }
+truth-proto-extension = { module = "com.google.truth.extensions:truth-proto-extension", version.ref = "truth" }
+antlr4-runtime = { module = "org.antlr:antlr4-runtime", version.ref = "antlr4-runtime" }
+jspecify = { module = "org.jspecify:jspecify", version.ref = "jspecify" }
+threeten-extra = { module = "org.threeten:threeten-extra", version.ref = "threeten-extra" }
+snakeyaml = { module = "org.yaml:snakeyaml", version.ref = "snakeyaml" }
