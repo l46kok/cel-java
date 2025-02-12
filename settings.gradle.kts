@@ -5,5 +5,7 @@ plugins {
 
 rootProject.name = "cel-java"
 include("common")
-include("testing")
+include("parser")
 include("generated")
+include("runtime")
+include("testing")

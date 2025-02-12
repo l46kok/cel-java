@@ -7,13 +7,17 @@ repositories {
 }
 
 dependencies {
+    testImplementation(libs.junit)
+    testImplementation(libs.truth)
+    testImplementation(libs.test.parameter.injector)
+
+    implementation(libs.antlr4.runtime)
     implementation(libs.guava)
-    implementation(libs.junit)
     implementation(libs.protobuf.java)
-    implementation(libs.truth)
+    implementation(libs.re2j)
+    implementation(libs.threeten.extra)
     implementation(project(":common"))
     implementation(project(":generated"))
-    implementation(project(":runtime"))
 
     compileOnlyApi(libs.auto.value.annotations)
     annotationProcessor(libs.auto.value)

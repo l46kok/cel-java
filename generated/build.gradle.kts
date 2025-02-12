@@ -8,6 +8,7 @@ repositories {
 
 dependencies {
     implementation(libs.protobuf.java)
+    implementation(libs.antlr4.runtime)
 }
 
 java {
