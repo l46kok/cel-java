@@ -26,7 +26,9 @@ dependencies {
     implementation(libs.guava)
     implementation(libs.jspecify)
     implementation(libs.protobuf.java)
+    implementation(libs.protobuf.java.util)
     implementation(libs.re2j)
+    implementation(project(":generated"))
 }
 
 // Apply a specific Java toolchain to ease working on different environments.
