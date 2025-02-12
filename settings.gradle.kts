@@ -12,3 +12,4 @@ plugins {
 
 rootProject.name = "cel-java"
 include("common")
+include("generated")
