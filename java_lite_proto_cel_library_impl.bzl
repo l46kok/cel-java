@@ -17,10 +17,10 @@ Starlark rule for generating descriptors that is compatible with Protolite Messa
 This is an implementation detail. Clients should use 'java_lite_proto_cel_library' instead.
 """
 
+load("@com_google_protobuf//bazel:java_lite_proto_library.bzl", "java_lite_proto_library")
 load("@rules_java//java:defs.bzl", "java_library")
 load("@rules_proto//proto:defs.bzl", "proto_descriptor_set")
 load("//publish:cel_version.bzl", "CEL_VERSION")
-load("@com_google_protobuf//bazel:java_lite_proto_library.bzl", "java_lite_proto_library")
 
 def java_lite_proto_cel_library_impl(
         name,
@@ -28,15 +28,6 @@ def java_lite_proto_cel_library_impl(
         proto_src,
         java_proto_library_dep,
         debug = False):
-    """Generates a CelLiteDescriptor
-
-    Args:
-       name: name of this target.
-       java_descriptor_class_name: Name of the generated descriptor java class.
-       proto_src: Name of the proto_library target.
-       java_proto_library_dep: (optional) Uses the provided java_lite_proto_library or java_proto_library to generate the lite descriptors. If none is provided, java_lite_proto_library is used by default behind the scenes. Most use cases should not need to provide this.
-       debug: (optional) If true, prints additional information during codegen for debugging purposes.
-    """
     if not name:
         fail("You must provide a name.")
 
@@ -46,65 +37,85 @@ def java_lite_proto_cel_library_impl(
     if not proto_src:
         fail("You must provide a proto_library dependency.")
 
-    _generate_cel_lite_descriptor_class(
-        name,
-        java_descriptor_class_name,
-        proto_src,
-        debug,
+    transitive_descriptor_set_name = "%s_transitive_descriptor_set" % name
+    proto_descriptor_set(
+      name = transitive_descriptor_set_name,
+      deps = [proto_src],
     )
 
-    if not java_proto_library_dep:
-        java_proto_library_dep = name + "_java_lite_proto_dep"
-        java_lite_proto_library(
-            name = java_proto_library_dep,
-            deps = [proto_src],
-        )
+    generated = name + "_cel_lite_descriptor"
+    java_lite_proto_cel_library_rule(
+        name = generated,
+        descriptor = proto_src,
+        transitive_descriptor_set_name = transitive_descriptor_set_name,
+        java_descriptor_class_name = java_descriptor_class_name
+    )
 
     descriptor_codegen_deps = [
         "//protobuf:cel_lite_descriptor",
-        java_proto_library_dep,
     ]
 
-    java_library(
+    native.java_library(
         name = name,
-        srcs = [":" + name + "_cel_lite_descriptor"],
+        srcs = [generated],
         deps = descriptor_codegen_deps,
     )
 
-def _generate_cel_lite_descriptor_class(
-        name,
-        descriptor_class_name,
-        proto_src,
-        debug):
-    outfile = "%s.java" % descriptor_class_name
+def _impl(ctx):
 
-    transitive_descriptor_set_name = "%s_transitive_descriptor_set" % name
-    proto_descriptor_set(
-        name = transitive_descriptor_set_name,
-        deps = [proto_src],
-    )
+   output = ctx.actions.declare_directory(ctx.attr.name + ".java")
+   # java_file_path = output.path + "/" + ctx.attr.java_descriptor_class_name + ".java"
+   java_file_path = output.path
 
-    direct_descriptor_set_name = proto_src
+   descriptor_target = ctx.attr.descriptor
+   proto_info = descriptor_target[ProtoInfo]
+   direct_descriptor = proto_info.direct_descriptor_set
 
-    debug_flag = "--debug" if debug else ""
 
-    cmd = (
-        "$(location //protobuf:cel_lite_descriptor_generator) " +
-        "--descriptor $(location %s) " % direct_descriptor_set_name +
-        "--transitive_descriptor_set $(location %s) " % transitive_descriptor_set_name +
-        "--descriptor_class_name %s " % descriptor_class_name +
-        "--out $(location %s) " % outfile +
-        "--version %s " % CEL_VERSION +
-        debug_flag
-    )
+   # transitive_descriptor_set_name = "%s_transitive_descriptor_set" % ctx.attr.name
+   # proto_descriptor_set(
+   #     name = transitive_descriptor_set_name,
+   #     deps = [direct_descriptor],
+   # )
 
-    native.genrule(
-        name = name + "_cel_lite_descriptor",
-        srcs = [
-            transitive_descriptor_set_name,
-            direct_descriptor_set_name,
-        ],
-        cmd = cmd,
-        outs = [outfile],
-        tools = ["//protobuf:cel_lite_descriptor_generator"],
-    )
+
+   transitive_descriptor_target = ctx.attr.transitive_descriptor_set_name
+   print(transitive_descriptor_target)
+   transitive_proto_info = transitive_descriptor_target[OutputGroupInfo]
+   print(transitive_proto_info)
+    #jtransitive_descriptor = transitive_proto_info.direct_descriptor_set
+   # print(transitive_descriptor)
+
+   args = ctx.actions.args()
+   args.add("--version", CEL_VERSION)
+   args.add("--descriptor", direct_descriptor)
+   args.add_joined("--transitive_descriptor_set", proto_info.transitive_descriptor_sets, join_with=",")
+   args.add("--descriptor_class_name", ctx.attr.java_descriptor_class_name)
+   args.add("--out", java_file_path)
+   # args.add("--debug")
+
+   ctx.actions.run(
+       arguments = [args],
+       inputs = [],
+       outputs = [output],
+       progress_message = "Generating CelLiteDescriptor for: " + ctx.attr.name,
+       executable = ctx.executable._tool,
+   )
+
+   return [DefaultInfo(files = depset([output]))]
+
+
+java_lite_proto_cel_library_rule = rule(
+    implementation = _impl,
+    attrs = {
+        "java_descriptor_class_name": attr.string(),
+        "descriptor": attr.label(),
+        "transitive_descriptor_set_name": attr.label(),
+        "_tool": attr.label(
+            executable = True,
+            cfg = "exec",  
+            allow_files = True,
+            default = Label("//protobuf:cel_lite_descriptor_generator"),
+        ),
+    }
+)

@@ -18,6 +18,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.io.Files;
 import com.google.protobuf.DescriptorProtos.FileDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FileDescriptorSet;
+import com.google.protobuf.DescriptorProtos.FileDescriptorSetOrBuilder;
 import com.google.protobuf.Descriptors.FileDescriptor;
 import com.google.protobuf.ExtensionRegistry;
 import dev.cel.common.CelDescriptorUtil;
@@ -25,6 +26,8 @@ import dev.cel.common.internal.ProtoJavaQualifiedNames;
 import dev.cel.protobuf.JavaFileGenerator.JavaFileGeneratorOption;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Callable;
 import picocli.CommandLine;
 import picocli.CommandLine.Model.OptionSpec;
@@ -46,8 +49,9 @@ final class CelLiteDescriptorGenerator implements Callable<Integer> {
 
   @Option(
       names = {"--transitive_descriptor_set"},
+      split = ",",
       description = "Path to the transitive set of descriptors")
-  private String transitiveDescriptorSetPath = "";
+  private List<String> transitiveDescriptorSetPath = new ArrayList<>();
 
   @Option(
       names = {"--descriptor_class_name"},
@@ -68,13 +72,22 @@ final class CelLiteDescriptorGenerator implements Callable<Integer> {
 
   @Override
   public Integer call() throws Exception {
+    System.out.println();
     String targetDescriptorProtoPath = extractProtoPath(targetDescriptorPath);
     debugPrinter.print("Target descriptor proto path: " + targetDescriptorProtoPath);
 
+    FileDescriptorSet.Builder combinedDescriptorBuilder = FileDescriptorSet.newBuilder();
+
+    for (String descriptorPath : transitiveDescriptorSetPath) {
+      FileDescriptorSet loadedFds = load(descriptorPath);
+      combinedDescriptorBuilder.addAllFile(loadedFds.getFileList());
+    }
+
+    System.out.println("Load success!");
+
     FileDescriptor targetFileDescriptor = null;
     ImmutableSet<FileDescriptor> transitiveFileDescriptors =
-        CelDescriptorUtil.getFileDescriptorsFromFileDescriptorSet(
-            load(transitiveDescriptorSetPath));
+        CelDescriptorUtil.getFileDescriptorsFromFileDescriptorSet(combinedDescriptorBuilder.build());
     for (FileDescriptor fd : transitiveFileDescriptors) {
       if (fd.getFullName().equals(targetDescriptorProtoPath)) {
         debugPrinter.print("Transitive Descriptor Path: " + fd.getFullName());

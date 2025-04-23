@@ -51,8 +51,9 @@ final class JavaFileGenerator {
     Writer out = new StringWriter();
 
     template.process(option.getTemplateMap(), out);
+    System.out.println("FOO");
 
-    Files.asCharSink(new File(filePath), UTF_8).write(out.toString());
+    Files.asCharSink(new File(filePath + "foo.java"), UTF_8).write(out.toString());
   }
 
   @AutoValue
