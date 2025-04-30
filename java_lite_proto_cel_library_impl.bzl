@@ -46,65 +46,74 @@ def java_lite_proto_cel_library_impl(
     if not proto_src:
         fail("You must provide a proto_library dependency.")
 
-    _generate_cel_lite_descriptor_class(
-        name,
-        java_descriptor_class_name,
-        proto_src,
-        debug,
+    transitive_descriptor_set_name = "%s_transitive_descriptor_set" % name
+    proto_descriptor_set(
+      name = transitive_descriptor_set_name,
+      deps = [proto_src],
     )
 
-    if not java_proto_library_dep:
-        java_proto_library_dep = name + "_java_lite_proto_dep"
-        java_lite_proto_library(
-            name = java_proto_library_dep,
-            deps = [proto_src],
-        )
+    generated = name + "_cel_lite_descriptor"
+    java_lite_proto_cel_library_rule(
+        name = generated,
+        descriptor = proto_src,
+        transitive_descriptor_set_name = transitive_descriptor_set_name,
+        java_descriptor_class_name = java_descriptor_class_name
+    )
 
     descriptor_codegen_deps = [
         "//protobuf:cel_lite_descriptor",
-        java_proto_library_dep,
     ]
 
     java_library(
         name = name,
-        srcs = [":" + name + "_cel_lite_descriptor"],
+        srcs = [generated],
         deps = descriptor_codegen_deps,
     )
 
-def _generate_cel_lite_descriptor_class(
-        name,
-        descriptor_class_name,
-        proto_src,
-        debug):
-    outfile = "%s.java" % descriptor_class_name
+def _generate_cel_lite_descriptor_class(ctx):
+   output = ctx.actions.declare_directory(ctx.attr.name + ".java")
+   # java_file_path = output.path + "/" + ctx.attr.java_descriptor_class_name + ".java"
+   java_file_path = output.path
 
-    transitive_descriptor_set_name = "%s_transitive_descriptor_set" % name
-    proto_descriptor_set(
-        name = transitive_descriptor_set_name,
-        deps = [proto_src],
-    )
+   descriptor_target = ctx.attr.descriptor
+   proto_info = descriptor_target[ProtoInfo]
+   direct_descriptor = proto_info.direct_descriptor_set
 
-    direct_descriptor_set_name = proto_src
+   transitive_descriptor_target = ctx.attr.transitive_descriptor_set_name
+   print(transitive_descriptor_target)
+   transitive_proto_info = transitive_descriptor_target[OutputGroupInfo]
+   print(transitive_proto_info)
 
-    debug_flag = "--debug" if debug else ""
 
-    cmd = (
-        "$(location //protobuf:cel_lite_descriptor_generator) " +
-        "--descriptor $(location %s) " % direct_descriptor_set_name +
-        "--transitive_descriptor_set $(location %s) " % transitive_descriptor_set_name +
-        "--descriptor_class_name %s " % descriptor_class_name +
-        "--out $(location %s) " % outfile +
-        "--version %s " % CEL_VERSION +
-        debug_flag
-    )
+   args = ctx.actions.args()
+   args.add("--version", CEL_VERSION)
+   args.add("--descriptor", direct_descriptor)
+   args.add_joined("--transitive_descriptor_set", proto_info.transitive_descriptor_sets, join_with=",")
+   args.add("--descriptor_class_name", ctx.attr.java_descriptor_class_name)
+   args.add("--out", java_file_path)
+   args.add("--debug")
 
-    native.genrule(
-        name = name + "_cel_lite_descriptor",
-        srcs = [
-            transitive_descriptor_set_name,
-            direct_descriptor_set_name,
-        ],
-        cmd = cmd,
-        outs = [outfile],
-        tools = ["//protobuf:cel_lite_descriptor_generator"],
-    )
+   ctx.actions.run(
+       arguments = [args],
+       inputs = [],
+       outputs = [output],
+       progress_message = "Generating CelLiteDescriptor for: " + ctx.attr.name,
+       executable = ctx.executable._tool,
+   )
+
+   return [DefaultInfo(files = depset([output]))]
+
+java_lite_proto_cel_library_rule = rule(
+    implementation = _generate_cel_lite_descriptor_class,
+    attrs = {
+        "java_descriptor_class_name": attr.string(),
+        "descriptor": attr.label(),
+        "transitive_descriptor_set_name": attr.label(),
+        "_tool": attr.label(
+            executable = True,
+            cfg = "exec",
+            allow_files = True,
+            default = Label("//protobuf:cel_lite_descriptor_generator"),
+        ),
+    }
+)

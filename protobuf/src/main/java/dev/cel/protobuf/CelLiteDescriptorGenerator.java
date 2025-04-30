@@ -25,6 +25,8 @@ import dev.cel.common.internal.ProtoJavaQualifiedNames;
 import dev.cel.protobuf.JavaFileGenerator.JavaFileGeneratorOption;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Callable;
 import picocli.CommandLine;
 import picocli.CommandLine.Model.OptionSpec;
@@ -46,8 +48,9 @@ final class CelLiteDescriptorGenerator implements Callable<Integer> {
 
   @Option(
       names = {"--transitive_descriptor_set"},
+      split = ",",
       description = "Path to the transitive set of descriptors")
-  private String transitiveDescriptorSetPath = "";
+  private List<String> transitiveDescriptorSetPath = new ArrayList<>();
 
   @Option(
       names = {"--descriptor_class_name"},
@@ -70,11 +73,10 @@ final class CelLiteDescriptorGenerator implements Callable<Integer> {
   public Integer call() throws Exception {
     String targetDescriptorProtoPath = extractProtoPath(targetDescriptorPath);
     debugPrinter.print("Target descriptor proto path: " + targetDescriptorProtoPath);
+    FileDescriptorSet transitiveDescriptorSet = combineFileDescriptors(transitiveDescriptorSetPath);
 
     FileDescriptor targetFileDescriptor = null;
-    ImmutableSet<FileDescriptor> transitiveFileDescriptors =
-        CelDescriptorUtil.getFileDescriptorsFromFileDescriptorSet(
-            load(transitiveDescriptorSetPath));
+    ImmutableSet<FileDescriptor> transitiveFileDescriptors = CelDescriptorUtil.getFileDescriptorsFromFileDescriptorSet(transitiveDescriptorSet);
     for (FileDescriptor fd : transitiveFileDescriptors) {
       if (fd.getFullName().equals(targetDescriptorProtoPath)) {
         debugPrinter.print("Transitive Descriptor Path: " + fd.getFullName());
@@ -127,7 +129,19 @@ final class CelLiteDescriptorGenerator implements Callable<Integer> {
     return fileDescriptorProto.getName();
   }
 
-  private FileDescriptorSet load(String descriptorSetPath) {
+  private FileDescriptorSet combineFileDescriptors(List<String> descriptorPaths) {
+    FileDescriptorSet.Builder combinedDescriptorBuilder = FileDescriptorSet.newBuilder();
+
+    for (String descriptorPath : descriptorPaths) {
+      debugPrinter.print("Path: " + descriptorPath);
+      FileDescriptorSet loadedFds = load(descriptorPath);
+      combinedDescriptorBuilder.addAllFile(loadedFds.getFileList());
+    }
+
+    return combinedDescriptorBuilder.build();
+  }
+
+  private static FileDescriptorSet load(String descriptorSetPath) {
     try {
       byte[] descriptorBytes = Files.toByteArray(new File(descriptorSetPath));
       return FileDescriptorSet.parseFrom(descriptorBytes, ExtensionRegistry.getEmptyRegistry());
