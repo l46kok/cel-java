@@ -18,30 +18,26 @@ This is an implementation detail. Clients should use 'java_lite_proto_cel_librar
 """
 
 load("@rules_java//java:defs.bzl", "java_library")
-load("@rules_proto//proto:defs.bzl", "proto_descriptor_set")
 load("//publish:cel_version.bzl", "CEL_VERSION")
 load("@com_google_protobuf//bazel:java_lite_proto_library.bzl", "java_lite_proto_library")
 
 def java_lite_proto_cel_library_impl(
         name,
-        java_descriptor_class_name,
         proto_src,
-        java_proto_library_dep,
+        java_descriptor_class_name = None,
+        java_proto_library_dep = None,
         debug = False):
     """Generates a CelLiteDescriptor
 
     Args:
        name: name of this target.
-       java_descriptor_class_name: Name of the generated descriptor java class.
        proto_src: Name of the proto_library target.
+       java_descriptor_class_name (optional): Fully-qualfied java class name for the generated CEL lite descriptor. By default, CEL will use the first encountered message name in proto_src with "CelLiteDescriptor" suffixed as the CelLiteDescriptor name. Use this field to override the name.
        java_proto_library_dep: (optional) Uses the provided java_lite_proto_library or java_proto_library to generate the lite descriptors. If none is provided, java_lite_proto_library is used by default behind the scenes. Most use cases should not need to provide this.
        debug: (optional) If true, prints additional information during codegen for debugging purposes.
     """
     if not name:
         fail("You must provide a name.")
-
-    if not java_descriptor_class_name:
-        fail("You must provide a descriptor_class_prefix.")
 
     if not proto_src:
         fail("You must provide a proto_library dependency.")
@@ -84,10 +80,12 @@ def _generate_cel_lite_descriptor_class(ctx):
     args.add("--version", CEL_VERSION)
     args.add("--descriptor", proto_info.direct_descriptor_set)
     args.add_joined("--transitive_descriptor_set", transitive_descriptors, join_with=",")
-    args.add("--descriptor_class_name", ctx.attr.java_descriptor_class_name)
     args.add("--out", java_file_path)
-    # if ctx.attr.debug:
-    args.add("--debug")
+
+    if ctx.attr.java_descriptor_class_name:
+        args.add("--overridden_descriptor_class_name", ctx.attr.java_descriptor_class_name)
+    if ctx.attr.debug:
+        args.add("--debug")
 
     ctx.actions.run(
        arguments = [args],

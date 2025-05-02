@@ -34,6 +34,8 @@ import picocli.CommandLine.Option;
 
 final class CelLiteDescriptorGenerator implements Callable<Integer> {
 
+  private static final String DEFAULT_CEL_LITE_DESCRIPTOR_CLASS_SUFFIX = "CelLiteDescriptor";
+
   @Option(
       names = {"--out"},
       description = "Outpath for the CelLiteDescriptor")
@@ -53,9 +55,9 @@ final class CelLiteDescriptorGenerator implements Callable<Integer> {
   private List<String> transitiveDescriptorSetPath = new ArrayList<>();
 
   @Option(
-      names = {"--descriptor_class_name"},
-      description = "Class name for the CelLiteDescriptor")
-  private String descriptorClassName = "";
+      names = {"--overridden_descriptor_class_name"},
+      description = "Fully-qualified Java Class name for the CelLiteDescriptor")
+  private String overriddenDescriptorClassName = "";
 
   @Option(
       names = {"--version"},
@@ -98,18 +100,31 @@ final class CelLiteDescriptorGenerator implements Callable<Integer> {
 
   private void codegenCelLiteDescriptor(FileDescriptor targetFileDescriptor) throws Exception {
     String javaPackageName = ProtoJavaQualifiedNames.getJavaPackageName(targetFileDescriptor);
-    // String javaClassName = targetFi
+    String javaClassName = overriddenDescriptorClassName;
+    if (javaClassName.isEmpty()) {
+      // Derive the java class name. Use first encountered message/enum in the FDS as a default,
+      // with a suffix applied for uniqueness (we don't want to collide with java protoc default generated class name).
+      if (!targetFileDescriptor.getMessageTypes().isEmpty()) {
+        javaClassName = targetFileDescriptor.getMessageTypes().get(0).getName();
+      } else if (!targetFileDescriptor.getEnumTypes().isEmpty()) {
+        javaClassName = targetFileDescriptor.getEnumTypes().get(0).getName();
+      } else {
+        throw new IllegalArgumentException("File descriptor does not contain any messages or enums!");
+      }
+
+      javaClassName += DEFAULT_CEL_LITE_DESCRIPTOR_CLASS_SUFFIX;
+    }
     ProtoDescriptorCollector descriptorCollector =
         ProtoDescriptorCollector.newInstance(debugPrinter);
 
     debugPrinter.print(
-        String.format("Fully qualified descriptor java class name: %s.%s", javaPackageName, descriptorClassName));
+        String.format("Fully qualified descriptor java class name: %s.%s", javaPackageName, javaClassName));
 
     JavaFileGenerator.createFile(
         outPath,
         JavaFileGeneratorOption.newBuilder()
             .setVersion(version)
-            .setDescriptorClassName(descriptorClassName)
+            .setDescriptorClassName(javaClassName)
             .setPackageName(javaPackageName)
             .setDescriptorMetadataList(
                 descriptorCollector.collectCodegenMetadata(targetFileDescriptor))
@@ -163,7 +178,7 @@ final class CelLiteDescriptorGenerator implements Callable<Integer> {
     this.debugPrinter = DebugPrinter.newInstance(debug);
   }
 
-  public static void main(String[] args) throws IOException {
+  public static void main(String[] args) {
     CelLiteDescriptorGenerator celLiteDescriptorGenerator = new CelLiteDescriptorGenerator();
     CommandLine cmd = new CommandLine(celLiteDescriptorGenerator);
     cmd.parseArgs(args);

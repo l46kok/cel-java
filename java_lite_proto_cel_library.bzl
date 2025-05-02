@@ -19,8 +19,8 @@ load("@com_google_protobuf//bazel:java_lite_proto_library.bzl", "java_lite_proto
 
 def java_lite_proto_cel_library(
         name,
-        java_descriptor_class_name,
         proto_src,
+        java_descriptor_class_name = None,
         debug = False):
     """Generates a CelLiteDescriptor
 
@@ -37,9 +37,9 @@ def java_lite_proto_cel_library(
     )
 
     java_lite_proto_cel_library_impl(
-        name,
-        java_descriptor_class_name,
-        proto_src,
-        java_proto_library_dep,
-        debug,
+        name = name,
+        proto_src = proto_src,
+        java_descriptor_class_name = java_descriptor_class_name,
+        java_proto_library_dep = java_proto_library_dep,
+        debug = debug,
     )
