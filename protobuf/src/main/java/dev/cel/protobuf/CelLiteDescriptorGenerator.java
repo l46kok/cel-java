@@ -79,7 +79,6 @@ final class CelLiteDescriptorGenerator implements Callable<Integer> {
     ImmutableSet<FileDescriptor> transitiveFileDescriptors = CelDescriptorUtil.getFileDescriptorsFromFileDescriptorSet(transitiveDescriptorSet);
     for (FileDescriptor fd : transitiveFileDescriptors) {
       if (fd.getFullName().equals(targetDescriptorProtoPath)) {
-        debugPrinter.print("Transitive Descriptor Path: " + fd.getFullName());
         targetFileDescriptor = fd;
         break;
       }
@@ -99,11 +98,12 @@ final class CelLiteDescriptorGenerator implements Callable<Integer> {
 
   private void codegenCelLiteDescriptor(FileDescriptor targetFileDescriptor) throws Exception {
     String javaPackageName = ProtoJavaQualifiedNames.getJavaPackageName(targetFileDescriptor);
+    // String javaClassName = targetFi
     ProtoDescriptorCollector descriptorCollector =
         ProtoDescriptorCollector.newInstance(debugPrinter);
 
     debugPrinter.print(
-        String.format("Descriptor Java class name: %s.%s", javaPackageName, descriptorClassName));
+        String.format("Fully qualified descriptor java class name: %s.%s", javaPackageName, descriptorClassName));
 
     JavaFileGenerator.createFile(
         outPath,
@@ -133,7 +133,6 @@ final class CelLiteDescriptorGenerator implements Callable<Integer> {
     FileDescriptorSet.Builder combinedDescriptorBuilder = FileDescriptorSet.newBuilder();
 
     for (String descriptorPath : descriptorPaths) {
-      debugPrinter.print("Path: " + descriptorPath);
       FileDescriptorSet loadedFds = load(descriptorPath);
       combinedDescriptorBuilder.addAllFile(loadedFds.getFileList());
     }
@@ -164,7 +163,7 @@ final class CelLiteDescriptorGenerator implements Callable<Integer> {
     this.debugPrinter = DebugPrinter.newInstance(debug);
   }
 
-  public static void main(String[] args) {
+  public static void main(String[] args) throws IOException {
     CelLiteDescriptorGenerator celLiteDescriptorGenerator = new CelLiteDescriptorGenerator();
     CommandLine cmd = new CommandLine(celLiteDescriptorGenerator);
     cmd.parseArgs(args);
@@ -174,6 +173,8 @@ final class CelLiteDescriptorGenerator implements Callable<Integer> {
     int exitCode = cmd.execute(args);
     System.exit(exitCode);
   }
+
+
 
   CelLiteDescriptorGenerator() {}
 }

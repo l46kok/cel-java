@@ -26,10 +26,17 @@ import freemarker.template.DefaultObjectWrapperBuilder;
 import freemarker.template.Template;
 import freemarker.template.TemplateException;
 import freemarker.template.Version;
+import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.StringWriter;
 import java.io.Writer;
+import java.nio.charset.StandardCharsets;
+import java.util.Locale;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 final class JavaFileGenerator {
 
@@ -50,10 +57,30 @@ final class JavaFileGenerator {
 
     Template template = cfg.getTemplate(HELPER_CLASS_TEMPLATE_FILE);
     Writer out = new StringWriter();
-
     template.process(option.getTemplateMap(), out);
 
-    Files.asCharSink(new File(filePath), UTF_8).write(out.toString());
+    writeSrcJar(filePath, option.descriptorClassName(), out.toString());
+  }
+
+  private static void writeSrcJar(String srcjarFilePath, String javaClassFileName, String javaClassContent) throws IOException {
+    if (!srcjarFilePath.toLowerCase(Locale.getDefault()).endsWith(".srcjar")) {
+      throw new IllegalArgumentException("File must end with .srcjar, proivded: " + srcjarFilePath);
+    }
+    try (FileOutputStream fos = new FileOutputStream(srcjarFilePath);
+        ZipOutputStream zos = new ZipOutputStream(fos)) {
+      ZipEntry entry = new ZipEntry(javaClassFileName + ".java");
+      zos.putNextEntry(entry);
+
+      try (InputStream inputStream = new ByteArrayInputStream(javaClassContent.getBytes(StandardCharsets.UTF_8))) {
+        byte[] buffer = new byte[1024];
+        int length;
+        while ((length = inputStream.read(buffer)) > 0) {
+          zos.write(buffer, 0, length);
+        }
+      }
+
+      zos.closeEntry();
+    }
   }
 
   @AutoValue

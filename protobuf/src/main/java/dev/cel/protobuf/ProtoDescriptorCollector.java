@@ -92,12 +92,12 @@ final class ProtoDescriptorCollector {
 
         descriptorCodegenBuilder.addFieldDescriptor(fieldDescriptorCodegenBuilder.build());
 
-        debugPrinter.print(
-            String.format(
-                "Collecting message %s, for field %s, type: %s",
-                descriptor.getFullName(),
-                fieldDescriptor.getFullName(),
-                fieldDescriptor.getType()));
+        // debugPrinter.print(
+        //     String.format(
+        //         "Collecting message %s, for field %s, type: %s",
+        //         descriptor.getFullName(),
+        //         fieldDescriptor.getFullName(),
+        //         fieldDescriptor.getType()));
       }
 
       descriptorCodegenBuilder.setProtoTypeName(descriptor.getFullName());

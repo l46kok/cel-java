@@ -46,69 +46,65 @@ def java_lite_proto_cel_library_impl(
     if not proto_src:
         fail("You must provide a proto_library dependency.")
 
-    transitive_descriptor_set_name = "%s_transitive_descriptor_set" % name
-    proto_descriptor_set(
-      name = transitive_descriptor_set_name,
-      deps = [proto_src],
-    )
-
     generated = name + "_cel_lite_descriptor"
     java_lite_proto_cel_library_rule(
-        name = generated,
+        name =  generated,
         descriptor = proto_src,
-        transitive_descriptor_set_name = transitive_descriptor_set_name,
         java_descriptor_class_name = java_descriptor_class_name
     )
 
+    if not java_proto_library_dep:
+        java_proto_library_dep = name + "_java_lite_proto_dep"
+        java_lite_proto_library(
+            name = java_proto_library_dep,
+            deps = [proto_src],
+        )
+
     descriptor_codegen_deps = [
         "//protobuf:cel_lite_descriptor",
+        java_proto_library_dep
     ]
 
     java_library(
         name = name,
-        srcs = [generated],
+        srcs = [":" +generated],
         deps = descriptor_codegen_deps,
     )
 
 def _generate_cel_lite_descriptor_class(ctx):
-   output = ctx.actions.declare_directory(ctx.attr.name + ".java")
-   # java_file_path = output.path + "/" + ctx.attr.java_descriptor_class_name + ".java"
-   java_file_path = output.path
+    srcjar_output = ctx.actions.declare_file(ctx.attr.name + ".srcjar")
+    java_file_path = srcjar_output.path
 
-   descriptor_target = ctx.attr.descriptor
-   proto_info = descriptor_target[ProtoInfo]
-   direct_descriptor = proto_info.direct_descriptor_set
+    print("java_file_path: " + java_file_path)
 
-   transitive_descriptor_target = ctx.attr.transitive_descriptor_set_name
-   print(transitive_descriptor_target)
-   transitive_proto_info = transitive_descriptor_target[OutputGroupInfo]
-   print(transitive_proto_info)
+    proto_info = ctx.attr.descriptor[ProtoInfo]
+    transitive_descriptors = proto_info.transitive_descriptor_sets
 
+    args = ctx.actions.args()
+    args.add("--version", CEL_VERSION)
+    args.add("--descriptor", proto_info.direct_descriptor_set)
+    args.add_joined("--transitive_descriptor_set", transitive_descriptors, join_with=",")
+    args.add("--descriptor_class_name", ctx.attr.java_descriptor_class_name)
+    args.add("--out", java_file_path)
+    # if ctx.attr.debug:
+    args.add("--debug")
 
-   args = ctx.actions.args()
-   args.add("--version", CEL_VERSION)
-   args.add("--descriptor", direct_descriptor)
-   args.add_joined("--transitive_descriptor_set", proto_info.transitive_descriptor_sets, join_with=",")
-   args.add("--descriptor_class_name", ctx.attr.java_descriptor_class_name)
-   args.add("--out", java_file_path)
-   args.add("--debug")
-
-   ctx.actions.run(
+    ctx.actions.run(
        arguments = [args],
-       inputs = [],
-       outputs = [output],
+       inputs = transitive_descriptors,
+       outputs = [srcjar_output],
        progress_message = "Generating CelLiteDescriptor for: " + ctx.attr.name,
        executable = ctx.executable._tool,
-   )
+    )
 
-   return [DefaultInfo(files = depset([output]))]
+    return [DefaultInfo(files = depset([srcjar_output]))]
 
 java_lite_proto_cel_library_rule = rule(
     implementation = _generate_cel_lite_descriptor_class,
     attrs = {
         "java_descriptor_class_name": attr.string(),
         "descriptor": attr.label(),
-        "transitive_descriptor_set_name": attr.label(),
+        "debug": attr.bool(),
         "_tool": attr.label(
             executable = True,
             cfg = "exec",
