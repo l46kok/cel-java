@@ -171,6 +171,30 @@ public abstract class CelConstant {
   }
 
   /**
+   * TODO
+   */
+  public Object objectValue() {
+    switch (getKind()) {
+      case NULL_VALUE:
+        return nullValue();
+      case BOOLEAN_VALUE:
+        return booleanValue();
+      case INT64_VALUE:
+        return int64Value();
+      case UINT64_VALUE:
+        return uint64Value();
+      case DOUBLE_VALUE:
+        return doubleValue();
+      case STRING_VALUE:
+        return stringValue();
+      case BYTES_VALUE:
+        return bytesValue();
+      default:
+        throw new IllegalStateException("Unsupported kind: " + getKind());
+    }
+  }
+
+  /**
    * @deprecated Do not use. Duration is no longer built-in CEL type.
    */
   @Deprecated
