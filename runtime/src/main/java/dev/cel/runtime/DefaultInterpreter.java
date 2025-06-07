@@ -140,20 +140,17 @@ final class DefaultInterpreter implements Interpreter {
       return eval(resolver, CelEvaluationListener.noOpListener());
     }
 
-    @Override
     public Object eval(GlobalResolver resolver, CelEvaluationListener listener)
         throws CelEvaluationException {
       return evalTrackingUnknowns(
           RuntimeUnknownResolver.fromResolver(resolver), Optional.empty(), listener);
     }
 
-    @Override
     public Object eval(GlobalResolver resolver, FunctionResolver lateBoundFunctionResolver)
         throws CelEvaluationException {
       return eval(resolver, lateBoundFunctionResolver, CelEvaluationListener.noOpListener());
     }
 
-    @Override
     public Object eval(
         GlobalResolver resolver,
         FunctionResolver lateBoundFunctionResolver,

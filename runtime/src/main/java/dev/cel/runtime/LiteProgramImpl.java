@@ -16,6 +16,7 @@ package dev.cel.runtime;
 
 import com.google.auto.value.AutoValue;
 import com.google.errorprone.annotations.Immutable;
+import dev.cel.runtime.DefaultInterpreter.DefaultInterpretable;
 import java.util.Map;
 
 @Immutable
@@ -37,14 +38,15 @@ abstract class LiteProgramImpl implements CelLiteRuntime.Program {
   @Override
   public Object eval(Map<String, ?> mapValue, CelFunctionResolver lateBoundFunctionResolver)
       throws CelEvaluationException {
-    return interpretable()
+
+    return ((DefaultInterpretable) interpretable())
         .eval(
             Activation.copyOf(mapValue),
             lateBoundFunctionResolver,
             CelEvaluationListener.noOpListener());
   }
 
-  static CelLiteRuntime.Program plan(Interpretable interpretable) {
+  static CelLiteRuntime.Program create(Interpretable interpretable) {
     return new AutoValue_LiteProgramImpl(interpretable);
   }
 }
