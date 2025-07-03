@@ -27,6 +27,7 @@ import dev.cel.common.CelOptions;
 import dev.cel.common.types.CelType;
 import dev.cel.common.types.CelTypeProvider;
 import dev.cel.common.values.CelValueProvider;
+import dev.cel.runtime.planner.ProgramPlanner;
 import dev.cel.runtime.standard.CelStandardFunction;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -244,7 +245,7 @@ final class LiteRuntimeImpl implements CelLiteRuntime {
     this.runtimeLibraries = runtimeLibraries;
     this.celValueProvider = celValueProvider;
     if (enablePlanner) {
-      this.planner = new ProgramPlanner(new CelTypeProvider() {
+      this.planner = ProgramPlanner.newPlanner(new CelTypeProvider() {
         @Override
         public ImmutableCollection<CelType> types() {
           return null;
