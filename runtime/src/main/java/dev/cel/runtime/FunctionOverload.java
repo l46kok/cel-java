@@ -15,12 +15,14 @@
 package dev.cel.runtime;
 
 import com.google.errorprone.annotations.Immutable;
+import dev.cel.common.annotations.Internal;
 
 /** Interface describing the general signature of all CEL custom function implementations. */
 @SuppressWarnings("AndroidJdkLibsChecker") // FunctionalInterface added in 24
 @FunctionalInterface
 @Immutable
-interface FunctionOverload {
+@Internal
+public interface FunctionOverload {
 
   /** Evaluate a set of arguments throwing a {@code CelException} on error. */
   Object apply(Object[] args) throws CelEvaluationException;
