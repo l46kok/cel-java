@@ -63,8 +63,8 @@ INTERPRABLE_SOURCES = [
 
 # keep sorted
 DISPATCHER_SOURCES = [
-    "DefaultDispatcher.java",
     "Dispatcher.java",
+    "LegacyDispatcher.java",
 ]
 
 java_library(
@@ -115,7 +115,22 @@ java_library(
 )
 
 java_library(
-    name = "dispatcher",
+    name = "default_dispatcher",
+    srcs = ["DefaultDispatcher.java"],
+    tags = [
+    ],
+    deps = [
+        ":base",
+        ":function_overload_impl",
+        "//:auto_value",
+        "//common/annotations",
+        "@maven//:com_google_errorprone_error_prone_annotations",
+        "@maven//:com_google_guava_guava",
+    ],
+)
+
+java_library(
+    name = "legacy_dispatcher",
     srcs = DISPATCHER_SOURCES,
     tags = [
     ],
@@ -134,7 +149,7 @@ java_library(
 )
 
 cel_android_library(
-    name = "dispatcher_android",
+    name = "legacy_dispatcher_android",
     srcs = DISPATCHER_SOURCES,
     visibility = ["//visibility:private"],
     deps = [
@@ -276,13 +291,13 @@ java_library(
     exports = [":base"],
     deps = [
         ":base",
-        ":dispatcher",
         ":evaluation_exception",
         ":evaluation_exception_builder",
         ":evaluation_listener",
         ":function_overload_impl",
         ":interpretable",
         ":interpreter_util",
+        ":legacy_dispatcher",
         ":metadata",
         ":runtime_helpers",
         ":runtime_type_provider",
@@ -310,13 +325,13 @@ cel_android_library(
     visibility = ["//visibility:private"],
     deps = [
         ":base_android",
-        ":dispatcher_android",
         ":evaluation_exception",
         ":evaluation_exception_builder",
         ":evaluation_listener_android",
         ":function_overload_impl",
         ":interpretable_android",
         ":interpreter_util_android",
+        ":legacy_dispatcher_android",
         ":metadata",
         ":runtime_helpers_android",
         ":runtime_type_provider_android",
@@ -478,12 +493,12 @@ java_library(
     tags = [
     ],
     deps = [
-        ":dispatcher",
         ":evaluation_exception",
         ":function_binding",
         ":function_overload",
         ":function_overload_impl",
         ":function_resolver",
+        ":legacy_dispatcher",
         "//:auto_value",
         "//common/annotations",
         "@maven//:com_google_errorprone_error_prone_annotations",
@@ -497,12 +512,12 @@ cel_android_library(
     tags = [
     ],
     deps = [
-        ":dispatcher_android",
         ":evaluation_exception",
         ":function_binding_android",
         ":function_overload",
         ":function_overload_impl",
         ":function_resolver",
+        ":legacy_dispatcher_android",
         "//:auto_value",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven_android//:com_google_guava_guava",
@@ -785,13 +800,13 @@ java_library(
         ":cel_value_runtime_type_provider",
         ":descriptor_message_provider",
         ":descriptor_type_resolver",
-        ":dispatcher",
         ":evaluation_exception",
         ":evaluation_listener",
         ":function_binding",
         ":function_resolver",
         ":interpretable",
         ":interpreter",
+        ":legacy_dispatcher",
         ":lite_runtime",
         ":proto_message_activation_factory",
         ":proto_message_runtime_equality",
@@ -848,13 +863,13 @@ java_library(
     deps = [
         ":activation",
         ":cel_value_runtime_type_provider",
-        ":dispatcher",
         ":evaluation_exception",
         ":evaluation_listener",
         ":function_binding",
         ":function_resolver",
         ":interpretable",
         ":interpreter",
+        ":legacy_dispatcher",
         ":lite_program_impl",
         ":lite_runtime",
         ":runtime_equality",
@@ -900,13 +915,13 @@ cel_android_library(
     deps = [
         ":activation_android",
         ":cel_value_runtime_type_provider_android",
-        ":dispatcher_android",
         ":evaluation_exception",
         ":evaluation_listener_android",
         ":function_binding_android",
         ":function_resolver",
         ":interpretable_android",
         ":interpreter_android",
+        ":legacy_dispatcher_android",
         ":lite_program_impl",  # TODO - android target
         ":lite_runtime_android",
         ":program_planner",  # TODO - android target
