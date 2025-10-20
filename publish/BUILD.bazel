@@ -1,4 +1,5 @@
 load("@bazel_common//tools/maven:pom_file.bzl", "pom_file")
+# load("@contrib_rules_jvm//docs:stardoc-input.bzl", "java_export")
 load("@rules_jvm_external//:defs.bzl", "java_export")
 load("//publish:cel_version.bzl", "CEL_VERSION")
 
@@ -111,7 +112,11 @@ pom_file(
         "PACKAGE_NAME": "CEL Java",
         "PACKAGE_DESC": "Common Expression Language for Java. This include both the compilation and runtime packages.",
     },
-    targets = ALL_TARGETS,
+    targets = [
+        ":cel_compiler",
+        ":cel_runtime",
+    ] + BUNDLE_TARGETS,
+    dependencies = ["dev.cel:runtime:0.11.0"],
     template_file = "pom_template.xml",
 )
 
@@ -121,7 +126,11 @@ java_export(
     javadocopts = JAVA_DOC_OPTIONS,
     maven_coordinates = "dev.cel:cel:%s" % CEL_VERSION,
     pom_template = ":cel_pom",
-    runtime_deps = ALL_TARGETS,
+    # runtime_deps = BUNDLE_TARGETS + COMPILER_TARGETS + EXTENSION_TARGETS + V1ALPHA1_AST_TARGETS + CANONICAL_AST_TARGETS + OPTIMIZER_TARGETS + VALIDATOR_TARGETS + POLICY_COMPILER_TARGETS + [":cel_runtime"]
+    runtime_deps = [
+        ":cel_compiler",
+        ":cel_runtime",
+    ] + BUNDLE_TARGETS
 )
 
 pom_file(

@@ -17,7 +17,8 @@ module(
 )
 
 bazel_dep(name = "bazel_skylib", version = "1.7.1")
-bazel_dep(name = "rules_jvm_external", version = "6.7")
+bazel_dep(name = "contrib_rules_jvm", version = "0.30.0")
+bazel_dep(name = "rules_jvm_external", version = "6.8")
 bazel_dep(name = "protobuf", version = "29.3", repo_name = "com_google_protobuf")  # see https://github.com/bazelbuild/rules_android/issues/373
 bazel_dep(name = "googleapis", version = "0.0.0-20241220-5e258e33.bcr.1", repo_name = "com_google_googleapis")
 bazel_dep(name = "rules_pkg", version = "1.0.1")

@@ -21,6 +21,7 @@
 
   <dependencies>
     {generated_bzl_deps}
+    {pom_extra_dependencies}
   </dependencies>
 
   <description>
