@@ -1,5 +1,4 @@
 load("@rules_java//java:defs.bzl", "java_library")
-load("//:cel_android_rules.bzl", "cel_android_local_test")
 load("//:testing.bzl", "junit4_test_suites")
 
 package(
@@ -7,21 +6,11 @@ package(
     default_testonly = True,
 )
 
-ANDROID_TESTS = [
-    "CelLiteRuntimeAndroidTest.java",
-]
-
 java_library(
     name = "tests",
     testonly = 1,
     srcs = glob(
         ["*.java"],
-        # keep sorted
-        exclude = [
-            "CelLiteInterpreterTest.java",
-            "CelValueInterpreterTest.java",
-            "InterpreterTest.java",
-        ] + ANDROID_TESTS,
     ),
     deps = [
         "//:auto_value",
@@ -41,6 +30,7 @@ java_library(
         "//common/ast",
         "//common/internal:cel_descriptor_pools",
         "//common/internal:converter",
+        "//common/internal:default_lite_descriptor_pool",
         "//common/internal:default_message_factory",
         "//common/internal:dynamic_proto",
         "//common/internal:proto_message_factory",
@@ -53,17 +43,24 @@ java_library(
         "//common/types:type_providers",
         "//common/values",
         "//common/values:cel_byte_string",
+        "//common/values:cel_value",
         "//common/values:cel_value_provider",
+        "//common/values:proto_message_lite_value",
         "//common/values:proto_message_lite_value_provider",
+        "//common/values:proto_message_value",
+        "//common/values:proto_message_value_provider",
         "//compiler",
         "//compiler:compiler_builder",
         "//extensions",
         "//extensions:optional_library",
         "//parser:macro",
+        "//parser:operator",
         "//parser:unparser",
         "//runtime",
         "//runtime:activation",
-        "//runtime:legacy_dispatcher",
+        "//runtime:cel_value_function_binding",
+        "//runtime:cel_value_function_overload",
+        "//runtime:default_dispatcher",
         "//runtime:evaluation_exception_builder",
         "//runtime:evaluation_listener",
         "//runtime:function_binding",
@@ -72,6 +69,7 @@ java_library(
         "//runtime:interpreter",
         "//runtime:interpreter_util",
         "//runtime:late_function_binding",
+        "//runtime:legacy_dispatcher",
         "//runtime:lite_runtime",
         "//runtime:lite_runtime_factory",
         "//runtime:proto_message_activation_factory",
@@ -84,6 +82,16 @@ java_library(
         "//runtime:unknown_attributes",
         "//runtime:unknown_options",
         "//runtime/planner:program_planner",
+        "//runtime/standard:add",
+        "//runtime/standard:divide",
+        "//runtime/standard:equals",
+        "//runtime/standard:greater",
+        "//runtime/standard:greater_equals",
+        "//runtime/standard:index",
+        "//runtime/standard:less",
+        "//runtime/standard:logical_not",
+        "//runtime/standard:not_strictly_false",
+        "//runtime/standard:standard_function",
         "//testing/protos:message_with_enum_cel_java_proto",
         "//testing/protos:message_with_enum_java_proto",
         "//testing/protos:multi_file_cel_java_proto",
@@ -106,100 +114,13 @@ java_library(
     ],
 )
 
-java_library(
-    name = "interpreter_test",
-    testonly = 1,
-    srcs = [
-        "InterpreterTest.java",
-    ],
-    deps = [
-        #         "//java/com/google/testing/testsize:annotations",
-        "//testing:base_interpreter_test",
-        "@maven//:junit_junit",
-        "@maven//:com_google_testparameterinjector_test_parameter_injector",
-    ],
-)
-
-java_library(
-    name = "cel_value_interpreter_test",
-    testonly = 1,
-    srcs = [
-        "CelValueInterpreterTest.java",
-    ],
-    deps = [
-        #         "//java/com/google/testing/testsize:annotations",
-        "//testing:base_interpreter_test",
-        "@maven//:junit_junit",
-        "@maven//:com_google_testparameterinjector_test_parameter_injector",
-    ],
-)
-
-cel_android_local_test(
-    name = "android_tests",
-    srcs = ANDROID_TESTS,
-    test_class = "dev.cel.runtime.CelLiteRuntimeAndroidTest",
-    deps = [
-        "//:java_truth",
-        "//common:cel_ast_android",
-        "//common:options",
-        "//common/internal:proto_time_utils_android",
-        "//common/values:cel_byte_string",
-        "//common/values:cel_value_provider_android",
-        "//common/values:proto_message_lite_value_provider_android",
-        "//extensions:lite_extensions_android",
-        "//extensions:sets_function",
-        "//runtime:evaluation_exception",
-        "//runtime:function_binding_android",
-        "//runtime:late_function_binding_android",
-        "//runtime:lite_runtime_android",
-        "//runtime:lite_runtime_factory_android",
-        "//runtime:lite_runtime_impl_android",
-        "//runtime:standard_functions_android",
-        "//runtime:unknown_attributes_android",
-        "//runtime/standard:equals_android",
-        "//runtime/standard:int_android",
-        "//testing/protos:test_all_types_cel_java_proto2_lite",
-        "//testing/protos:test_all_types_cel_java_proto3_lite",
-        "//testing/src/main/java/dev/cel/testing/compiled:compiled_expr_utils_android",
-        "@cel_spec//proto/cel/expr:checked_java_proto_lite",
-        "@cel_spec//proto/cel/expr/conformance/proto2:test_all_types_java_proto_lite",
-        "@cel_spec//proto/cel/expr/conformance/proto3:test_all_types_java_proto_lite",
-        "@maven//:com_google_testparameterinjector_test_parameter_injector",
-        "@maven_android//:com_google_guava_guava",
-        "@maven_android//:com_google_protobuf_protobuf_javalite",
-    ],
-)
-
-java_library(
-    name = "cel_lite_interpreter_test",
-    testonly = 1,
-    srcs = [
-        "CelLiteInterpreterTest.java",
-    ],
-    deps = [
-        "//common/values:proto_message_lite_value_provider",
-        "//extensions:optional_library",
-        "//runtime",
-        "//testing:base_interpreter_test",
-        "//testing/protos:test_all_types_cel_java_proto2",
-        "//testing/protos:test_all_types_cel_java_proto3",
-        "@maven//:com_google_testparameterinjector_test_parameter_injector",
-        "@maven//:junit_junit",
-    ],
-)
-
 junit4_test_suites(
     name = "test_suites",
-    shard_count = 4,
     sizes = [
         "small",
-        "medium",
     ],
     src_dir = "src/test/java",
     deps = [
-        ":cel_lite_interpreter_test",
-        ":cel_value_interpreter_test",
-        ":interpreter_test",
         ":tests",
     ],
 )

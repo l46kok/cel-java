@@ -18,17 +18,22 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import javax.annotation.concurrent.ThreadSafe;
 import dev.cel.common.CelAbstractSyntaxTree;
 import dev.cel.common.CelOptions;
+import dev.cel.common.types.CelType;
+import dev.cel.common.types.CelTypeProvider;
 import dev.cel.common.values.CelValueProvider;
+import dev.cel.runtime.planner.ProgramPlanner;
 import dev.cel.runtime.standard.CelStandardFunction;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Optional;
+import javax.annotation.Nullable;
+import javax.annotation.concurrent.ThreadSafe;
 
 @ThreadSafe
 final class LiteRuntimeImpl implements CelLiteRuntime {
@@ -37,6 +42,7 @@ final class LiteRuntimeImpl implements CelLiteRuntime {
   private final ImmutableList<CelFunctionBinding> customFunctionBindings;
   private final ImmutableSet<CelStandardFunction> celStandardFunctions;
   private final CelValueProvider celValueProvider;
+  private final @Nullable ProgramPlanner planner;
 
   // This does not affect the evaluation behavior in any manner.
   // CEL-Internal-4
@@ -45,7 +51,11 @@ final class LiteRuntimeImpl implements CelLiteRuntime {
   @Override
   public Program createProgram(CelAbstractSyntaxTree ast) {
     checkState(ast.isChecked(), "programs must be created from checked expressions");
-    return LiteProgramImpl.plan(interpreter.createInterpretable(ast));
+    if (planner != null) {
+      return planner.plan(ast);
+    } else {
+      return LiteProgramImpl.plan(interpreter.createInterpretable(ast));
+    }
   }
 
   @Override
@@ -72,6 +82,7 @@ final class LiteRuntimeImpl implements CelLiteRuntime {
     @VisibleForTesting final ImmutableSet.Builder<CelLiteRuntimeLibrary> runtimeLibrariesBuilder;
     @VisibleForTesting final ImmutableSet.Builder<CelStandardFunction> standardFunctionBuilder;
     @VisibleForTesting CelValueProvider celValueProvider;
+    @VisibleForTesting boolean enablePlanner;
 
     @Override
     public CelLiteRuntimeBuilder setOptions(CelOptions celOptions) {
@@ -116,6 +127,11 @@ final class LiteRuntimeImpl implements CelLiteRuntime {
     @Override
     public CelLiteRuntimeBuilder addLibraries(Iterable<? extends CelLiteRuntimeLibrary> libraries) {
       this.runtimeLibrariesBuilder.addAll(checkNotNull(libraries));
+      return this;
+    }
+    @Override
+    public CelLiteRuntimeBuilder enablePlanner(boolean value) {
+      this.enablePlanner = value;
       return this;
     }
 
@@ -197,7 +213,8 @@ final class LiteRuntimeImpl implements CelLiteRuntime {
           customFunctionBindings.values(),
           standardFunctions,
           runtimeLibs,
-          celValueProvider);
+          celValueProvider,
+          enablePlanner);
     }
 
     private Builder() {
@@ -223,12 +240,28 @@ final class LiteRuntimeImpl implements CelLiteRuntime {
       Iterable<CelFunctionBinding> customFunctionBindings,
       ImmutableSet<CelStandardFunction> celStandardFunctions,
       ImmutableSet<CelLiteRuntimeLibrary> runtimeLibraries,
-      CelValueProvider celValueProvider) {
+      CelValueProvider celValueProvider,
+      boolean enablePlanner) {
     this.interpreter = interpreter;
     this.celOptions = celOptions;
     this.customFunctionBindings = ImmutableList.copyOf(customFunctionBindings);
     this.celStandardFunctions = celStandardFunctions;
     this.runtimeLibraries = runtimeLibraries;
     this.celValueProvider = celValueProvider;
+    if (enablePlanner) {
+      // TODO
+      this.planner = ProgramPlanner.newPlanner(new CelTypeProvider() {
+        @Override
+        public ImmutableCollection<CelType> types() {
+          return null;
+        }
+        @Override
+        public Optional<CelType> findType(String typeName) {
+          return Optional.empty();
+        }
+      }, null, null, null);
+    } else {
+      this.planner = null;
+    }
   }
 }

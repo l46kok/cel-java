@@ -1,0 +1,27 @@
+package dev.cel.runtime.planner;
+
+import com.google.errorprone.annotations.Immutable;
+import dev.cel.common.values.CelValue;
+import dev.cel.runtime.CelEvaluationException;
+import dev.cel.runtime.GlobalResolver;
+
+@Immutable
+final class EvalConstant implements CelValueInterpretable {
+
+  @SuppressWarnings("Immutable")
+  private final CelValue constant;
+
+
+  @Override
+  public CelValue eval(GlobalResolver resolver) {
+    return constant;
+  }
+
+  static EvalConstant create(CelValue constant) {
+    return new EvalConstant(constant);
+  }
+
+  private EvalConstant(CelValue constant) {
+    this.constant = constant;
+  }
+}

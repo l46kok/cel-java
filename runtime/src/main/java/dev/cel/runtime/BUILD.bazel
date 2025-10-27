@@ -41,8 +41,12 @@ LITE_RUNTIME_SOURCES = [
 
 # keep sorted
 LITE_RUNTIME_IMPL_SOURCES = [
-    "LiteProgramImpl.java",
     "LiteRuntimeImpl.java",
+]
+
+# keep sorted
+LITE_PROGRAM_IMPL_SOURCES = [
+    "LiteProgramImpl.java",
 ]
 
 # keep sorted
@@ -120,7 +124,23 @@ java_library(
 )
 
 java_library(
-    name = "dispatcher",
+    name = "default_dispatcher",
+    srcs = ["CelValueDispatcher.java"],
+    tags = [
+    ],
+    deps = [
+        ":base",
+        ":cel_value_function_binding",
+        ":cel_value_function_overload",
+        "//:auto_value",
+        "//common/annotations",
+        "@maven//:com_google_errorprone_error_prone_annotations",
+        "@maven//:com_google_guava_guava",
+    ],
+)
+
+java_library(
+    name = "legacy_dispatcher",
     srcs = DISPATCHER_SOURCES,
     tags = [
     ],
@@ -139,7 +159,7 @@ java_library(
 )
 
 cel_android_library(
-    name = "dispatcher_android",
+    name = "legacy_dispatcher_android",
     srcs = DISPATCHER_SOURCES,
     visibility = ["//visibility:private"],
     deps = [
@@ -283,14 +303,13 @@ java_library(
     deps = [
         ":accumulated_unknowns",
         ":base",
-        ":concatenated_list_view",
-        ":dispatcher",
         ":evaluation_exception",
         ":evaluation_exception_builder",
         ":evaluation_listener",
         ":function_overload_impl",
         ":interpretable",
         ":interpreter_util",
+        ":legacy_dispatcher",
         ":metadata",
         ":runtime_helpers",
         ":runtime_type_provider",
@@ -303,6 +322,7 @@ java_library(
         "//common:runtime_exception",
         "//common/annotations",
         "//common/ast",
+        "//common/internal:concatenated_list_view",
         "//common/types",
         "//common/types:type_providers",
         "//common/values:cel_byte_string",
@@ -321,14 +341,13 @@ cel_android_library(
     deps = [
         ":accumulated_unknowns_android",
         ":base_android",
-        ":concatenated_list_view",
-        ":dispatcher_android",
         ":evaluation_exception",
         ":evaluation_exception_builder",
         ":evaluation_listener_android",
         ":function_overload_impl_android",
         ":interpretable_android",
         ":interpreter_util_android",
+        ":legacy_dispatcher_android",
         ":metadata",
         ":runtime_helpers_android",
         ":runtime_type_provider_android",
@@ -341,6 +360,7 @@ cel_android_library(
         "//common:runtime_exception",
         "//common/annotations",
         "//common/ast:ast_android",
+        "//common/internal:concatenated_list_view",
         "//common/types:type_providers_android",
         "//common/types:types_android",
         "//common/values:cel_byte_string",
@@ -416,11 +436,11 @@ cel_android_library(
     tags = [
     ],
     deps = [
-        ":concatenated_list_view",
         "//common:error_codes",
         "//common:options",
         "//common:runtime_exception",
         "//common/annotations",
+        "//common/internal:concatenated_list_view",
         "//common/internal:converter",
         "//common/values:values_android",
         "@maven//:com_google_errorprone_error_prone_annotations",
@@ -439,11 +459,11 @@ java_library(
     tags = [
     ],
     deps = [
-        ":concatenated_list_view",
         "//common:error_codes",
         "//common:options",
         "//common:runtime_exception",
         "//common/annotations",
+        "//common/internal:concatenated_list_view",
         "//common/internal:converter",
         "//common/values",
         "@maven//:com_google_errorprone_error_prone_annotations",
@@ -495,13 +515,14 @@ java_library(
     tags = [
     ],
     deps = [
-        ":dispatcher",
         ":evaluation_exception",
         ":function_binding",
         ":function_overload",
         ":function_overload_impl",
         ":function_resolver",
+        ":legacy_dispatcher",
         "//:auto_value",
+        "//common/annotations",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
     ],
@@ -513,12 +534,12 @@ cel_android_library(
     tags = [
     ],
     deps = [
-        ":dispatcher_android",
         ":evaluation_exception",
         ":function_binding_android",
         ":function_overload_android",
         ":function_overload_impl_android",
         ":function_resolver_android",
+        ":legacy_dispatcher_android",
         "//:auto_value",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven_android//:com_google_guava_guava",
@@ -827,13 +848,13 @@ java_library(
         ":cel_value_runtime_type_provider",
         ":descriptor_message_provider",
         ":descriptor_type_resolver",
-        ":dispatcher",
         ":evaluation_exception",
         ":evaluation_listener",
         ":function_binding",
         ":function_resolver",
         ":interpretable",
         ":interpreter",
+        ":legacy_dispatcher",
         ":lite_runtime",
         ":proto_message_activation_factory",
         ":proto_message_runtime_equality",
@@ -891,12 +912,13 @@ java_library(
     deps = [
         ":activation",
         ":cel_value_runtime_type_provider",
-        ":dispatcher",
         ":evaluation_exception",
         ":function_binding",
         ":function_resolver",
         ":interpretable",
         ":interpreter",
+        ":legacy_dispatcher",
+        ":lite_program_impl",
         ":lite_runtime",
         ":runtime_equality",
         ":runtime_helpers",
@@ -904,11 +926,31 @@ java_library(
         "//:auto_value",
         "//common:cel_ast",
         "//common:options",
+        "//common/types:type_providers",
         "//common/values:cel_value_provider",
+        "//runtime/planner:program_planner",
         "//runtime/standard:standard_function",
         "@maven//:com_google_code_findbugs_annotations",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
+    ],
+)
+
+java_library(
+    name = "lite_program_impl",
+    srcs = LITE_PROGRAM_IMPL_SOURCES,
+    tags = [
+    ],
+    deps = [
+        ":activation",
+        ":evaluation_exception",
+        ":evaluation_listener",
+        ":function_resolver",
+        ":interpretable",
+        ":interpreter",
+        ":lite_runtime",
+        "//:auto_value",
+        "@maven//:com_google_errorprone_error_prone_annotations",
     ],
 )
 
@@ -920,13 +962,15 @@ cel_android_library(
     deps = [
         ":activation_android",
         ":cel_value_runtime_type_provider_android",
-        ":dispatcher_android",
         ":evaluation_exception",
         ":function_binding_android",
         ":function_resolver_android",
         ":interpretable_android",
         ":interpreter_android",
+        ":legacy_dispatcher_android",
+        ":lite_program_impl",  # TODO - android target
         ":lite_runtime_android",
+        ":program_planner",  # TODO - android target
         ":runtime_equality_android",
         ":runtime_helpers_android",
         ":type_resolver_android",
@@ -1142,13 +1186,6 @@ cel_android_library(
 )
 
 java_library(
-    name = "concatenated_list_view",
-    srcs = ["ConcatenatedListView.java"],
-    # used_by_android
-    visibility = ["//visibility:private"],
-)
-
-java_library(
     name = "accumulated_unknowns",
     srcs = ["AccumulatedUnknowns.java"],
     visibility = ["//visibility:private"],
@@ -1165,5 +1202,33 @@ cel_android_library(
     deps = [
         ":unknown_attributes_android",
         "@maven//:com_google_errorprone_error_prone_annotations",
+    ],
+)
+
+java_library(
+    name = "cel_value_function_binding",
+    srcs = ["CelValueFunctionBinding.java"],
+    tags = [
+    ],
+    deps = [
+        ":cel_value_function_overload",
+        "//common/values:cel_value",
+        "@maven//:com_google_errorprone_error_prone_annotations",
+        "@maven//:com_google_guava_guava",
+    ],
+)
+
+java_library(
+    name = "cel_value_function_overload",
+    srcs = [
+        "CelValueFunctionOverload.java",
+    ],
+    tags = [
+    ],
+    deps = [
+        ":evaluation_exception",
+        "//common/values:cel_value",
+        "@maven//:com_google_errorprone_error_prone_annotations",
+        "@maven//:com_google_guava_guava",
     ],
 )

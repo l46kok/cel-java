@@ -20,10 +20,18 @@ java_library(
 )
 
 java_library(
-    name = "dispatcher",
+    name = "default_dispatcher",
     visibility = ["//:internal"],
     exports = [
-        "//runtime/src/main/java/dev/cel/runtime:dispatcher",
+        "//runtime/src/main/java/dev/cel/runtime:default_dispatcher",
+    ],
+)
+
+java_library(
+    name = "legacy_dispatcher",
+    visibility = ["//:internal"],
+    exports = [
+        "//runtime/src/main/java/dev/cel/runtime:legacy_dispatcher",
     ],
 )
 
@@ -219,4 +227,14 @@ cel_android_library(
     name = "lite_runtime_impl_android",
     visibility = ["//:internal"],
     exports = ["//runtime/src/main/java/dev/cel/runtime:lite_runtime_impl_android"],
+)
+
+java_library(
+    name = "cel_value_function_binding",
+    exports = ["//runtime/src/main/java/dev/cel/runtime:cel_value_function_binding"],
+)
+
+java_library(
+    name = "cel_value_function_overload",
+    exports = ["//runtime/src/main/java/dev/cel/runtime:cel_value_function_overload"],
 )

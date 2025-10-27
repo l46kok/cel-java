@@ -157,18 +157,15 @@ abstract class ProgramImpl implements CelRuntime.Program {
               .build(),
           lateBoundFunctionResolver,
           listener);
-    } else {
-      if (lateBoundFunctionResolver.isPresent() && listener.isPresent()) {
-        return impl.eval(
-            context.variableResolver(), lateBoundFunctionResolver.get(), listener.get());
-      } else if (lateBoundFunctionResolver.isPresent()) {
-        return impl.eval(context.variableResolver(), lateBoundFunctionResolver.get());
-      } else if (listener.isPresent()) {
-        return impl.eval(context.variableResolver(), listener.get());
-      }
-
-      return impl.eval(context.variableResolver());
+    } else if (lateBoundFunctionResolver.isPresent()) {
+      //   return impl.eval(context.variableResolver(), lateBoundFunctionResolver.get(), listener);
+      // }
+      // return impl.eval(context.variableResolver(), listener);
+    } else if (listener.isPresent()) {
+      // return impl.eval(context.variableResolver(), listener.get());
     }
+
+    return impl.eval(context.variableResolver());
   }
 
   /** Get the underlying {@link Interpretable} for the {@code Program}. */
