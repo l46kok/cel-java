@@ -13,7 +13,7 @@ java_library(
     tags = [
     ],
     deps = [
-        ":attribute_factory",
+        ":attribute",
         ":cel_value_interpretable",
         ":cel_value_program",
         ":eval_and",
@@ -27,6 +27,7 @@ java_library(
         ":eval_unary",
         ":eval_var_args_call",
         ":eval_zero_arity",
+        ":qualifier",
         "//:auto_value",
         "//common:cel_ast",
         "//common:container",
@@ -93,10 +94,17 @@ java_library(
 
 java_library(
     name = "attribute",
-    srcs = ["Attribute.java"],
+    srcs = [
+        "Attribute.java",
+        "AttributeFactory.java",
+    ],
     deps = [
+        ":qualifier",
+        "//common:container",
         "//common/types",
         "//common/types:type_providers",
+        "//common/values",
+        "//common/values:cel_value",
         "//runtime:interpretable",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
@@ -104,12 +112,13 @@ java_library(
 )
 
 java_library(
-    name = "attribute_factory",
-    srcs = ["AttributeFactory.java"],
+    name = "qualifier",
+    srcs = ["Qualifier.java"],
     deps = [
-        ":attribute",
-        "//common:container",
+        "//common/types",
         "//common/types:type_providers",
+        "//common/values:cel_value",
+        "//runtime:interpretable",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
     ],
@@ -121,6 +130,7 @@ java_library(
     deps = [
         ":attribute",
         ":cel_value_interpretable",
+        ":qualifier",
         "//common/values",
         "//common/values:cel_value",
         "//runtime:interpretable",

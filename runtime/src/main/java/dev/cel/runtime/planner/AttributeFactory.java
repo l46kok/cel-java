@@ -18,32 +18,52 @@ import com.google.common.collect.ImmutableList;
 import com.google.errorprone.annotations.Immutable;
 import dev.cel.common.CelContainer;
 import dev.cel.common.types.CelTypeProvider;
+import dev.cel.common.values.CelValue;
+import dev.cel.common.values.CelValueConverter;
+import dev.cel.common.values.StringValue;
 import dev.cel.runtime.planner.Attribute.MaybeAttribute;
 import dev.cel.runtime.planner.Attribute.NamespacedAttribute;
+import dev.cel.runtime.planner.Qualifier.StringQualifier;
 
 @Immutable
 final class AttributeFactory {
 
   private final CelContainer unusedContainer;
   private final CelTypeProvider typeProvider;
+  private final CelValueConverter celValueConverter;
 
   NamespacedAttribute newAbsoluteAttribute(String... names) {
-    return new NamespacedAttribute(typeProvider, ImmutableList.copyOf(names));
+    return new NamespacedAttribute(typeProvider, ImmutableList.copyOf(names), celValueConverter);
   }
 
   MaybeAttribute newMaybeAttribute(String... names) {
     // TODO: Resolve container names
     return new MaybeAttribute(
-        ImmutableList.of(new NamespacedAttribute(typeProvider, ImmutableList.copyOf(names))));
+        this, ImmutableList.of(new NamespacedAttribute(typeProvider, ImmutableList.copyOf(names), celValueConverter)));
   }
+
+  Qualifier newQualifier(CelValue value) {
+    // TODO: Handle checked
+
+    if (value instanceof StringValue) {
+      return new StringQualifier(value);
+    }
+
+    return null;
+  }
+
 
   static AttributeFactory newAttributeFactory(
-      CelContainer celContainer, CelTypeProvider typeProvider) {
-    return new AttributeFactory(celContainer, typeProvider);
+      CelContainer celContainer,
+      CelTypeProvider typeProvider,
+      CelValueConverter celValueConverter) {
+    return new AttributeFactory(celContainer, typeProvider, celValueConverter);
   }
 
-  private AttributeFactory(CelContainer container, CelTypeProvider typeProvider) {
+  private AttributeFactory(CelContainer container, CelTypeProvider typeProvider,
+      CelValueConverter celValueConverter) {
     this.unusedContainer = container;
     this.typeProvider = typeProvider;
+    this.celValueConverter = celValueConverter;
   }
 }

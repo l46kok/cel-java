@@ -257,7 +257,8 @@ public final class ProgramPlannerTest {
     }
   }
 
-  @TestParameter boolean isParseOnly;
+  boolean isParseOnly = true;
+  // @TestParameter boolean isParseOnly;
 
   @Test
   public void plan_notSet_throws() {

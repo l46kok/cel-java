@@ -17,20 +17,31 @@ package dev.cel.runtime.planner;
 
 import com.google.common.collect.ImmutableList;
 import com.google.errorprone.annotations.Immutable;
+import dev.cel.common.types.CelType;
 import dev.cel.common.types.CelTypeProvider;
+import dev.cel.common.types.EnumType;
 import dev.cel.common.types.TypeType;
+import dev.cel.common.values.CelValue;
+import dev.cel.common.values.CelValueConverter;
+import dev.cel.common.values.SelectableValue;
+import dev.cel.common.values.StringValue;
 import dev.cel.runtime.GlobalResolver;
+import java.util.NoSuchElementException;
+import java.util.Optional;
 
 @Immutable
 interface Attribute {
   Object resolve(GlobalResolver ctx);
+  Attribute addQualifier(Qualifier qualifier);
 
   final class MaybeAttribute implements Attribute {
-    private final ImmutableList<Attribute> attributes;
+    private final AttributeFactory attrFactory;
+    private final ImmutableList<NamespacedAttribute> attributes;
+    private final ImmutableList<String> augmentedNames;
 
     @Override
     public Object resolve(GlobalResolver ctx) {
-      for (Attribute attr : attributes) {
+      for (NamespacedAttribute attr : attributes) {
         Object value = attr.resolve(ctx);
         if (value != null) {
           return value;
@@ -40,38 +51,115 @@ interface Attribute {
       // TODO: Handle unknowns
       throw new UnsupportedOperationException("Unknown attributes is not supported yet");
     }
+    @Override
+    public Attribute addQualifier(Qualifier qualifier) {
+      CelValue strQualifier = qualifier.value();
+      ImmutableList.Builder<String> augmentedNamesBuilder = ImmutableList.builder();
+      ImmutableList.Builder<NamespacedAttribute> attributesBuilder = ImmutableList.builder();
+      for (NamespacedAttribute attr : attributes) {
+        if (strQualifier instanceof StringValue && attr.qualifiers.isEmpty()) {
+          for (String varName : attr.candidateVariableNames()) {
+            augmentedNamesBuilder.add(varName + "." + strQualifier.value());
+          }
+        }
 
-    MaybeAttribute(ImmutableList<Attribute> attributes) {
+        attributesBuilder.add(attr.addQualifier(qualifier));
+      }
+      ImmutableList<String> augmentedNames = augmentedNamesBuilder.build();
+      ImmutableList.Builder<NamespacedAttribute> namespacedAttributeBuilder = ImmutableList.builder();
+      if (!augmentedNames.isEmpty()) {
+        namespacedAttributeBuilder.add(attrFactory.newAbsoluteAttribute(augmentedNames.toArray(new String[0])));
+      }
+
+      namespacedAttributeBuilder.addAll(attributesBuilder.build());
+      return new MaybeAttribute(attrFactory, namespacedAttributeBuilder.build());
+    }
+
+    MaybeAttribute(AttributeFactory factory, ImmutableList<NamespacedAttribute> attributes) {
+      this(factory, attributes, ImmutableList.of());
+    }
+
+    private MaybeAttribute(AttributeFactory attrFactory, ImmutableList<NamespacedAttribute> attributes, ImmutableList<String> augmentedNames) {
+      this.attrFactory = attrFactory;
       this.attributes = attributes;
+      this.augmentedNames = augmentedNames;
     }
   }
 
   final class NamespacedAttribute implements Attribute {
     private final ImmutableList<String> namespacedNames;
     private final CelTypeProvider typeProvider;
+    private final ImmutableList<Qualifier> qualifiers;
+    private final CelValueConverter celValueConverter;
 
     @Override
     public Object resolve(GlobalResolver ctx) {
       for (String name : namespacedNames) {
         Object value = ctx.resolve(name);
         if (value != null) {
-          // TODO: apply qualifiers
-          return value;
+          if (!qualifiers.isEmpty()) {
+            return applyQualifiers(value, qualifiers);
+          } else {
+            return value;
+          }
         }
 
-        TypeType type = typeProvider.findType(name).map(TypeType::create).orElse(null);
+        CelType type = typeProvider.findType(name).orElse(null);
         if (type != null) {
+          if (qualifiers.isEmpty()) {
+            // Resolution of a fully qualified type name: foo.bar.baz
+            return TypeType.create(type);
+          } else {
+            // This is potentially a fully qualified reference to an enum value
+            if (type instanceof EnumType && qualifiers.size() == 1) {
+              EnumType enumType = (EnumType) type;
+              StringValue strQualifier = (StringValue) qualifiers.get(0).value();
+              return enumType.findNumberByName(strQualifier.value()).orElseThrow(() -> new NoSuchElementException(String.format("Field %s was not found on enum %s", enumType, strQualifier.value())));
+            }
+          }
           return type;
         }
       }
 
-      // TODO: Handle unknowns
-      throw new UnsupportedOperationException("Unknown attributes is not supported yet");
+      return null;
     }
 
-    NamespacedAttribute(CelTypeProvider typeProvider, ImmutableList<String> namespacedNames) {
+    private Object applyQualifiers(Object value, ImmutableList<Qualifier> qualifiers) {
+      CelValue obj = celValueConverter.fromJavaObjectToCelValue(value);
+
+      for (Qualifier qualifier : qualifiers) {
+        obj = ((SelectableValue<CelValue>) obj).select(qualifier.value());
+      }
+
+      return celValueConverter.fromCelValueToJavaObject(obj);
+    }
+
+
+    private ImmutableList<String> candidateVariableNames() {
+      return namespacedNames;
+    }
+
+    private ImmutableList<Qualifier> qualifiers() {
+      return qualifiers;
+    }
+
+    @Override
+    public NamespacedAttribute addQualifier(Qualifier qualifier) {
+      return new NamespacedAttribute(typeProvider, namespacedNames, ImmutableList.<Qualifier>builder().addAll(qualifiers).add(qualifier).build(), celValueConverter );
+    }
+
+    NamespacedAttribute(CelTypeProvider typeProvider,
+        ImmutableList<String> namespacedNames,
+        CelValueConverter celValueConverter) {
+      this(typeProvider, namespacedNames, ImmutableList.of(), celValueConverter);
+    }
+
+    private NamespacedAttribute(CelTypeProvider typeProvider, ImmutableList<String> namespacedNames, ImmutableList<Qualifier> qualifiers,
+        CelValueConverter celValueConverter) {
       this.typeProvider = typeProvider;
       this.namespacedNames = namespacedNames;
+      this.qualifiers = qualifiers;
+      this.celValueConverter = celValueConverter;
     }
   }
 }

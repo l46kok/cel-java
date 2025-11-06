@@ -31,6 +31,11 @@ final class EvalAttribute implements CelValueInterpretable {
     return celValueConverter.fromJavaObjectToCelValue(obj);
   }
 
+  EvalAttribute addQualifier(Qualifier qualifier) {
+    Attribute newAttribute = attr.addQualifier(qualifier);
+    return create(celValueConverter, newAttribute);
+  }
+
   static EvalAttribute create(CelValueConverter celValueConverter, Attribute attr) {
     return new EvalAttribute(celValueConverter, attr);
   }
@@ -39,4 +44,6 @@ final class EvalAttribute implements CelValueInterpretable {
     this.celValueConverter = celValueConverter;
     this.attr = attr;
   }
+
+
 }

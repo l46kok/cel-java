@@ -15,6 +15,7 @@
 package dev.cel.runtime.planner;
 
 import com.google.errorprone.annotations.Immutable;
+import dev.cel.common.values.BoolValue;
 import dev.cel.common.values.CelValue;
 import dev.cel.common.values.IntValue;
 import dev.cel.runtime.GlobalResolver;
@@ -46,7 +47,10 @@ final class EvalFold implements CelValueInterpretable {
 
     long index = 0;
     for (Iterator<CelValue> iterator = foldRange.iterator(); iterator.hasNext(); ) {
-      // TODO: Implement condition
+      BoolValue cond = (BoolValue) condition.eval(folder);
+      if (!cond.value()) {
+        return result.eval(folder);
+      }
       if (iterVar2.isEmpty()) {
         folder.iterVarVal = iterator.next();
       } else {

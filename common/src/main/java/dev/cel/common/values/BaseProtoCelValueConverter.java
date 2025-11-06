@@ -69,6 +69,10 @@ public abstract class BaseProtoCelValueConverter extends CelValueConverter {
       return NullValue.NULL_VALUE;
     }
 
+    if (value instanceof MessageLite) {
+      return fromProtoMessageToCelValue((MessageLite) value);
+    }
+
     return super.fromJavaObjectToCelValue(value);
   }
 

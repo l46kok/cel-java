@@ -18,6 +18,8 @@ import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.errorprone.annotations.CheckReturnValue;
+import dev.cel.common.ast.CelExpr.CelSelect;
+import dev.cel.common.values.StringValue;
 import javax.annotation.concurrent.ThreadSafe;
 import dev.cel.common.CelAbstractSyntaxTree;
 import dev.cel.common.CelContainer;
@@ -83,7 +85,7 @@ public final class ProgramPlanner {
       case IDENT:
         return planIdent(celExpr, ctx);
       case SELECT:
-        break;
+        return planSelect(celExpr, ctx);
       case CALL:
         return planCall(celExpr, ctx);
       case LIST:
@@ -101,6 +103,20 @@ public final class ProgramPlanner {
     throw new IllegalArgumentException("Not yet implemented kind: " + celExpr.getKind());
   }
 
+  private CelValueInterpretable planSelect(CelExpr celExpr, PlannerContext ctx) {
+    // TODO: Handled checked
+    CelSelect select = celExpr.select();
+
+    CelValueInterpretable operand = plan(select.operand(), ctx);
+    // TODO: Relative attr handling
+    EvalAttribute attribute = (EvalAttribute) operand;
+
+    // TODO: Presence tests
+
+    Qualifier qualifier = attributeFactory.newQualifier(StringValue.create(select.field()));
+
+    return attribute.addQualifier(qualifier);
+  }
 
   private CelValueInterpretable planIdent(CelExpr celExpr, PlannerContext ctx) {
     CelReference ref = ctx.referenceMap().get(celExpr.id());
@@ -368,6 +384,6 @@ public final class ProgramPlanner {
     this.dispatcher = dispatcher;
     // TODO: Container support
     this.attributeFactory =
-        AttributeFactory.newAttributeFactory(CelContainer.newBuilder().build(), typeProvider);
+        AttributeFactory.newAttributeFactory(CelContainer.newBuilder().build(), typeProvider, celValueConverter);
   }
 }
