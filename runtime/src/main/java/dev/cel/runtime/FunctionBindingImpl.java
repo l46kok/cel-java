@@ -15,6 +15,8 @@
 package dev.cel.runtime;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.errorprone.annotations.Immutable;
 
 @Immutable
@@ -57,5 +59,87 @@ final class FunctionBindingImpl implements CelFunctionBinding {
     this.argTypes = argTypes;
     this.definition = definition;
     this.isStrict = isStrict;
+  }
+
+  static ImmutableSet<CelFunctionBinding> groupOverloadsToFunction(
+      String functionName, ImmutableSet<CelFunctionBinding> overloadBindings) {
+    if (overloadBindings.size() == 1) {
+      CelFunctionBinding singleBinding = Iterables.getOnlyElement(overloadBindings);
+      FunctionBindingImpl functionBindingImpl =
+          new FunctionBindingImpl(
+              functionName,
+              singleBinding.getArgTypes(),
+              singleBinding.getDefinition(),
+              singleBinding.isStrict());
+
+      return ImmutableSet.of(singleBinding, functionBindingImpl);
+    }
+
+    ImmutableSet.Builder<CelFunctionBinding> builder = ImmutableSet.builder();
+    for (CelFunctionBinding binding : overloadBindings) {
+      builder.add(binding);
+    }
+
+    // Setup dynamic dispatch
+    builder.add(new DynamicDispatchBinding(functionName, overloadBindings));
+
+    return builder.build();
+  }
+
+  @Immutable
+  static final class DynamicDispatchBinding implements CelFunctionBinding {
+
+    private final boolean isStrict;
+    private final DynamicDispatchOverload dynamicDispatchOverload;
+
+    @Override
+    public String getOverloadId() {
+      return dynamicDispatchOverload.functionName;
+    }
+
+    @Override
+    public ImmutableList<Class<?>> getArgTypes() {
+      return ImmutableList.of();
+    }
+
+    @Override
+    public CelFunctionOverload getDefinition() {
+      return dynamicDispatchOverload;
+    }
+
+    @Override
+    public boolean isStrict() {
+      return isStrict;
+    }
+
+    private DynamicDispatchBinding(
+        String functionName, ImmutableSet<CelFunctionBinding> overloadBindings) {
+      this.isStrict = overloadBindings.stream().allMatch(CelFunctionBinding::isStrict);
+      this.dynamicDispatchOverload = new DynamicDispatchOverload(functionName, overloadBindings);
+    }
+  }
+
+  @Immutable
+  static final class DynamicDispatchOverload implements CelFunctionOverload {
+    private final String functionName;
+    private final ImmutableSet<CelFunctionBinding> overloadBindings;
+
+    @Override
+    public Object apply(Object[] args) throws CelEvaluationException {
+      for (CelFunctionBinding overload : overloadBindings) {
+        // TODO: Pull canHandle to somewhere else?
+        if (CelResolvedOverload.canHandle(args, overload.getArgTypes(), overload.isStrict())) {
+          return overload.getDefinition().apply(args);
+        }
+      }
+
+      throw new IllegalArgumentException("No matching overload for function: " + functionName);
+    }
+
+    private DynamicDispatchOverload(
+        String functionName, ImmutableSet<CelFunctionBinding> overloadBindings) {
+      this.functionName = functionName;
+      this.overloadBindings = overloadBindings;
+    }
   }
 }

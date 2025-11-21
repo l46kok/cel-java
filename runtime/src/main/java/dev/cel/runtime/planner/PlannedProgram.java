@@ -23,6 +23,7 @@ import dev.cel.runtime.Activation;
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelEvaluationExceptionBuilder;
 import dev.cel.runtime.CelFunctionResolver;
+import dev.cel.runtime.CelVariableResolver;
 import dev.cel.runtime.GlobalResolver;
 import dev.cel.runtime.Program;
 import java.util.Map;
@@ -50,6 +51,11 @@ abstract class PlannedProgram implements Program {
   public Object eval(Map<String, ?> mapValue, CelFunctionResolver lateBoundFunctionResolver)
       throws CelEvaluationException {
     throw new UnsupportedOperationException("Late bound functions not supported yet");
+  }
+
+  @Override
+  public Object eval(CelVariableResolver resolver) throws CelEvaluationException {
+    return evalOrThrow(interpretable(), ((name) -> resolver.find(name).orElse(null)));
   }
 
   private Object evalOrThrow(PlannedInterpretable interpretable, GlobalResolver resolver)

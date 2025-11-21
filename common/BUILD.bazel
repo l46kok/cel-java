@@ -22,6 +22,11 @@ java_library(
     exports = ["//common/src/main/java/dev/cel/common:container"],
 )
 
+cel_android_library(
+    name = "container_android",
+    exports = ["//common/src/main/java/dev/cel/common:container_android"],
+)
+
 java_library(
     name = "proto_ast",
     exports = ["//common/src/main/java/dev/cel/common:proto_ast"],
@@ -125,4 +130,9 @@ java_library(
 java_library(
     name = "operator",
     exports = ["//common/src/main/java/dev/cel/common:operator"],
+)
+
+cel_android_library(
+    name = "operator_android",
+    exports = ["//common/src/main/java/dev/cel/common:operator_android"],
 )

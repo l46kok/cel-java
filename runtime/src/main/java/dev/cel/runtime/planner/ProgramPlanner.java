@@ -18,7 +18,7 @@ import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.errorprone.annotations.CheckReturnValue;
-import javax.annotation.concurrent.ThreadSafe;
+import com.google.errorprone.annotations.Immutable;
 import dev.cel.common.CelAbstractSyntaxTree;
 import dev.cel.common.CelContainer;
 import dev.cel.common.CelOptions;
@@ -53,10 +53,9 @@ import java.util.Optional;
  * {@code ProgramPlanner} resolves functions, types, and identifiers at plan time given a
  * parsed-only or a type-checked expression.
  */
-@ThreadSafe
+@Immutable
 @Internal
 public final class ProgramPlanner {
-
   private final CelTypeProvider typeProvider;
   private final CelValueProvider valueProvider;
   private final DefaultDispatcher dispatcher;
@@ -217,6 +216,7 @@ public final class ProgramPlanner {
       }
     }
 
+    // TODO: Handle all specialized calls (logical operators, conditionals, equals etc)
     CelResolvedOverload resolvedOverload = null;
     if (resolvedFunction.overloadId().isPresent()) {
       resolvedOverload = dispatcher.findOverload(resolvedFunction.overloadId().get()).orElse(null);
