@@ -142,6 +142,7 @@ java_library(
         ":resolved_overload",
         ":resolved_overload_internal",
         "//:auto_value",
+        "//common/annotations",
         "//common:error_codes",
         "//runtime:function_resolver",
         "@maven//:com_google_code_findbugs_annotations",

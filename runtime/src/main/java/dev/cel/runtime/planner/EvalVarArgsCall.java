@@ -16,7 +16,7 @@ package dev.cel.runtime.planner;
 
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelEvaluationListener;
-import dev.cel.runtime.CelFunctionBinding;
+import dev.cel.runtime.CelResolvedOverload;
 import dev.cel.runtime.CelFunctionResolver;
 import dev.cel.runtime.GlobalResolver;
 import dev.cel.runtime.Interpretable;
@@ -24,7 +24,7 @@ import dev.cel.runtime.Interpretable;
 @SuppressWarnings("Immutable")
 final class EvalVarArgsCall implements Interpretable {
 
-  private final CelFunctionBinding resolvedOverload;
+  private final CelResolvedOverload resolvedOverload;
   private final Interpretable[] args;
 
   @Override
@@ -59,11 +59,11 @@ final class EvalVarArgsCall implements Interpretable {
     return null;
   }
 
-  static EvalVarArgsCall create(CelFunctionBinding resolvedOverload, Interpretable[] args) {
+  static EvalVarArgsCall create(CelResolvedOverload resolvedOverload, Interpretable[] args) {
     return new EvalVarArgsCall(resolvedOverload, args);
   }
 
-  private EvalVarArgsCall(CelFunctionBinding resolvedOverload, Interpretable[] args) {
+  private EvalVarArgsCall(CelResolvedOverload resolvedOverload, Interpretable[] args) {
     this.resolvedOverload = resolvedOverload;
     this.args = args;
   }

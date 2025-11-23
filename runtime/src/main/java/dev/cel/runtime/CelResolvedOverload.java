@@ -25,7 +25,7 @@ import java.util.List;
  */
 @AutoValue
 @Immutable
-abstract class CelResolvedOverload implements ResolvedOverload {
+public abstract class CelResolvedOverload implements ResolvedOverload {
 
   /** The overload id of the function. */
   @Override

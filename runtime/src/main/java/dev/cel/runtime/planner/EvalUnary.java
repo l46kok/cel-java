@@ -16,14 +16,14 @@ package dev.cel.runtime.planner;
 
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelEvaluationListener;
-import dev.cel.runtime.CelFunctionBinding;
+import dev.cel.runtime.CelResolvedOverload;
 import dev.cel.runtime.CelFunctionResolver;
 import dev.cel.runtime.GlobalResolver;
 import dev.cel.runtime.Interpretable;
 
 final class EvalUnary implements Interpretable {
 
-  private final CelFunctionBinding resolvedOverload;
+  private final CelResolvedOverload resolvedOverload;
   private final Interpretable arg;
 
   @Override
@@ -53,11 +53,11 @@ final class EvalUnary implements Interpretable {
     return null;
   }
 
-  static EvalUnary create(CelFunctionBinding resolvedOverload, Interpretable arg) {
+  static EvalUnary create(CelResolvedOverload resolvedOverload, Interpretable arg) {
     return new EvalUnary(resolvedOverload, arg);
   }
 
-  private EvalUnary(CelFunctionBinding resolvedOverload, Interpretable arg) {
+  private EvalUnary(CelResolvedOverload resolvedOverload, Interpretable arg) {
     this.resolvedOverload = resolvedOverload;
     this.arg = arg;
   }

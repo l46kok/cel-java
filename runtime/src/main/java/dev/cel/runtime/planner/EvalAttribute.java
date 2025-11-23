@@ -15,18 +15,19 @@
 package dev.cel.runtime.planner;
 
 import com.google.errorprone.annotations.Immutable;
+import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelEvaluationListener;
 import dev.cel.runtime.CelFunctionResolver;
 import dev.cel.runtime.GlobalResolver;
 import dev.cel.runtime.Interpretable;
 
 @Immutable
-final class EvalAttribute implements Interpretable {
+final class EvalAttribute implements InterpretableAttribute {
 
   private final Attribute attr;
 
   @Override
-  public Object eval(GlobalResolver resolver) {
+  public Object eval(GlobalResolver resolver) throws CelEvaluationException {
     return attr.resolve(resolver);
   }
 
@@ -51,7 +52,7 @@ final class EvalAttribute implements Interpretable {
     throw new UnsupportedOperationException("Not yet supported");
   }
 
-  EvalAttribute addQualifier(Qualifier qualifier) {
+  public EvalAttribute addQualifier(Qualifier qualifier) {
     Attribute newAttribute = attr.addQualifier(qualifier);
     return create(newAttribute);
   }

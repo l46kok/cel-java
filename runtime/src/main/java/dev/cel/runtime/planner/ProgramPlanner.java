@@ -42,10 +42,11 @@ import dev.cel.common.values.CelValueConverter;
 import dev.cel.common.values.CelValueProvider;
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelEvaluationExceptionBuilder;
-import dev.cel.runtime.CelFunctionBinding;
-import dev.cel.runtime.CelValueDispatcher;
+import dev.cel.runtime.DefaultDispatcher;
 import dev.cel.runtime.Interpretable;
 import dev.cel.runtime.Program;
+import dev.cel.runtime.CelResolvedOverload;
+
 import java.util.NoSuchElementException;
 import java.util.Optional;
 
@@ -58,7 +59,7 @@ import java.util.Optional;
 public final class ProgramPlanner {
   private final CelTypeProvider typeProvider;
   private final CelValueProvider valueProvider;
-  private final CelValueDispatcher dispatcher;
+  private final DefaultDispatcher dispatcher;
   private final AttributeFactory attributeFactory;
 
   /**
@@ -103,12 +104,18 @@ public final class ProgramPlanner {
 
   private Interpretable planSelect(CelExpr celExpr, PlannerContext ctx) {
     CelSelect select = celExpr.select();
-
     Interpretable operand = plan(select.operand(), ctx);
-    // TODO: Relative attr handling
-    EvalAttribute attribute = (EvalAttribute) operand;
 
-    // TODO: Presence tests
+    InterpretableAttribute attribute;
+    if (operand instanceof EvalAttribute) {
+      attribute = (EvalAttribute) operand;
+    } else {
+      attribute = EvalAttribute.create(attributeFactory.newRelativeAttribute(operand));
+    }
+
+    if (select.testOnly()) {
+      attribute = EvalPresenceTest.create(attribute);
+    }
 
     Qualifier qualifier = attributeFactory.newQualifier(select.field());
 
@@ -202,17 +209,19 @@ public final class ProgramPlanner {
       }
     }
 
-    CelFunctionBinding resolvedOverload = null;
+    CelResolvedOverload resolvedOverload = null;
 
     if (resolvedFunction.overloadId().isPresent()) {
-      resolvedOverload = dispatcher.findOverload(resolvedFunction.overloadId().get()).orElse(null);
+      // TODO: Refactor and remove ResolvedOverload
+      resolvedOverload = (CelResolvedOverload) dispatcher.findOverload(resolvedFunction.overloadId().get()).orElse(null);
     }
 
     if (resolvedOverload == null) {
+      // Parsed-only function dispatch
       resolvedOverload =
-          dispatcher
-              .findOverload(functionName)
-              .orElseThrow(() -> new NoSuchElementException("Overload not found: " + functionName));
+              (CelResolvedOverload) dispatcher
+                  .findOverload(functionName)
+                  .orElseThrow(() -> new NoSuchElementException("Overload not found: " + functionName));
     }
 
     switch (argCount) {
@@ -384,15 +393,15 @@ public final class ProgramPlanner {
   public static ProgramPlanner newPlanner(
       CelTypeProvider typeProvider,
       CelValueProvider valueProvider,
-      CelValueDispatcher dispatcher,
+      DefaultDispatcher functionResolver,
       CelValueConverter celValueConverter) {
-    return new ProgramPlanner(typeProvider, valueProvider, dispatcher, celValueConverter);
+    return new ProgramPlanner(typeProvider, valueProvider, functionResolver, celValueConverter);
   }
 
   private ProgramPlanner(
       CelTypeProvider typeProvider,
       CelValueProvider valueProvider,
-      CelValueDispatcher dispatcher,
+      DefaultDispatcher dispatcher,
       CelValueConverter celValueConverter) {
     this.typeProvider = typeProvider;
     this.valueProvider = valueProvider;

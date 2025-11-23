@@ -22,8 +22,10 @@ import dev.cel.common.types.EnumType;
 import dev.cel.common.types.TypeType;
 import dev.cel.common.values.CelValue;
 import dev.cel.common.values.CelValueConverter;
-import dev.cel.common.values.SelectableValue;
+import dev.cel.common.values.ErrorValue;
 import dev.cel.runtime.GlobalResolver;
+import dev.cel.runtime.Interpretable;
+
 import java.util.NoSuchElementException;
 
 @Immutable
@@ -31,6 +33,54 @@ interface Attribute {
   Object resolve(GlobalResolver ctx);
 
   Attribute addQualifier(Qualifier qualifier);
+
+  @Immutable
+  final class RelativeAttribute implements Attribute {
+
+    private final Interpretable operand;
+    private final CelValueConverter celValueConverter;
+    private final ImmutableList<Qualifier> qualifiers;
+
+    @Override
+    public Object resolve(GlobalResolver ctx){
+      Object obj = EvalHelpers.evalNonstrictly(operand, ctx);
+      if (obj instanceof ErrorValue) {
+        return obj;
+      }
+      obj = celValueConverter.toRuntimeValue(obj);
+
+      for (Qualifier qualifier : qualifiers) {
+        obj  = qualifier.qualify(obj);
+      }
+
+      // TODO: Handle unknowns
+
+      return obj;
+    }
+
+    @Override
+    public Attribute addQualifier(Qualifier qualifier) {
+      return new RelativeAttribute(
+              this.operand,
+              celValueConverter,
+              ImmutableList.<Qualifier>builderWithExpectedSize(
+                      qualifiers.size() + 1).addAll(this.qualifiers).add(qualifier).build()
+      );
+    }
+
+    RelativeAttribute(Interpretable operand, CelValueConverter celValueConverter) {
+      this(operand, celValueConverter, ImmutableList.of());
+    }
+
+    private RelativeAttribute(
+            Interpretable operand,
+            CelValueConverter celValueConverter,
+            ImmutableList<Qualifier> qualifiers) {
+      this.operand = operand;
+      this.celValueConverter = celValueConverter;
+      this.qualifiers = qualifiers;
+    }
+  }
 
   @Immutable
   final class MaybeAttribute implements Attribute {
@@ -95,7 +145,7 @@ interface Attribute {
         Object value = ctx.resolve(name);
         if (value != null) {
           if (!qualifiers.isEmpty()) {
-            return applyQualifiers(value, qualifiers);
+            return applyQualifiers(value, celValueConverter, qualifiers);
           } else {
             return value;
           }
@@ -125,29 +175,12 @@ interface Attribute {
       }
 
       return null;
+//      throw new IllegalArgumentException("Could not resolve variable.");
     }
 
-    private Object applyQualifiers(Object value, ImmutableList<Qualifier> qualifiers) {
-      Object obj = celValueConverter.toRuntimeValue(value);
-
-      for (Qualifier qualifier : qualifiers) {
-        obj = ((SelectableValue<Object>) obj).select(qualifier.value());
-      }
-
-      // TODO
-      if (obj instanceof CelValue) {
-        obj = celValueConverter.unwrap((CelValue) obj);
-      }
-
-      return obj;
-    }
 
     private ImmutableList<String> candidateVariableNames() {
       return namespacedNames;
-    }
-
-    private ImmutableList<Qualifier> qualifiers() {
-      return qualifiers;
     }
 
     @Override
@@ -176,5 +209,19 @@ interface Attribute {
       this.namespacedNames = namespacedNames;
       this.qualifiers = qualifiers;
     }
+  }
+
+  private static Object applyQualifiers(Object value, CelValueConverter celValueConverter, ImmutableList<Qualifier> qualifiers) {
+    Object obj = celValueConverter.toRuntimeValue(value);
+
+    for (Qualifier qualifier : qualifiers) {
+      obj = qualifier.qualify(obj);
+    }
+
+    if (obj instanceof CelValue) {
+      obj = celValueConverter.unwrap((CelValue) obj);
+    }
+
+    return obj;
   }
 }

@@ -27,11 +27,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.primitives.UnsignedLong;
-import com.google.protobuf.DescriptorProtos.FileDescriptorSet;
-import com.google.protobuf.Descriptors.Descriptor;
-import com.google.protobuf.Descriptors.FileDescriptor;
-import com.google.protobuf.ExtensionRegistry;
-import com.google.protobuf.Message;
 import com.google.testing.junit.testparameterinjector.TestParameter;
 import com.google.testing.junit.testparameterinjector.TestParameterInjector;
 import com.google.testing.junit.testparameterinjector.TestParameters;
@@ -74,11 +69,7 @@ import dev.cel.parser.CelStandardMacro;
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelFunctionBinding;
 import dev.cel.runtime.CelFunctionOverload;
-import dev.cel.runtime.CelRuntime;
-import dev.cel.runtime.CelRuntimeBuilder;
-import dev.cel.runtime.CelRuntimeLibrary;
-import dev.cel.runtime.CelStandardFunctions;
-import dev.cel.runtime.CelValueDispatcher;
+import dev.cel.runtime.DefaultDispatcher;
 import dev.cel.runtime.Program;
 import dev.cel.runtime.RuntimeEquality;
 import dev.cel.runtime.RuntimeHelpers;
@@ -93,7 +84,7 @@ import dev.cel.runtime.standard.LessOperator;
 import dev.cel.runtime.standard.LogicalNotOperator;
 import dev.cel.runtime.standard.NotStrictlyFalseFunction;
 import java.util.Optional;
-import java.util.function.Function;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -147,116 +138,12 @@ public final class ProgramPlannerTest {
           .addMessageTypes(TestAllTypes.getDescriptor())
           .build();
 
-  private static CelValueDispatcher.Builder addOptionalBindings(
-      CelValueDispatcher.Builder valueDispatcherBuilder) {
-    CelRuntimeBuilder runtimeBuilder =
-        new CelRuntimeBuilder() {
-          @Override
-          public CelRuntimeBuilder setOptions(CelOptions options) {
-            return null;
-          }
-
-          @Override
-          public CelRuntimeBuilder addFunctionBindings(CelFunctionBinding... bindings) {
-            return addFunctionBindings(ImmutableList.copyOf(bindings));
-          }
-
-          @Override
-          public CelRuntimeBuilder addFunctionBindings(Iterable<CelFunctionBinding> bindings) {
-            for (CelFunctionBinding binding : bindings) {
-              // TODO: Temp
-              if (binding.getFunctionName().isEmpty()) {
-                valueDispatcherBuilder.addOverload(binding);
-              } else {
-                addBindings(valueDispatcherBuilder, binding.getFunctionName(), binding);
-              }
-            }
-            return this;
-            // return this;
-          }
-
-          @Override
-          public CelRuntimeBuilder addMessageTypes(Descriptor... descriptors) {
-            return null;
-          }
-
-          @Override
-          public CelRuntimeBuilder addMessageTypes(Iterable<Descriptor> descriptors) {
-            return null;
-          }
-
-          @Override
-          public CelRuntimeBuilder addFileTypes(FileDescriptor... fileDescriptors) {
-            return null;
-          }
-
-          @Override
-          public CelRuntimeBuilder addFileTypes(Iterable<FileDescriptor> fileDescriptors) {
-            return null;
-          }
-
-          @Override
-          public CelRuntimeBuilder addFileTypes(FileDescriptorSet fileDescriptorSet) {
-            return null;
-          }
-
-          @Override
-          public CelRuntimeBuilder setTypeFactory(Function<String, Message.Builder> typeFactory) {
-            return null;
-          }
-
-          @Override
-          public CelRuntimeBuilder setValueProvider(CelValueProvider celValueProvider) {
-            return null;
-          }
-
-          @Override
-          public CelRuntimeBuilder setEvaluateLinkedMessageTypes(boolean value) {
-            return null;
-          }
-
-          @Override
-          public CelRuntimeBuilder setStandardEnvironmentEnabled(boolean value) {
-            return null;
-          }
-
-          @Override
-          public CelRuntimeBuilder setStandardFunctions(CelStandardFunctions standardFunctions) {
-            return null;
-          }
-
-          @Override
-          public CelRuntimeBuilder addLibraries(CelRuntimeLibrary... libraries) {
-            return null;
-          }
-
-          @Override
-          public CelRuntimeBuilder addLibraries(Iterable<? extends CelRuntimeLibrary> libraries) {
-            return null;
-          }
-
-          @Override
-          public CelRuntimeBuilder setExtensionRegistry(ExtensionRegistry extensionRegistry) {
-            return null;
-          }
-
-          @Override
-          public CelRuntime build() {
-            return null;
-          }
-        };
-
-    CelOptionalLibrary.INSTANCE.setRuntimeOptions(runtimeBuilder, RUNTIME_EQUALITY, CEL_OPTIONS);
-
-    return valueDispatcherBuilder;
-  }
-
   /**
    * Configure dispatcher for testing purposes. This is done manually here, but this should be
    * driven by the top-level runtime APIs in the future
    */
-  private static CelValueDispatcher newDispatcher() {
-    CelValueDispatcher.Builder builder = CelValueDispatcher.newBuilder();
+  private static DefaultDispatcher newDispatcher() {
+    DefaultDispatcher.Builder builder = DefaultDispatcher.newBuilder();
 
     // Subsetted StdLib
     addBindings(
@@ -315,20 +202,18 @@ public final class ProgramPlannerTest {
             CelByteString.class,
             ProgramPlannerTest::concatenateByteArrays));
 
-    addOptionalBindings(builder);
-
     return builder.build();
   }
 
   private static void addBindings(
-      CelValueDispatcher.Builder builder,
+      DefaultDispatcher.Builder builder,
       String functionName,
       CelFunctionBinding... functionBindings) {
     addBindings(builder, functionName, ImmutableSet.copyOf(functionBindings));
   }
 
   private static void addBindings(
-      CelValueDispatcher.Builder builder,
+      DefaultDispatcher.Builder builder,
       String functionName,
       ImmutableCollection<CelFunctionBinding> overloadBindings) {
     if (overloadBindings.isEmpty()) {
@@ -339,24 +224,34 @@ public final class ProgramPlannerTest {
     if (overloadBindings.size() == 1) {
       CelFunctionBinding singleBinding = Iterables.getOnlyElement(overloadBindings);
       builder.addOverload(
-          CelFunctionBinding.from(
-              functionName, singleBinding.getArgTypes(), singleBinding.getDefinition()));
+          functionName,
+              singleBinding.getArgTypes(),
+              singleBinding.isStrict(),
+              singleBinding.getDefinition());
     } else {
-      overloadBindings.forEach(builder::addOverload);
+      overloadBindings.forEach(x ->
+              builder.addOverload(x.getOverloadId(),
+                      x.getArgTypes(),
+                      x.isStrict(),
+                      x.getDefinition())
+      );
 
       // Setup dynamic dispatch
       CelFunctionOverload dynamicDispatchDef =
-          args -> {
-            for (CelFunctionBinding overload : overloadBindings) {
-              if (canHandle(args, overload)) {
-                return overload.getDefinition().apply(args);
-              }
-            }
+              args -> {
+                for (CelFunctionBinding overload : overloadBindings) {
+                  if (canHandle(args, overload)) {
+                    return overload.getDefinition().apply(args);
+                  }
+                }
 
-            throw new IllegalArgumentException("Overload not found: " + functionName);
-          };
+                throw new IllegalArgumentException("Overload not found: " + functionName);
+              };
 
-      builder.addDynamicDispatchOverload(functionName, dynamicDispatchDef);
+      builder.addOverload(functionName,
+              ImmutableList.of(),
+              /* isStrict = */ true,
+              dynamicDispatchDef);
     }
   }
 
@@ -687,13 +582,45 @@ public final class ProgramPlannerTest {
   }
 
   @Test
-  public void plan_select_mapIndex() throws Exception {
+  public void plan_select_onCreateStruct() throws Exception {
+    CelAbstractSyntaxTree ast = compile("cel.expr.conformance.proto3.TestAllTypes{ single_string: 'foo'}.single_string");
+    Program program = PLANNER.plan(ast);
+
+    Object result = program.eval();
+
+    assertThat(result).isEqualTo("foo");
+  }
+
+  @Test
+  public void plan_select_onCreateMap() throws Exception {
+    CelAbstractSyntaxTree ast = compile("{'foo':'bar'}.foo");
+    Program program = PLANNER.plan(ast);
+
+    Object result = program.eval();
+
+    assertThat(result).isEqualTo("bar");
+  }
+
+  @Test
+  public void plan_select_onMapVariable() throws Exception {
     CelAbstractSyntaxTree ast = compile("map_string_int.foo");
     Program program = PLANNER.plan(ast);
 
     Object result = program.eval(ImmutableMap.of("map_string_int", ImmutableMap.of("foo", 42L)));
 
     assertThat(result).isEqualTo(42L);
+  }
+
+  @Test
+  public void plan_select_presenceTest(@TestParameter PresenceTestCase testCase) throws Exception {
+    CelAbstractSyntaxTree ast = compile(testCase.expression);
+    Program program = PLANNER.plan(ast);
+
+    boolean result =
+            (boolean) program.eval(
+                    ImmutableMap.of("msg", testCase.inputParam));
+
+    assertThat(result).isEqualTo(testCase.expected);
   }
 
   @Test
@@ -725,26 +652,6 @@ public final class ProgramPlannerTest {
     assertThat(result).isTrue();
   }
 
-  @Test
-  public void mapIndex_onOptionalList_returnsOptionalValue() throws Exception {
-    CelAbstractSyntaxTree ast = compile("{'a': 2}['a']");
-    Program program = PLANNER.plan(ast);
-
-    Object result = program.eval();
-
-    assertThat(result).isEqualTo(2L);
-  }
-
-  @Test
-  public void optionalIndex_onOptionalList_returnsOptionalValue() throws Exception {
-    CelAbstractSyntaxTree ast = compile("{'a': 2}.?a");
-    Program program = PLANNER.plan(ast);
-
-    Optional<Long> result = (Optional<Long>) program.eval();
-
-    assertThat(result).hasValue(2L);
-  }
-
   private CelAbstractSyntaxTree compile(String expression) throws Exception {
     CelAbstractSyntaxTree ast = CEL_COMPILER.parse(expression).getAst();
     if (isParseOnly) {
@@ -774,73 +681,6 @@ public final class ProgramPlannerTest {
         standardFunction.newFunctionBindings(CEL_OPTIONS, RUNTIME_EQUALITY);
     return functionBindings;
   }
-
-  // private static CelValueFunctionBinding adaptBinding(CelFunctionBinding functionBinding) {
-  //   return CelValueFunctionBinding.from(
-  //       functionBinding.getOverloadId(),
-  //       adaptArgumentTypes(functionBinding.getArgTypes()),
-  //       celValueArgs -> {
-  //         Object[] nativeArgs = new Object[celValueArgs.length];
-  //         for (int i = 0; i < celValueArgs.length; i++) {
-  //           nativeArgs[i] = CEL_VALUE_CONVERTER.fromCelValueToJavaObject(celValueArgs[i]);
-  //         }
-  //
-  //         Object nativeResult;
-  //         try {
-  //           nativeResult = functionBinding.getDefinition().apply(nativeArgs);
-  //         } catch (CelRuntimeException e) {
-  //           throw e;
-  //         } catch (CelEvaluationException e) {
-  //           throw new CelRuntimeException(e.getCause(), e.getErrorCode());
-  //         }
-  //         return CEL_VALUE_CONVERTER.fromJavaObjectToCelValue(nativeResult);
-  //       });
-  // }
-
-  // private static ImmutableList<Class<? extends CelValue>> adaptArgumentTypes(
-  //     ImmutableList<Class<?>> argTypes) {
-  //   ImmutableList.Builder<Class<? extends CelValue>> builder = ImmutableList.builder();
-  //
-  //   for (Class<?> argType : argTypes) {
-  //     if (argType.equals(String.class)) {
-  //       builder.add(StringValue.class);
-  //     } else if (argType.equals(Long.class)) {
-  //       builder.add(IntValue.class);
-  //     } else if (argType.equals(Double.class)) {
-  //       builder.add(DoubleValue.class);
-  //     } else if (argType.equals(Boolean.class)) {
-  //       builder.add(BoolValue.class);
-  //     } else if (argType.equals(UnsignedLong.class)) {
-  //       builder.add(UintValue.class);
-  //     } else if (argType.equals(CelByteString.class)) {
-  //       builder.add(BytesValue.class);
-  //     } else if (argType.equals(Instant.class)) {
-  //       builder.add(TimestampValue.class);
-  //     } else if (argType.equals(Duration.class)) {
-  //       builder.add(DurationValue.class);
-  //     } else if (Collection.class.isAssignableFrom(argType)) {
-  //       builder.add(ListValue.class);
-  //     } else if (Map.class.isAssignableFrom(argType)) {
-  //       builder.add(MapValue.class);
-  //     } else if (CelType.class.isAssignableFrom(argType)) {
-  //       builder.add(TypeValue.class);
-  //     } else if (argType.equals(NullValue.class)) {
-  //       builder.add(NullValue.class);
-  //     } else if (argType.equals(Object.class)
-  //         ||
-  //         // Using Number.class was probably a mistake (see index_list). This particular overload
-  //         // will benefit from a concrete definition.
-  //         argType.equals(Number.class)) {
-  //       builder.add(CelValue.class);
-  //     } else if (argType.equals(Optional.class)) {
-  //       builder.add(OptionalValue.class);
-  //     } else {
-  //       // In all likelihood -- we should probably do an OpaqueValue here
-  //       throw new IllegalArgumentException("Unknown argument type: " + argType);
-  //     }
-  //   }
-  //   return builder.build();
-  // }
 
   @SuppressWarnings("ImmutableEnumChecker") // Test only
   private enum ConstantTestCase {
@@ -886,6 +726,24 @@ public final class ProgramPlannerTest {
     TypeLiteralTestCase(String expression, CelType type) {
       this.expression = expression;
       this.type = TypeType.create(type);
+    }
+  }
+
+  private enum PresenceTestCase {
+    PROTO_FIELD_PRESENT("has(msg.single_string)", TestAllTypes.newBuilder().setSingleString("foo").build(), true),
+    PROTO_FIELD_ABSENT("has(msg.single_string)", TestAllTypes.newBuilder().build(), false),
+    PROTO_NESTED_FIELD_PRESENT("has(msg.single_nested_message.bb)", TestAllTypes.newBuilder().setSingleNestedMessage(NestedMessage.newBuilder().setBb(42).build()).build(), true),
+    PROTO_NESTED_FIELD_ABSENT("has(msg.single_nested_message.bb)", TestAllTypes.newBuilder().build(), false),
+    ;
+
+    private final String expression;
+    private final Object inputParam;
+    private final Object expected;
+
+    PresenceTestCase(String expression, Object inputParam, Object expected) {
+      this.expression = expression;
+      this.inputParam = inputParam;
+      this.expected = expected;
     }
   }
 }

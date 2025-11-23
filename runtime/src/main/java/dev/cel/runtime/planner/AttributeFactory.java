@@ -19,8 +19,10 @@ import com.google.errorprone.annotations.Immutable;
 import dev.cel.common.CelContainer;
 import dev.cel.common.types.CelTypeProvider;
 import dev.cel.common.values.CelValueConverter;
+import dev.cel.runtime.Interpretable;
 import dev.cel.runtime.planner.Attribute.MaybeAttribute;
 import dev.cel.runtime.planner.Attribute.NamespacedAttribute;
+import dev.cel.runtime.planner.Attribute.RelativeAttribute;
 import dev.cel.runtime.planner.Qualifier.StringQualifier;
 
 @Immutable
@@ -29,6 +31,10 @@ final class AttributeFactory {
   private final CelContainer unusedContainer;
   private final CelTypeProvider typeProvider;
   private final CelValueConverter celValueConverter;
+
+  RelativeAttribute newRelativeAttribute(Interpretable operand) {
+    return new RelativeAttribute(operand, celValueConverter);
+  }
 
   NamespacedAttribute newAbsoluteAttribute(String... names) {
     return new NamespacedAttribute(typeProvider, celValueConverter, ImmutableList.copyOf(names));

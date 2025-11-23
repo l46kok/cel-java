@@ -14,6 +14,7 @@ java_library(
     ],
     deps = [
         ":attribute",
+        ":eval_presence_test",
         ":eval_and",
         ":eval_attribute",
         ":eval_const",
@@ -27,6 +28,7 @@ java_library(
         ":eval_zero_arity",
         ":planned_program",
         ":qualifier",
+        ":interpretable_attribute",
         "//:auto_value",
         "//common:cel_ast",
         "//common:container",
@@ -37,6 +39,8 @@ java_library(
         "//common/types:type_providers",
         "//common/values",
         "//common/values:cel_value_provider",
+        "//runtime:resolved_overload",
+        "//runtime:dispatcher",
         "//runtime:cel_value_dispatcher",
         "//runtime:evaluation_exception",
         "//runtime:evaluation_exception_builder",
@@ -83,18 +87,30 @@ java_library(
 )
 
 java_library(
+    name = "interpretable_attribute",
+    srcs = ["InterpretableAttribute.java"],
+    deps = [
+        ":qualifier",
+        "//runtime:interpretable",
+        "@maven//:com_google_errorprone_error_prone_annotations",
+    ]
+)
+
+java_library(
     name = "attribute",
     srcs = [
         "Attribute.java",
         "AttributeFactory.java",
     ],
     deps = [
+        ":eval_helpers",
         ":qualifier",
         "//common:container",
         "//common/types",
         "//common/types:type_providers",
         "//common/values",
         "//common/values:cel_value",
+        "//runtime:evaluation_exception",
         "//runtime:interpretable",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
@@ -106,6 +122,8 @@ java_library(
     srcs = ["Qualifier.java"],
     deps = [
         "@maven//:com_google_errorprone_error_prone_annotations",
+                    "//common/values",
+                    "//common/values:cel_value",
     ],
 )
 
@@ -115,6 +133,8 @@ java_library(
     deps = [
         ":attribute",
         ":qualifier",
+        ":interpretable_attribute",
+        "//runtime:evaluation_exception",
         "//runtime:evaluation_listener",
         "//runtime:function_resolver",
         "//runtime:interpretable",
@@ -124,9 +144,28 @@ java_library(
 )
 
 java_library(
+    name = "eval_presence_test",
+    srcs = ["EvalPresenceTest.java"],
+    deps = [
+        "//common/values",
+        ":interpretable_attribute",
+        ":attribute",
+        ":qualifier",
+        "//runtime:evaluation_exception",
+        "//runtime:evaluation_listener",
+        "//runtime:function_resolver",
+        "//runtime:interpretable",
+        "@maven//:com_google_errorprone_error_prone_annotations",
+        "@maven//:com_google_guava_guava",
+    ],
+)
+
+
+java_library(
     name = "eval_zero_arity",
     srcs = ["EvalZeroArity.java"],
     deps = [
+        "//runtime:resolved_overload",
         "//runtime:evaluation_exception",
         "//runtime:evaluation_listener",
         "//runtime:function_binding",
@@ -139,6 +178,7 @@ java_library(
     name = "eval_unary",
     srcs = ["EvalUnary.java"],
     deps = [
+        "//runtime:resolved_overload",
         "//runtime:evaluation_exception",
         "//runtime:evaluation_listener",
         "//runtime:function_binding",
@@ -151,6 +191,7 @@ java_library(
     name = "eval_var_args_call",
     srcs = ["EvalVarArgsCall.java"],
     deps = [
+        "//runtime:resolved_overload",
         "//runtime:evaluation_exception",
         "//runtime:evaluation_listener",
         "//runtime:function_binding",

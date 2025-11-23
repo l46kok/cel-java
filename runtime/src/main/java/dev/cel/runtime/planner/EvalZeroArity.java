@@ -16,14 +16,14 @@ package dev.cel.runtime.planner;
 
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelEvaluationListener;
-import dev.cel.runtime.CelFunctionBinding;
 import dev.cel.runtime.CelFunctionResolver;
 import dev.cel.runtime.GlobalResolver;
 import dev.cel.runtime.Interpretable;
+import dev.cel.runtime.CelResolvedOverload;
 
 final class EvalZeroArity implements Interpretable {
 
-  private final CelFunctionBinding resolvedOverload;
+  private final CelResolvedOverload resolvedOverload;
 
   @Override
   public Object eval(GlobalResolver resolver) throws CelEvaluationException {
@@ -51,11 +51,11 @@ final class EvalZeroArity implements Interpretable {
     return null;
   }
 
-  static EvalZeroArity create(CelFunctionBinding resolvedOverload) {
+  static EvalZeroArity create(CelResolvedOverload resolvedOverload) {
     return new EvalZeroArity(resolvedOverload);
   }
 
-  private EvalZeroArity(CelFunctionBinding resolvedOverload) {
+  private EvalZeroArity(CelResolvedOverload resolvedOverload) {
     this.resolvedOverload = resolvedOverload;
   }
 }
