@@ -31,5 +31,15 @@ public final class CelRuntimeFactory {
         .setStandardEnvironmentEnabled(true);
   }
 
+  public static CelRuntimeBuilder plannerCelRuntimeBuilder() {
+    return CelRuntimeImpl.newBuilder()
+            .setOptions(CelOptions.current()
+                    .enableTimestampEpoch(true)
+                    .enableHeterogeneousNumericComparisons(true)
+                    .build()
+            )
+            ;
+  }
+
   private CelRuntimeFactory() {}
 }

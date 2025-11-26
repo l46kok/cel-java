@@ -15,6 +15,7 @@
 package dev.cel.runtime.planner;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.errorprone.annotations.Immutable;
 import dev.cel.common.CelContainer;
 import dev.cel.common.types.CelTypeProvider;
@@ -28,29 +29,26 @@ import dev.cel.runtime.planner.Qualifier.StringQualifier;
 @Immutable
 final class AttributeFactory {
 
-  private final CelContainer unusedContainer;
+  private final CelContainer container;
   private final CelTypeProvider typeProvider;
   private final CelValueConverter celValueConverter;
 
   NamespacedAttribute newAbsoluteAttribute(String... names) {
-    return new NamespacedAttribute(typeProvider, celValueConverter, ImmutableList.copyOf(names));
+    return new NamespacedAttribute(typeProvider, celValueConverter, ImmutableSet.copyOf(names));
   }
 
   RelativeAttribute newRelativeAttribute(Interpretable operand) {
     return new RelativeAttribute(operand, celValueConverter);
   }
 
-  MaybeAttribute newMaybeAttribute(String... names) {
-    // TODO: Resolve container names
+  MaybeAttribute newMaybeAttribute(String name) {
     return new MaybeAttribute(
         this,
         ImmutableList.of(
-            new NamespacedAttribute(typeProvider, celValueConverter, ImmutableList.copyOf(names))));
+            new NamespacedAttribute(typeProvider, celValueConverter, container.resolveCandidateNames(name))));
   }
 
   Qualifier newQualifier(String value) {
-    // TODO: Handle checked
-
     return new StringQualifier(value);
   }
 
@@ -63,7 +61,7 @@ final class AttributeFactory {
 
   private AttributeFactory(
       CelContainer container, CelTypeProvider typeProvider, CelValueConverter celValueConverter) {
-    this.unusedContainer = container;
+    this.container = container;
     this.typeProvider = typeProvider;
     this.celValueConverter = celValueConverter;
   }

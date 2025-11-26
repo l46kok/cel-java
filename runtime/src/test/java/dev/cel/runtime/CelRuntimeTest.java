@@ -43,6 +43,7 @@ import dev.cel.common.ast.CelExpr;
 import dev.cel.common.ast.CelExpr.ExprKind.Kind;
 import dev.cel.common.types.CelV1AlphaTypes;
 import dev.cel.common.types.ListType;
+import dev.cel.common.types.MapType;
 import dev.cel.common.types.SimpleType;
 import dev.cel.common.types.StructTypeReference;
 import dev.cel.compiler.CelCompiler;
@@ -732,5 +733,17 @@ public class CelRuntimeTest {
     assertThat(e)
         .hasMessageThat()
         .contains("No matching overload for function 'size'. Overload candidates: size_string");
+  }
+
+  @Test
+  public void foo() throws Exception {
+    Cel cel = CelFactory.standardCelBuilder()
+            .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
+            .addVar("map_var", MapType.create(SimpleType.DYN, SimpleType.DYN)).build();
+    CelAbstractSyntaxTree ast = cel.compile("has(map_var.foo)").getAst();
+
+    Object result =  cel.createProgram(ast).eval(ImmutableMap.of("map_var", ImmutableMap.of("foo", "bar")));
+
+    assertThat(result).isEqualTo("test");
   }
 }

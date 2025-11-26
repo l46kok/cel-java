@@ -19,6 +19,8 @@ import dev.cel.runtime.CelEvaluationListener;
 import dev.cel.runtime.CelFunctionResolver;
 import dev.cel.runtime.GlobalResolver;
 
+import static dev.cel.runtime.planner.Attribute.MissingAttribute;
+
 @Immutable
 final class EvalAttribute implements InterpretableAttribute {
 
@@ -26,7 +28,12 @@ final class EvalAttribute implements InterpretableAttribute {
 
   @Override
   public Object eval(GlobalResolver resolver) {
-    return attr.resolve(resolver);
+    Object resolved = attr.resolve(resolver);
+    if (resolved instanceof MissingAttribute) {
+      ((MissingAttribute) resolved).resolve(resolver);
+    }
+
+    return resolved;
   }
 
   @Override

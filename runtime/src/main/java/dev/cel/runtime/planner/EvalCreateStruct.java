@@ -15,7 +15,7 @@
 package dev.cel.runtime.planner;
 
 import com.google.errorprone.annotations.Immutable;
-import dev.cel.common.types.StructType;
+import dev.cel.common.types.StructTypeReference;
 import dev.cel.common.values.CelValueProvider;
 import dev.cel.common.values.StructValue;
 import dev.cel.runtime.CelEvaluationException;
@@ -31,7 +31,7 @@ import java.util.Map;
 final class EvalCreateStruct implements Interpretable {
 
   private final CelValueProvider valueProvider;
-  private final StructType structType;
+  private final StructTypeReference structType;
 
   // Array contents are not mutated
   @SuppressWarnings("Immutable")
@@ -85,7 +85,7 @@ final class EvalCreateStruct implements Interpretable {
 
   static EvalCreateStruct create(
       CelValueProvider valueProvider,
-      StructType structType,
+      StructTypeReference structType,
       String[] keys,
       Interpretable[] values) {
     return new EvalCreateStruct(valueProvider, structType, keys, values);
@@ -93,7 +93,7 @@ final class EvalCreateStruct implements Interpretable {
 
   private EvalCreateStruct(
       CelValueProvider valueProvider,
-      StructType structType,
+      StructTypeReference structType,
       String[] keys,
       Interpretable[] values) {
     this.valueProvider = valueProvider;

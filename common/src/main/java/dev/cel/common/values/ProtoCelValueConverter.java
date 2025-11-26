@@ -82,7 +82,13 @@ public final class ProtoCelValueConverter extends BaseProtoCelValueConverter {
     }
 
     if (value instanceof MessageOrBuilder) {
-      MessageOrBuilder message = (MessageOrBuilder) value;
+      Message message;
+      if (value instanceof Message.Builder) {
+        message = ((Message.Builder) value).build();
+      } else {
+        message = (Message) value;
+      }
+
       // Attempt to convert the proto from a dynamic message into a concrete message if possible.
       if (message instanceof DynamicMessage) {
         message = dynamicProto.maybeAdaptDynamicMessage((DynamicMessage) message);
@@ -91,7 +97,7 @@ public final class ProtoCelValueConverter extends BaseProtoCelValueConverter {
       WellKnownProto wellKnownProto =
           WellKnownProto.getByTypeName(message.getDescriptorForType().getFullName()).orElse(null);
       if (wellKnownProto == null) {
-        return ProtoMessageValue.create((Message) message, celDescriptorPool, this);
+        return ProtoMessageValue.create(message, celDescriptorPool, this);
       }
 
       return fromWellKnownProto(message, wellKnownProto);

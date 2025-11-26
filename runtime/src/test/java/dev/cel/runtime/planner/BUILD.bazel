@@ -15,6 +15,7 @@ java_library(
     deps = [
         "//:java_truth",
         "//common:cel_ast",
+        "//common:container",
         "//common:cel_descriptor_util",
         "//common:cel_source",
         "//common:compiler_common",

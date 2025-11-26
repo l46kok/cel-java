@@ -31,6 +31,7 @@ import com.google.testing.junit.testparameterinjector.TestParameter;
 import com.google.testing.junit.testparameterinjector.TestParameterInjector;
 import com.google.testing.junit.testparameterinjector.TestParameters;
 import dev.cel.common.CelAbstractSyntaxTree;
+import dev.cel.common.CelContainer;
 import dev.cel.common.CelDescriptorUtil;
 import dev.cel.common.CelErrorCode;
 import dev.cel.common.CelOptions;
@@ -107,10 +108,14 @@ public final class ProgramPlannerTest {
       ProtoMessageValueProvider.newInstance(CEL_OPTIONS, DYNAMIC_PROTO);
   private static final CelValueConverter CEL_VALUE_CONVERTER =
       ProtoCelValueConverter.newInstance(DESCRIPTOR_POOL, DYNAMIC_PROTO);
+  private static final CelContainer CEL_CONTAINER = CelContainer
+          .newBuilder()
+          .setName("cel.expr.conformance.proto3")
+          .addAbbreviations("really.long.abbr").build();
 
   private static final ProgramPlanner PLANNER =
       ProgramPlanner.newPlanner(
-          TYPE_PROVIDER, VALUE_PROVIDER, newDispatcher(), CEL_VALUE_CONVERTER);
+          TYPE_PROVIDER, VALUE_PROVIDER, newDispatcher(), CEL_VALUE_CONVERTER, CEL_CONTAINER);
 
   private static final CelCompiler CEL_COMPILER =
       CelCompilerFactory.standardCelCompilerBuilder()
@@ -118,7 +123,9 @@ public final class ProgramPlannerTest {
           .addVar("map_var", MapType.create(SimpleType.STRING, SimpleType.DYN))
           .addVar("int_var", SimpleType.INT)
           .addVar("dyn_var", SimpleType.DYN)
+          .addVar("really.long.abbr.ident", SimpleType.DYN)
           .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
+          .setContainer(CEL_CONTAINER)
           .addFunctionDeclarations(
               newFunctionDeclaration("zero", newGlobalOverload("zero_overload", SimpleType.INT)),
               newFunctionDeclaration("error", newGlobalOverload("error_overload", SimpleType.INT)),
@@ -126,6 +133,9 @@ public final class ProgramPlannerTest {
                   "neg",
                   newGlobalOverload("neg_int", SimpleType.INT, SimpleType.INT),
                   newGlobalOverload("neg_double", SimpleType.DOUBLE, SimpleType.DOUBLE)),
+              newFunctionDeclaration(
+                          "cel.expr.conformance.proto3.power",
+                  newGlobalOverload("power_int_int", SimpleType.INT, SimpleType.INT, SimpleType.INT)),
               newFunctionDeclaration(
                   "concat",
                   newGlobalOverload(
@@ -186,6 +196,10 @@ public final class ProgramPlannerTest {
         "neg",
         CelFunctionBinding.from("neg_int", Long.class, arg -> -arg),
         CelFunctionBinding.from("neg_double", Double.class, arg -> -arg));
+    addBindings(
+            builder,
+            "cel.expr.conformance.proto3.power",
+            CelFunctionBinding.from("power_int_int", Long.class, Long.class, (value, power) ->  (long) Math.pow(value, power)));
     addBindings(
         builder,
         "concat",
@@ -322,6 +336,16 @@ public final class ProgramPlannerTest {
   }
 
   @Test
+  public void plan_ident_withContainer() throws Exception {
+    CelAbstractSyntaxTree ast = compile("abbr.ident");
+    Program program = PLANNER.plan(ast);
+
+    Object result = program.eval(ImmutableMap.of("really.long.abbr.ident", 1L));
+
+    assertThat(result).isEqualTo(1);
+  }
+
+  @Test
   @SuppressWarnings("unchecked") // test only
   public void plan_createList() throws Exception {
     CelAbstractSyntaxTree ast = compile("[1, 'foo', true, [2, false]]");
@@ -377,6 +401,16 @@ public final class ProgramPlannerTest {
 
     assertThat(result)
         .isEqualTo(TestAllTypes.newBuilder().setSingleString("foo").setSingleBool(true).build());
+  }
+
+  @Test
+  public void plan_createStruct_withContainer() throws Exception {
+    CelAbstractSyntaxTree ast = compile("TestAllTypes{}");
+    Program program = PLANNER.plan(ast);
+
+    TestAllTypes result = (TestAllTypes) program.eval();
+
+    assertThat(result).isEqualTo(TestAllTypes.getDefaultInstance());
   }
 
   @Test
@@ -557,6 +591,22 @@ public final class ProgramPlannerTest {
   }
 
   @Test
+  @TestParameters("{expression: 'power(2,3)'}")
+  @TestParameters("{expression: 'proto3.power(2,3)'}")
+  @TestParameters("{expression: 'conformance.proto3.power(2,3)'}")
+  @TestParameters("{expression: 'expr.conformance.proto3.power(2,3)'}")
+  @TestParameters("{expression: 'cel.expr.conformance.proto3.power(2,3)'}")
+  public void plan_call_withContainer(String expression) throws Exception {
+    CelAbstractSyntaxTree ast = compile(expression); // invokes cel.expr.conformance.proto3.power
+    Program program = PLANNER.plan(ast);
+
+
+    Long result = (Long) program.eval();
+
+    assertThat(result).isEqualTo(8);
+  }
+
+  @Test
   public void plan_select_protoMessageField() throws Exception {
     CelAbstractSyntaxTree ast = compile("msg.single_string");
     Program program = PLANNER.plan(ast);
@@ -578,7 +628,7 @@ public final class ProgramPlannerTest {
     Object result =
         program.eval(
             ImmutableMap.of(
-                "msg", TestAllTypes.newBuilder().setSingleNestedMessage(nestedMessage).build()));
+                "msg", TestAllTypes.newBuilder().setSingleNestedMessage(nestedMessage)));
 
     assertThat(result).isEqualTo(nestedMessage);
   }
@@ -641,11 +691,40 @@ public final class ProgramPlannerTest {
   }
 
   @Test
+  public void plan_select_mapVarInputVarMissing_throws() throws Exception {
+    CelAbstractSyntaxTree ast = compile("map_var.foo");
+    Program program = PLANNER.plan(ast);
+    String errorMessage = "evaluation error: No such attribute(s): ";
+    if (isParseOnly) {
+      errorMessage += "cel.expr.conformance.proto3.map_var, cel.expr.conformance.map_var, cel.expr.map_var, cel.map_var, map_var";
+    } else {
+      errorMessage += "map_var";
+    }
+
+    CelEvaluationException e = assertThrows(CelEvaluationException.class, () -> program.eval(ImmutableMap.of()));
+
+    assertThat(e).hasMessageThat().contains(errorMessage);
+  }
+
+  @Test
+  public void plan_select_mapVarKeyMissing_throws() throws Exception {
+    CelAbstractSyntaxTree ast = compile("map_var.foo");
+    Program program = PLANNER.plan(ast);
+
+    CelEvaluationException e = assertThrows(CelEvaluationException.class, () -> program.eval(ImmutableMap.of("map_var", ImmutableMap.of())));
+    assertThat(e).hasMessageThat().contains("evaluation error: No such key: foo");
+  }
+
+  @Test
   public void plan_select_presenceTest(@TestParameter PresenceTestCase testCase) throws Exception {
     CelAbstractSyntaxTree ast = compile(testCase.expression);
     Program program = PLANNER.plan(ast);
 
-    boolean result = (boolean) program.eval(ImmutableMap.of("msg", testCase.inputParam));
+    boolean result = (boolean) program.eval(
+            ImmutableMap.of("msg", testCase.inputParam,
+                    "map_var", testCase.inputParam
+            )
+    );
 
     assertThat(result).isEqualTo(testCase.expected);
   }
@@ -764,6 +843,10 @@ public final class ProgramPlannerTest {
         true),
     PROTO_NESTED_FIELD_ABSENT(
         "has(msg.single_nested_message.bb)", TestAllTypes.newBuilder().build(), false),
+    PROTO_MAP_KEY_PRESENT(
+            "has(map_var.foo)", ImmutableMap.of("foo", "1"), true),
+    PROTO_MAP_KEY_ABSENT(
+            "has(map_var.bar)", ImmutableMap.of(), false)
     ;
 
     private final String expression;

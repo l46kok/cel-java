@@ -20,6 +20,7 @@ java_library(
         exclude = [
             "CelLiteInterpreterTest.java",
             "CelValueInterpreterTest.java",
+            "PlannerInterpreterTest.java",
             "InterpreterTest.java",
         ] + ANDROID_TESTS,
     ),
@@ -133,6 +134,23 @@ java_library(
     ],
 )
 
+java_library(
+    name = "planner_interpreter_test",
+    testonly = 1,
+    srcs = [
+        "PlannerInterpreterTest.java",
+    ],
+    deps = [
+        #         "//java/com/google/testing/testsize:annotations",
+        "//extensions",
+        "//runtime",
+        "//testing:base_interpreter_test",
+        "@maven//:junit_junit",
+        "@maven//:com_google_testparameterinjector_test_parameter_injector",
+    ],
+)
+
+
 cel_android_local_test(
     name = "android_tests",
     srcs = ANDROID_TESTS,
@@ -201,6 +219,7 @@ junit4_test_suites(
         ":cel_lite_interpreter_test",
         ":cel_value_interpreter_test",
         ":interpreter_test",
+        ":planner_interpreter_test",
         ":tests",
     ],
 )

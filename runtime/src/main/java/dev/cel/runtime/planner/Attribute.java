@@ -14,7 +14,9 @@
 
 package dev.cel.runtime.planner;
 
+import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.errorprone.annotations.Immutable;
 import dev.cel.common.types.CelType;
 import dev.cel.common.types.CelTypeProvider;
@@ -25,7 +27,10 @@ import dev.cel.common.values.CelValueConverter;
 import dev.cel.common.values.ErrorValue;
 import dev.cel.runtime.GlobalResolver;
 import dev.cel.runtime.Interpretable;
+
+import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Set;
 
 @Immutable
 interface Attribute {
@@ -89,15 +94,24 @@ interface Attribute {
 
     @Override
     public Object resolve(GlobalResolver ctx) {
+      MissingAttribute maybeError = null;
       for (NamespacedAttribute attr : attributes) {
         Object value = attr.resolve(ctx);
-        if (value != null) {
-          return value;
+        if (value == null) {
+          continue;
         }
+
+        if (value instanceof MissingAttribute) {
+          maybeError = (MissingAttribute) value;
+          // When the variable is missing in a maybe attribute, defer erroring.
+          // The variable may exist in other namespaced attributes.
+          continue;
+        }
+
+        return value;
       }
 
-      // TODO: Handle unknowns
-      throw new UnsupportedOperationException("Unknown attributes is not supported yet");
+      return maybeError;
     }
 
     @Override
@@ -134,7 +148,7 @@ interface Attribute {
 
   @Immutable
   final class NamespacedAttribute implements Attribute {
-    private final ImmutableList<String> namespacedNames;
+    private final ImmutableSet<String> namespacedNames;
     private final ImmutableList<Qualifier> qualifiers;
     private final CelValueConverter celValueConverter;
     private final CelTypeProvider typeProvider;
@@ -174,11 +188,10 @@ interface Attribute {
         }
       }
 
-      return null;
-      //      throw new IllegalArgumentException("Could not resolve variable.");
+      return MissingAttribute.newMissingAttribute(namespacedNames);
     }
 
-    private ImmutableList<String> candidateVariableNames() {
+    private ImmutableSet<String> candidateVariableNames() {
       return namespacedNames;
     }
 
@@ -194,19 +207,46 @@ interface Attribute {
     NamespacedAttribute(
         CelTypeProvider typeProvider,
         CelValueConverter celValueConverter,
-        ImmutableList<String> namespacedNames) {
+        ImmutableSet<String> namespacedNames) {
       this(typeProvider, celValueConverter, namespacedNames, ImmutableList.of());
     }
 
     private NamespacedAttribute(
         CelTypeProvider typeProvider,
         CelValueConverter celValueConverter,
-        ImmutableList<String> namespacedNames,
+        ImmutableSet<String> namespacedNames,
         ImmutableList<Qualifier> qualifiers) {
       this.typeProvider = typeProvider;
       this.celValueConverter = celValueConverter;
       this.namespacedNames = namespacedNames;
       this.qualifiers = qualifiers;
+    }
+  }
+
+  final class MissingAttribute implements Attribute {
+
+    private static final Joiner JOINER = Joiner.on(", ");
+
+    private final String errorMessage;
+
+    @Override
+    public Object resolve(GlobalResolver ctx) {
+      throw new IllegalArgumentException(errorMessage);
+    }
+
+    @Override
+    public Attribute addQualifier(Qualifier qualifier) {
+      throw new UnsupportedOperationException("Unsupported operation");
+    }
+
+    private static MissingAttribute newMissingAttribute(Set<String> attributeName) {
+      return new MissingAttribute(
+              String.format("No such attribute(s): %s", JOINER.join(attributeName))
+      );
+    }
+
+    private MissingAttribute(String errorMessage) {
+      this.errorMessage = errorMessage;
     }
   }
 

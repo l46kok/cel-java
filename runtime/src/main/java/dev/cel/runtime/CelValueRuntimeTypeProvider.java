@@ -24,6 +24,7 @@ import dev.cel.common.annotations.Internal;
 import dev.cel.common.values.BaseProtoCelValueConverter;
 import dev.cel.common.values.BaseProtoMessageValueProvider;
 import dev.cel.common.values.CelValue;
+import dev.cel.common.values.CelValueConverter;
 import dev.cel.common.values.CelValueProvider;
 import dev.cel.common.values.CombinedCelValueProvider;
 import dev.cel.common.values.SelectableValue;
@@ -36,12 +37,12 @@ import java.util.NoSuchElementException;
 final class CelValueRuntimeTypeProvider implements RuntimeTypeProvider {
 
   private final CelValueProvider valueProvider;
-  private final BaseProtoCelValueConverter protoCelValueConverter;
-  private static final BaseProtoCelValueConverter DEFAULT_CEL_VALUE_CONVERTER =
+  private final CelValueConverter protoCelValueConverter;
+  private static final CelValueConverter DEFAULT_CEL_VALUE_CONVERTER =
       new BaseProtoCelValueConverter() {};
 
   static CelValueRuntimeTypeProvider newInstance(CelValueProvider valueProvider) {
-    BaseProtoCelValueConverter converter = DEFAULT_CEL_VALUE_CONVERTER;
+    CelValueConverter converter = DEFAULT_CEL_VALUE_CONVERTER;
 
     // Find the underlying ProtoCelValueConverter.
     // This is required because DefaultInterpreter works with a resolved protobuf messages directly
@@ -49,13 +50,12 @@ final class CelValueRuntimeTypeProvider implements RuntimeTypeProvider {
     // A new runtime should not directly depend on protobuf, thus this will not be needed in the
     // future.
     if (valueProvider instanceof BaseProtoMessageValueProvider) {
-      converter = ((BaseProtoMessageValueProvider) valueProvider).protoCelValueConverter();
+      converter = valueProvider.celValueConverter();
     } else if (valueProvider instanceof CombinedCelValueProvider) {
       converter =
           ((CombinedCelValueProvider) valueProvider)
               .valueProviders().stream()
-                  .filter(p -> p instanceof BaseProtoMessageValueProvider)
-                  .map(p -> ((BaseProtoMessageValueProvider) p).protoCelValueConverter())
+                  .map(p -> p.celValueConverter())
                   .findFirst()
                   .orElse(DEFAULT_CEL_VALUE_CONVERTER);
     }
@@ -152,7 +152,7 @@ final class CelValueRuntimeTypeProvider implements RuntimeTypeProvider {
   }
 
   private CelValueRuntimeTypeProvider(
-      CelValueProvider valueProvider, BaseProtoCelValueConverter protoCelValueConverter) {
+      CelValueProvider valueProvider, CelValueConverter protoCelValueConverter) {
     this.valueProvider = checkNotNull(valueProvider);
     this.protoCelValueConverter = checkNotNull(protoCelValueConverter);
   }

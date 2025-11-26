@@ -144,7 +144,7 @@ public class CelLiteRuntimeAndroidTest {
         (LiteRuntimeImpl.Builder) runtime.toRuntimeBuilder();
 
     assertThat(newRuntimeBuilder.celOptions).isEqualTo(celOptions);
-    assertThat(newRuntimeBuilder.celValueProvider).isSameInstanceAs(celValueProvider);
+    assertThat(newRuntimeBuilder.customValueProvider).isSameInstanceAs(celValueProvider);
     assertThat(newRuntimeBuilder.runtimeLibrariesBuilder.build()).containsExactly(runtimeExtension);
     assertThat(newRuntimeBuilder.standardFunctionBuilder.build())
         .containsExactly(intFunction, equalsOperator)
