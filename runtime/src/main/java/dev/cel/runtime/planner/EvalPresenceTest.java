@@ -19,10 +19,9 @@ import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelEvaluationListener;
 import dev.cel.runtime.CelFunctionResolver;
 import dev.cel.runtime.GlobalResolver;
-import dev.cel.runtime.planner.Qualifier.PresenceTestQualifier;
 
 @Immutable
-final class EvalPresenceTest implements InterpretableAttribute {
+final class EvalPresenceTest extends InterpretableAttribute {
 
   private final InterpretableAttribute attr;
 
@@ -32,9 +31,9 @@ final class EvalPresenceTest implements InterpretableAttribute {
   }
 
   @Override
-  public EvalPresenceTest addQualifier(Qualifier qualifier) {
+  public EvalPresenceTest addQualifier(long exprId, Qualifier qualifier) {
     PresenceTestQualifier presenceTestQualifier = new PresenceTestQualifier(qualifier.value());
-    return new EvalPresenceTest(attr.addQualifier(presenceTestQualifier));
+    return new EvalPresenceTest(exprId(), attr.addQualifier(exprId, presenceTestQualifier));
   }
 
   @Override
@@ -58,11 +57,12 @@ final class EvalPresenceTest implements InterpretableAttribute {
     throw new UnsupportedOperationException("Not yet supported");
   }
 
-  static EvalPresenceTest create(InterpretableAttribute attr) {
-    return new EvalPresenceTest(attr);
+  static EvalPresenceTest create(long exprId, InterpretableAttribute attr) {
+    return new EvalPresenceTest(exprId, attr);
   }
 
-  private EvalPresenceTest(InterpretableAttribute attr) {
+  private EvalPresenceTest(long exprId, InterpretableAttribute attr) {
+    super(exprId);
     this.attr = attr;
   }
 }

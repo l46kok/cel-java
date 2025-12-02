@@ -11,6 +11,7 @@ import com.google.protobuf.Message;
 import dev.cel.common.CelAbstractSyntaxTree;
 import dev.cel.common.CelContainer;
 import dev.cel.common.CelDescriptorUtil;
+import dev.cel.common.CelDescriptors;
 import dev.cel.common.CelOptions;
 import dev.cel.common.annotations.Internal;
 import dev.cel.common.internal.CelDescriptorPool;
@@ -19,6 +20,7 @@ import dev.cel.common.internal.DefaultMessageFactory;
 import dev.cel.common.internal.DynamicProto;
 import dev.cel.common.types.CelTypeProvider;
 import dev.cel.common.types.DefaultTypeProvider;
+import dev.cel.common.types.ProtoMessageTypeProvider;
 import dev.cel.common.values.CelValueConverter;
 import dev.cel.common.values.CelValueProvider;
 import dev.cel.common.values.CombinedCelValueProvider;
@@ -72,7 +74,7 @@ abstract class CelRuntimeImpl implements CelRuntime {
 
       @Override
       public Object eval(CelVariableResolver resolver) throws CelEvaluationException {
-        throw new UnsupportedOperationException("Not yet supported.");
+        return program.eval(resolver);
       }
 
       @Override
@@ -292,11 +294,10 @@ abstract class CelRuntimeImpl implements CelRuntime {
     public CelRuntime build() {
       assertAllowedCelOptions(options());
 
-      // TODO: Accept custom type provider
-      CelTypeProvider defaultTypeProvider = DefaultTypeProvider.getInstance();
+      CelDescriptors celDescriptors = CelDescriptorUtil.getAllDescriptorsFromFileDescriptor(fileDescriptorsBuilder().build());
 
       CelDescriptorPool descriptorPool = DefaultDescriptorPool.create(
-              CelDescriptorUtil.getAllDescriptorsFromFileDescriptor(fileDescriptorsBuilder().build())
+              celDescriptors
       );
       DefaultMessageFactory defaultMessageFactory = DefaultMessageFactory.create(descriptorPool);
       DynamicProto dynamicProto = DynamicProto.create(defaultMessageFactory);
@@ -306,7 +307,8 @@ abstract class CelRuntimeImpl implements CelRuntime {
         protoMessageValueProvider = CombinedCelValueProvider.combine(protoMessageValueProvider, valueProvider());
       }
 
-      RuntimeEquality runtimeEquality = RuntimeEquality.create(RuntimeHelpers.create(), options());
+      RuntimeEquality runtimeEquality = RuntimeEquality.create(ProtoMessageRuntimeHelpers.create(dynamicProto
+      , options()), options());
       ImmutableSet<CelRuntimeLibrary> runtimeLibraries = runtimeLibrariesBuilder().build();
       // Add libraries, such as extensions
       for (CelRuntimeLibrary celLibrary : runtimeLibraries) {
@@ -324,8 +326,15 @@ abstract class CelRuntimeImpl implements CelRuntime {
               runtimeEquality,
               options());
 
+
+      CelTypeProvider combinedTypeProvider =
+              new CelTypeProvider.CombinedCelTypeProvider(
+                      new ProtoMessageTypeProvider(celDescriptors),
+                      DefaultTypeProvider.getInstance()
+              );
+
       ProgramPlanner planner = ProgramPlanner.newPlanner(
-              defaultTypeProvider,
+              combinedTypeProvider,
               protoMessageValueProvider,
               dispatcher,
               celValueConverter,

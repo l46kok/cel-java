@@ -15,6 +15,9 @@
 package dev.cel.runtime.planner;
 
 import com.google.errorprone.annotations.Immutable;
+import dev.cel.common.AttributeNotFoundException;
+import dev.cel.common.CelErrorCode;
+import dev.cel.common.CelRuntimeException;
 import dev.cel.common.values.SelectableValue;
 import java.util.Map;
 
@@ -24,32 +27,6 @@ interface Qualifier {
 
   Object qualify(Object value);
 
-  final class PresenceTestQualifier implements Qualifier {
-
-    @SuppressWarnings("Immutable")
-    private final Object value;
-
-    @Override
-    public Object value() {
-      return value;
-    }
-
-    @Override
-    public Boolean qualify(Object obj) {
-      if (obj instanceof SelectableValue) {
-        return ((SelectableValue<Object>) obj).find(value).isPresent();
-      } else if (obj instanceof Map) {
-        Map<?, ?> map = (Map<?, ?>) obj;
-        return map.containsKey(value);
-      }
-
-      return false;
-    }
-
-    PresenceTestQualifier(Object value) {
-      this.value = value;
-    }
-  }
 
   final class StringQualifier implements Qualifier {
 
@@ -79,8 +56,7 @@ interface Qualifier {
         return map.get(value);
       }
 
-      throw new UnsupportedOperationException(
-          String.format("Unable to qualify: %s for %s", obj, value));
+      throw new AttributeNotFoundException(value);
     }
 
     StringQualifier(String value) {

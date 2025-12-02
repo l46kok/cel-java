@@ -44,10 +44,6 @@ LITE_RUNTIME_IMPL_SOURCES = [
     "LiteRuntimeImpl.java",
 ]
 
-# keep sorted
-LITE_PROGRAM_IMPL_SOURCES = [
-    "LiteProgramImpl.java",
-]
 
 # keep sorted
 FUNCTION_BINDING_SOURCES = [
@@ -478,8 +474,6 @@ RUNTIME_SOURCES = [
     "CelRuntimeFactory.java",
     "CelRuntimeLegacyImpl.java",
     "CelRuntimeLibrary.java",
-    "CelVariableResolver.java",
-    "HierarchicalVariableResolver.java",
     "ProgramImpl.java",
     "UnknownContext.java",
 ]
@@ -803,6 +797,7 @@ java_library(
     deps = [
         ":activation",
         ":cel_value_runtime_type_provider",
+        ":variable_resolver",
         ":descriptor_message_provider",
         ":descriptor_type_resolver",
         ":dispatcher",
@@ -819,6 +814,7 @@ java_library(
         ":runtime_type_provider",
         ":standard_functions",
         ":unknown_attributes",
+        ":proto_message_runtime_helpers",
         ":runtime_helpers",
         ":resolved_overload",
         "//:auto_value",
@@ -827,6 +823,7 @@ java_library(
         "//common:cel_descriptors",
         "//common:container",
         "//common:options",
+        "//common/types:message_type_provider",
         "//common/annotations",
         "//common/internal:cel_descriptor_pools",
         "//common/internal:default_message_factory",
@@ -881,7 +878,6 @@ java_library(
         ":dispatcher",
         ":function_binding",
         ":interpreter",
-        ":lite_program_impl",
         ":lite_runtime",
         ":program",
         ":runtime_equality",
@@ -905,33 +901,6 @@ java_library(
     ],
 )
 
-java_library(
-    name = "lite_program_impl",
-    srcs = LITE_PROGRAM_IMPL_SOURCES,
-    deps = [
-        ":activation",
-        ":evaluation_exception",
-        ":function_resolver",
-        ":interpretable",
-        ":program",
-        "//:auto_value",
-        "@maven//:com_google_errorprone_error_prone_annotations",
-    ],
-)
-
-cel_android_library(
-    name = "lite_program_impl_android",
-    srcs = LITE_PROGRAM_IMPL_SOURCES,
-    deps = [
-        ":activation_android",
-        ":evaluation_exception",
-        ":function_resolver_android",
-        ":interpretable_android",
-        ":program_android",
-        "//:auto_value",
-        "@maven//:com_google_errorprone_error_prone_annotations",
-    ],
-)
 
 cel_android_library(
     name = "lite_runtime_impl_android",
@@ -943,7 +912,6 @@ cel_android_library(
         ":dispatcher_android",
         ":function_binding_android",
         ":interpreter_android",
-        ":lite_program_impl_android",
         ":lite_runtime_android",
         ":program_android",
         ":runtime_equality_android",
@@ -953,6 +921,8 @@ cel_android_library(
         "//common:cel_ast_android",
         "//common:options",
         "//common/values:cel_value_provider_android",
+        "//runtime:evaluation_exception",
+        "//runtime/planner:program_planner",
         "//runtime/standard:standard_function_android",
         "@maven//:com_google_code_findbugs_annotations",
         "@maven//:com_google_errorprone_error_prone_annotations",
@@ -1225,6 +1195,7 @@ java_library(
     deps = [
         ":evaluation_exception",
         ":function_resolver",
+        ":variable_resolver",
         "@maven//:com_google_errorprone_error_prone_annotations",
     ],
 )
@@ -1265,5 +1236,15 @@ cel_android_library(
         ":function_overload_android",
         "//common/annotations",
         "@maven_android//:com_google_guava_guava",
+    ],
+)
+
+java_library(
+    name = "variable_resolver",
+    srcs = [
+        "CelVariableResolver.java",
+        "HierarchicalVariableResolver.java",
+    ],
+    deps = [
     ],
 )

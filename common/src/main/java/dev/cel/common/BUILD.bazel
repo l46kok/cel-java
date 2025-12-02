@@ -185,6 +185,21 @@ java_library(
 )
 
 java_library(
+    name = "attribute_not_found_exception",
+    srcs = ["AttributeNotFoundException.java"],
+    # used_by_android
+    tags = [
+    ],
+    deps = [
+        ":error_codes",
+        ":runtime_exception",
+        "//common/annotations",
+        "@maven//:com_google_guava_guava",
+    ],
+)
+
+
+java_library(
     name = "mutable_ast",
     srcs = ["CelMutableAst.java"],
     tags = [

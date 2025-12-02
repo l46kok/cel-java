@@ -79,7 +79,8 @@ public class CelValueConverter {
           .map(OptionalValue::create)
           .orElse(OptionalValue.EMPTY);
     } else if (value instanceof Exception) {
-      return ErrorValue.create((Exception) value);
+      // TODO: Remove?
+      return ErrorValue.create(-1L, (Exception) value);
     }
 
     return normalizePrimitive(value);

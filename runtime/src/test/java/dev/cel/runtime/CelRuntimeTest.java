@@ -740,7 +740,7 @@ public class CelRuntimeTest {
     Cel cel = CelFactory.standardCelBuilder()
             .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
             .addVar("map_var", MapType.create(SimpleType.DYN, SimpleType.DYN)).build();
-    CelAbstractSyntaxTree ast = cel.compile("has(map_var.foo)").getAst();
+    CelAbstractSyntaxTree ast = cel.compile("int('asdf')").getAst();
 
     Object result =  cel.createProgram(ast).eval(ImmutableMap.of("map_var", ImmutableMap.of("foo", "bar")));
 

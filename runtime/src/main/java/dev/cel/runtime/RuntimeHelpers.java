@@ -21,6 +21,7 @@ import com.google.common.primitives.UnsignedLong;
 import com.google.common.primitives.UnsignedLongs;
 import com.google.errorprone.annotations.Immutable;
 import com.google.protobuf.Duration;
+import com.google.protobuf.Message;
 import com.google.protobuf.MessageLiteOrBuilder;
 import com.google.re2j.Pattern;
 import dev.cel.common.CelErrorCode;

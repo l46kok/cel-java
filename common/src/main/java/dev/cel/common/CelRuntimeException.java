@@ -29,6 +29,11 @@ import dev.cel.common.annotations.Internal;
 public class CelRuntimeException extends RuntimeException {
   private final CelErrorCode errorCode;
 
+  public CelRuntimeException(String errorMessage, CelErrorCode errorCode) {
+    super(errorMessage);
+    this.errorCode = errorCode;
+  }
+
   public CelRuntimeException(Throwable cause, CelErrorCode errorCode) {
     super(cause);
     this.errorCode = errorCode;

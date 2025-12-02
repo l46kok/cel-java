@@ -14,7 +14,6 @@
 
 package dev.cel.runtime.planner;
 
-import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.errorprone.annotations.Immutable;
@@ -26,11 +25,8 @@ import dev.cel.common.values.CelValue;
 import dev.cel.common.values.CelValueConverter;
 import dev.cel.common.values.ErrorValue;
 import dev.cel.runtime.GlobalResolver;
-import dev.cel.runtime.Interpretable;
 
-import java.util.List;
 import java.util.NoSuchElementException;
-import java.util.Set;
 
 @Immutable
 interface Attribute {
@@ -41,7 +37,7 @@ interface Attribute {
   @Immutable
   final class RelativeAttribute implements Attribute {
 
-    private final Interpretable operand;
+    private final PlannedInterpretable operand;
     private final CelValueConverter celValueConverter;
     private final ImmutableList<Qualifier> qualifiers;
 
@@ -73,12 +69,12 @@ interface Attribute {
               .build());
     }
 
-    RelativeAttribute(Interpretable operand, CelValueConverter celValueConverter) {
+    RelativeAttribute(PlannedInterpretable operand, CelValueConverter celValueConverter) {
       this(operand, celValueConverter, ImmutableList.of());
     }
 
     private RelativeAttribute(
-        Interpretable operand,
+        PlannedInterpretable operand,
         CelValueConverter celValueConverter,
         ImmutableList<Qualifier> qualifiers) {
       this.operand = operand;
@@ -223,32 +219,7 @@ interface Attribute {
     }
   }
 
-  final class MissingAttribute implements Attribute {
 
-    private static final Joiner JOINER = Joiner.on(", ");
-
-    private final String errorMessage;
-
-    @Override
-    public Object resolve(GlobalResolver ctx) {
-      throw new IllegalArgumentException(errorMessage);
-    }
-
-    @Override
-    public Attribute addQualifier(Qualifier qualifier) {
-      throw new UnsupportedOperationException("Unsupported operation");
-    }
-
-    private static MissingAttribute newMissingAttribute(Set<String> attributeName) {
-      return new MissingAttribute(
-              String.format("No such attribute(s): %s", JOINER.join(attributeName))
-      );
-    }
-
-    private MissingAttribute(String errorMessage) {
-      this.errorMessage = errorMessage;
-    }
-  }
 
   private static Object applyQualifiers(
       Object value, CelValueConverter celValueConverter, ImmutableList<Qualifier> qualifiers) {

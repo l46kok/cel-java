@@ -19,10 +19,8 @@ import dev.cel.runtime.CelEvaluationListener;
 import dev.cel.runtime.CelFunctionResolver;
 import dev.cel.runtime.GlobalResolver;
 
-import static dev.cel.runtime.planner.Attribute.MissingAttribute;
-
 @Immutable
-final class EvalAttribute implements InterpretableAttribute {
+final class EvalAttribute extends InterpretableAttribute {
 
   private final Attribute attr;
 
@@ -58,16 +56,17 @@ final class EvalAttribute implements InterpretableAttribute {
   }
 
   @Override
-  public EvalAttribute addQualifier(Qualifier qualifier) {
+  public EvalAttribute addQualifier(long exprId, Qualifier qualifier) {
     Attribute newAttribute = attr.addQualifier(qualifier);
-    return create(newAttribute);
+    return create(exprId, newAttribute);
   }
 
-  static EvalAttribute create(Attribute attr) {
-    return new EvalAttribute(attr);
+  static EvalAttribute create(long exprId, Attribute attr) {
+    return new EvalAttribute(exprId, attr);
   }
 
-  private EvalAttribute(Attribute attr) {
+  private EvalAttribute(long exprId, Attribute attr) {
+    super(exprId);
     this.attr = attr;
   }
 }

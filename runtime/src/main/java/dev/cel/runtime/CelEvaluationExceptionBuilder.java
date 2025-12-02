@@ -84,9 +84,15 @@ public final class CelEvaluationExceptionBuilder {
   @Internal
   public static CelEvaluationExceptionBuilder newBuilder(CelRuntimeException celRuntimeException) {
     Throwable cause = celRuntimeException.getCause();
-    return new CelEvaluationExceptionBuilder(cause.getMessage())
-        .setCause(cause)
+    // TODO: Remove
+    String message = cause == null ? celRuntimeException.getMessage() : cause.getMessage();
+    CelEvaluationExceptionBuilder builder = new CelEvaluationExceptionBuilder(message)
         .setErrorCode(celRuntimeException.getErrorCode());
+    if (cause != null) {
+      // TODO: Remove
+        builder.setCause(cause);
+    }
+    return builder;
   }
 
   private CelEvaluationExceptionBuilder(String message) {

@@ -14,13 +14,6 @@
 
 package dev.cel.runtime.planner;
 
-import static com.google.common.truth.Truth.assertThat;
-import static dev.cel.common.CelFunctionDecl.newFunctionDeclaration;
-import static dev.cel.common.CelOverloadDecl.newGlobalOverload;
-import static dev.cel.common.CelOverloadDecl.newMemberOverload;
-import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.junit.Assert.assertThrows;
-
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -78,6 +71,7 @@ import dev.cel.runtime.RuntimeHelpers;
 import dev.cel.runtime.standard.AddOperator;
 import dev.cel.runtime.standard.CelStandardFunction;
 import dev.cel.runtime.standard.DivideOperator;
+import dev.cel.runtime.standard.DynFunction;
 import dev.cel.runtime.standard.EqualsOperator;
 import dev.cel.runtime.standard.GreaterEqualsOperator;
 import dev.cel.runtime.standard.GreaterOperator;
@@ -87,6 +81,13 @@ import dev.cel.runtime.standard.LogicalNotOperator;
 import dev.cel.runtime.standard.NotStrictlyFalseFunction;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+
+import static com.google.common.truth.Truth.assertThat;
+import static dev.cel.common.CelFunctionDecl.newFunctionDeclaration;
+import static dev.cel.common.CelOverloadDecl.newGlobalOverload;
+import static dev.cel.common.CelOverloadDecl.newMemberOverload;
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.junit.Assert.assertThrows;
 
 @RunWith(TestParameterInjector.class)
 public final class ProgramPlannerTest {
@@ -176,6 +177,10 @@ public final class ProgramPlannerTest {
         builder,
         Operator.NOT_STRICTLY_FALSE.getFunction(),
         fromStandardFunction(NotStrictlyFalseFunction.create()));
+
+    // TEMP
+    addBindings(
+            builder, "dyn", fromStandardFunction(DynFunction.create()));
 
     // Custom functions
     addBindings(
@@ -429,7 +434,7 @@ public final class ProgramPlannerTest {
     Program program = PLANNER.plan(ast);
 
     CelEvaluationException e = assertThrows(CelEvaluationException.class, program::eval);
-    assertThat(e).hasMessageThat().contains("evaluation error: Intentional error");
+    assertThat(e).hasMessageThat().contains("evaluation error at <input>:5: Intentional error");
     assertThat(e).hasCauseThat().isInstanceOf(IllegalArgumentException.class);
   }
 
@@ -522,8 +527,8 @@ public final class ProgramPlannerTest {
     Program program = PLANNER.plan(ast);
 
     CelEvaluationException e = assertThrows(CelEvaluationException.class, program::eval);
-    // TODO: Tag metadata (source loc)
-    assertThat(e).hasMessageThat().isEqualTo("evaluation error: / by zero");
+    assertThat(e).hasMessageThat().startsWith("evaluation error at <input>:");
+    assertThat(e).hasMessageThat().endsWith("/ by zero");
     assertThat(e).hasCauseThat().isInstanceOf(ArithmeticException.class);
     assertThat(e.getErrorCode()).isEqualTo(CelErrorCode.DIVIDE_BY_ZERO);
   }
@@ -554,8 +559,8 @@ public final class ProgramPlannerTest {
     Program program = PLANNER.plan(ast);
 
     CelEvaluationException e = assertThrows(CelEvaluationException.class, program::eval);
-    // TODO: Tag metadata (source loc)
-    assertThat(e).hasMessageThat().isEqualTo("evaluation error: / by zero");
+    assertThat(e).hasMessageThat().startsWith("evaluation error at <input>:");
+    assertThat(e).hasMessageThat().endsWith("/ by zero");
     assertThat(e).hasCauseThat().isInstanceOf(ArithmeticException.class);
     assertThat(e.getErrorCode()).isEqualTo(CelErrorCode.DIVIDE_BY_ZERO);
   }
@@ -584,8 +589,8 @@ public final class ProgramPlannerTest {
     Program program = PLANNER.plan(ast);
 
     CelEvaluationException e = assertThrows(CelEvaluationException.class, program::eval);
-    // TODO: Tag metadata (source loc)
-    assertThat(e).hasMessageThat().isEqualTo("evaluation error: / by zero");
+    assertThat(e).hasMessageThat().startsWith("evaluation error at <input>:");
+    assertThat(e).hasMessageThat().endsWith("/ by zero");
     assertThat(e).hasCauseThat().isInstanceOf(ArithmeticException.class);
     assertThat(e.getErrorCode()).isEqualTo(CelErrorCode.DIVIDE_BY_ZERO);
   }
@@ -694,11 +699,11 @@ public final class ProgramPlannerTest {
   public void plan_select_mapVarInputVarMissing_throws() throws Exception {
     CelAbstractSyntaxTree ast = compile("map_var.foo");
     Program program = PLANNER.plan(ast);
-    String errorMessage = "evaluation error: No such attribute(s): ";
+    String errorMessage = "evaluation error at <input>:7: Error resolving ";
     if (isParseOnly) {
-      errorMessage += "cel.expr.conformance.proto3.map_var, cel.expr.conformance.map_var, cel.expr.map_var, cel.map_var, map_var";
+      errorMessage += "fields 'cel.expr.conformance.proto3.map_var, cel.expr.conformance.map_var, cel.expr.map_var, cel.map_var, map_var'";
     } else {
-      errorMessage += "map_var";
+      errorMessage += "field 'map_var'";
     }
 
     CelEvaluationException e = assertThrows(CelEvaluationException.class, () -> program.eval(ImmutableMap.of()));
@@ -712,7 +717,7 @@ public final class ProgramPlannerTest {
     Program program = PLANNER.plan(ast);
 
     CelEvaluationException e = assertThrows(CelEvaluationException.class, () -> program.eval(ImmutableMap.of("map_var", ImmutableMap.of())));
-    assertThat(e).hasMessageThat().contains("evaluation error: No such key: foo");
+    assertThat(e).hasMessageThat().contains("evaluation error at <input>:7: No such key: foo");
   }
 
   @Test
@@ -727,6 +732,15 @@ public final class ProgramPlannerTest {
     );
 
     assertThat(result).isEqualTo(testCase.expected);
+  }
+
+  @Test
+  public void plan_select_badPresenceTest_throws() throws Exception {
+    CelAbstractSyntaxTree ast = compile("has(dyn([]).invalid)");
+    Program program = PLANNER.plan(ast);
+
+    CelEvaluationException e = assertThrows(CelEvaluationException.class, () -> program.eval());
+    assertThat(e).hasMessageThat().contains("Error resolving field 'invalid'. Field selections must be performed on messages or maps.");
   }
 
   @Test

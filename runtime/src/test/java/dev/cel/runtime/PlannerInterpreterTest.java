@@ -12,6 +12,7 @@ public class PlannerInterpreterTest extends BaseInterpreterTest {
     super(
             CelRuntimeFactory.plannerCelRuntimeBuilder()
                     .addLibraries(CelExtensions.optional())
+                    .addFileTypes(TEST_FILE_DESCRIPTORS)
                     .build()
     );
   }

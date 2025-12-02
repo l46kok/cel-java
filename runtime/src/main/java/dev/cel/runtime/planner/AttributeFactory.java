@@ -37,7 +37,7 @@ final class AttributeFactory {
     return new NamespacedAttribute(typeProvider, celValueConverter, ImmutableSet.copyOf(names));
   }
 
-  RelativeAttribute newRelativeAttribute(Interpretable operand) {
+  RelativeAttribute newRelativeAttribute(PlannedInterpretable operand) {
     return new RelativeAttribute(operand, celValueConverter);
   }
 

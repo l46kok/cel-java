@@ -21,6 +21,7 @@ java_library(
         ":eval_create_list",
         ":eval_create_map",
         ":eval_create_struct",
+        ":error_metadata",
         ":eval_fold",
         ":eval_or",
         ":eval_presence_test",
@@ -28,6 +29,7 @@ java_library(
         ":eval_var_args_call",
         ":eval_zero_arity",
         ":interpretable_attribute",
+        ":planned_interpretable",
         ":planned_program",
         ":qualifier",
         "//:auto_value",
@@ -58,6 +60,8 @@ java_library(
     tags = [
     ],
     deps = [
+        ":error_metadata",
+        ":planned_interpretable",
         "//:auto_value",
         "//common:runtime_exception",
         "//common/values",
@@ -67,6 +71,7 @@ java_library(
         "//runtime:function_resolver",
         "//runtime:interpretable",
         "//runtime:program",
+        "//runtime:variable_resolver",
         "@maven//:com_google_errorprone_error_prone_annotations",
     ],
 )
@@ -75,6 +80,7 @@ java_library(
     name = "eval_const",
     srcs = ["EvalConstant.java"],
     deps = [
+        ":planned_interpretable",
         "//common/values",
         "//common/values:cel_byte_string",
         "//runtime:evaluation_listener",
@@ -90,7 +96,7 @@ java_library(
     srcs = ["InterpretableAttribute.java"],
     deps = [
         ":qualifier",
-        "//runtime:interpretable",
+        ":planned_interpretable",
         "@maven//:com_google_errorprone_error_prone_annotations",
     ],
 )
@@ -100,17 +106,22 @@ java_library(
     srcs = [
         "Attribute.java",
         "AttributeFactory.java",
+        "MissingAttribute.java",
     ],
     deps = [
         "//:auto_value",
         ":eval_helpers",
         ":qualifier",
+        ":planned_interpretable",
+        "//runtime:interpretable",
+        "//common:error_codes",
+        "//common:runtime_exception",
         "//common:container",
         "//common/types",
         "//common/types:type_providers",
         "//common/values",
         "//common/values:cel_value",
-        "//runtime:interpretable",
+        "//common:attribute_not_found_exception",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
     ],
@@ -121,6 +132,22 @@ java_library(
     srcs = ["Qualifier.java"],
     deps = [
         "//common/values",
+        "//common:error_codes",
+        "//common:runtime_exception",
+        "//common:attribute_not_found_exception",
+        "@maven//:com_google_errorprone_error_prone_annotations",
+    ],
+)
+
+java_library(
+    name = "presence_test_qualifier",
+    srcs = ["PresenceTestQualifier.java"],
+    deps = [
+        ":attribute",
+        ":qualifier",
+        "//common/values",
+        "//common:error_codes",
+        "//common:runtime_exception",
         "@maven//:com_google_errorprone_error_prone_annotations",
     ],
 )
@@ -132,9 +159,10 @@ java_library(
         ":attribute",
         ":interpretable_attribute",
         ":qualifier",
+        "//runtime:interpretable",
         "//runtime:evaluation_listener",
         "//runtime:function_resolver",
-        "//runtime:interpretable",
+        ":planned_interpretable",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
     ],
@@ -145,11 +173,12 @@ java_library(
     srcs = ["EvalPresenceTest.java"],
     deps = [
         ":interpretable_attribute",
+        "//runtime:interpretable",
         "//runtime:evaluation_exception",
         ":qualifier",
+        ":presence_test_qualifier",
         "//runtime:evaluation_listener",
         "//runtime:function_resolver",
-        "//runtime:interpretable",
         "@maven//:com_google_errorprone_error_prone_annotations",
     ],
 )
@@ -158,6 +187,7 @@ java_library(
     name = "eval_zero_arity",
     srcs = ["EvalZeroArity.java"],
     deps = [
+        ":planned_interpretable",
         "//runtime:evaluation_exception",
         "//runtime:evaluation_listener",
         "//runtime:function_resolver",
@@ -170,6 +200,8 @@ java_library(
     name = "eval_unary",
     srcs = ["EvalUnary.java"],
     deps = [
+        ":eval_helpers",
+        ":planned_interpretable",
         "//runtime:evaluation_exception",
         "//runtime:evaluation_listener",
         "//runtime:function_resolver",
@@ -182,10 +214,12 @@ java_library(
     name = "eval_var_args_call",
     srcs = ["EvalVarArgsCall.java"],
     deps = [
+        ":eval_helpers",
+        ":planned_interpretable",
+        "//runtime:interpretable",
         "//runtime:evaluation_exception",
         "//runtime:evaluation_listener",
         "//runtime:function_resolver",
-        "//runtime:interpretable",
         "//runtime:resolved_overload",
     ],
 )
@@ -199,6 +233,7 @@ java_library(
         "//runtime:evaluation_listener",
         "//runtime:function_resolver",
         "//runtime:interpretable",
+        ":planned_interpretable",
         "@maven//:com_google_guava_guava",
     ],
 )
@@ -207,6 +242,7 @@ java_library(
     name = "eval_and",
     srcs = ["EvalAnd.java"],
     deps = [
+        ":planned_interpretable",
         ":eval_helpers",
         "//common/values",
         "//runtime:evaluation_listener",
@@ -220,6 +256,7 @@ java_library(
     name = "eval_conditional",
     srcs = ["EvalConditional.java"],
     deps = [
+        ":planned_interpretable",
         "//runtime:evaluation_exception",
         "//runtime:evaluation_listener",
         "//runtime:function_resolver",
@@ -232,6 +269,7 @@ java_library(
     name = "eval_create_struct",
     srcs = ["EvalCreateStruct.java"],
     deps = [
+        ":planned_interpretable",
         "//common/types",
         "//common/values",
         "//common/values:cel_value_provider",
@@ -248,6 +286,7 @@ java_library(
     name = "eval_create_list",
     srcs = ["EvalCreateList.java"],
     deps = [
+        ":planned_interpretable",
         "//runtime:evaluation_exception",
         "//runtime:evaluation_listener",
         "//runtime:function_resolver",
@@ -261,6 +300,7 @@ java_library(
     name = "eval_create_map",
     srcs = ["EvalCreateMap.java"],
     deps = [
+        ":planned_interpretable",
         "//runtime:evaluation_exception",
         "//runtime:evaluation_listener",
         "//runtime:function_resolver",
@@ -274,6 +314,7 @@ java_library(
     name = "eval_fold",
     srcs = ["EvalFold.java"],
     deps = [
+        ":planned_interpretable",
         "//common/values:cel_value",
         "//runtime:evaluation_exception",
         "//runtime:evaluation_listener",
@@ -289,7 +330,43 @@ java_library(
     name = "eval_helpers",
     srcs = ["EvalHelpers.java"],
     deps = [
+        ":planned_interpretable",
+        ":strict_error_exception",
+        "//common:runtime_exception",
+        "//common:error_codes",
         "//common/values",
         "//runtime:interpretable",
     ],
+)
+
+java_library(
+    name = "strict_error_exception",
+    srcs = ["StrictErrorException.java"],
+    deps = [
+        ":planned_interpretable",
+        "//common:error_codes",
+        "//common/values",
+        "//common:runtime_exception",
+        "//runtime:interpretable",
+    ],
+)
+
+
+java_library(
+    name = "error_metadata",
+    srcs = ["ErrorMetadata.java"],
+    deps = [
+        "//runtime:metadata",
+        "@maven//:com_google_errorprone_error_prone_annotations",
+        "@maven//:com_google_guava_guava",
+    ]
+)
+
+java_library(
+    name = "planned_interpretable",
+    srcs = ["PlannedInterpretable.java"],
+    deps = [
+        "//runtime:interpretable",
+        "@maven//:com_google_errorprone_error_prone_annotations",
+    ]
 )

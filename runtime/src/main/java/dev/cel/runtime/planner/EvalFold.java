@@ -20,22 +20,22 @@ import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelEvaluationListener;
 import dev.cel.runtime.CelFunctionResolver;
 import dev.cel.runtime.GlobalResolver;
-import dev.cel.runtime.Interpretable;
+
 import java.util.Collection;
 import java.util.Iterator;
 import org.jspecify.annotations.Nullable;
 
 @Immutable
-final class EvalFold implements Interpretable {
+final class EvalFold extends PlannedInterpretable {
 
   private final String accuVar;
-  private final Interpretable accuInit;
+  private final PlannedInterpretable accuInit;
   private final String iterVar;
   private final String iterVar2;
-  private final Interpretable iterRange;
-  private final Interpretable condition;
-  private final Interpretable loopStep;
-  private final Interpretable result;
+  private final PlannedInterpretable iterRange;
+  private final PlannedInterpretable condition;
+  private final PlannedInterpretable loopStep;
+  private final PlannedInterpretable result;
 
   @Override
   public Object eval(GlobalResolver resolver) throws CelEvaluationException {
@@ -124,27 +124,30 @@ final class EvalFold implements Interpretable {
   }
 
   static EvalFold create(
+      long exprId,
       String accuVar,
-      Interpretable accuInit,
+      PlannedInterpretable accuInit,
       String iterVar,
       String iterVar2,
-      Interpretable iterRange,
-      Interpretable condition,
-      Interpretable loopStep,
-      Interpretable result) {
+      PlannedInterpretable iterRange,
+      PlannedInterpretable condition,
+      PlannedInterpretable loopStep,
+      PlannedInterpretable result) {
     return new EvalFold(
-        accuVar, accuInit, iterVar, iterVar2, iterRange, condition, loopStep, result);
+        exprId, accuVar, accuInit, iterVar, iterVar2, iterRange, condition, loopStep, result);
   }
 
   private EvalFold(
+      long exprId,
       String accuVar,
-      Interpretable accuInit,
+      PlannedInterpretable accuInit,
       String iterVar,
       String iterVar2,
-      Interpretable iterRange,
-      Interpretable condition,
-      Interpretable loopStep,
-      Interpretable result) {
+      PlannedInterpretable iterRange,
+      PlannedInterpretable condition,
+      PlannedInterpretable loopStep,
+      PlannedInterpretable result) {
+    super(exprId);
     this.accuVar = accuVar;
     this.accuInit = accuInit;
     this.iterVar = iterVar;

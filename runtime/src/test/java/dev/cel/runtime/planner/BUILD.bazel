@@ -48,6 +48,7 @@ java_library(
         "//runtime:runtime_equality",
         "//runtime:runtime_helpers",
         "//runtime/planner:program_planner",
+        "//runtime/standard:dyn",
         "//runtime/standard:add",
         "//runtime/standard:divide",
         "//runtime/standard:equals",

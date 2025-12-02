@@ -19,9 +19,8 @@ import dev.cel.runtime.CelEvaluationListener;
 import dev.cel.runtime.CelFunctionResolver;
 import dev.cel.runtime.CelResolvedOverload;
 import dev.cel.runtime.GlobalResolver;
-import dev.cel.runtime.Interpretable;
 
-final class EvalZeroArity implements Interpretable {
+final class EvalZeroArity extends PlannedInterpretable {
 
   private final CelResolvedOverload resolvedOverload;
 
@@ -51,11 +50,12 @@ final class EvalZeroArity implements Interpretable {
     throw new UnsupportedOperationException("Not yet supported");
   }
 
-  static EvalZeroArity create(CelResolvedOverload resolvedOverload) {
-    return new EvalZeroArity(resolvedOverload);
+  static EvalZeroArity create(long exprId, CelResolvedOverload resolvedOverload) {
+    return new EvalZeroArity(exprId, resolvedOverload);
   }
 
-  private EvalZeroArity(CelResolvedOverload resolvedOverload) {
+  private EvalZeroArity(long exprId, CelResolvedOverload resolvedOverload) {
+    super(exprId);
     this.resolvedOverload = resolvedOverload;
   }
 }
