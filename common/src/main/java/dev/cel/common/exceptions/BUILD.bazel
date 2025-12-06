@@ -97,3 +97,16 @@ java_library(
         "//common/exceptions:runtime_exception",
     ],
 )
+
+java_library(
+    name = "iteration_budget_exceeded",
+    srcs = ["CelIterationLimitExceededException.java"],
+    # used_by_android
+    tags = [
+    ],
+    deps = [
+        "//common:error_codes",
+        "//common/annotations",
+        "//common/exceptions:runtime_exception",
+    ],
+)

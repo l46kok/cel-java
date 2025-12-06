@@ -56,6 +56,7 @@ import dev.cel.common.types.StructTypeReference;
 import dev.cel.common.types.TypeType;
 import dev.cel.common.values.CelByteString;
 import dev.cel.common.values.CelValueConverter;
+import dev.cel.common.exceptions.CelIterationLimitExceededException;
 import dev.cel.common.values.CelValueProvider;
 import dev.cel.common.values.NullValue;
 import dev.cel.common.values.ProtoCelValueConverter;
@@ -86,6 +87,7 @@ import dev.cel.runtime.standard.GreaterOperator;
 import dev.cel.runtime.standard.IndexOperator;
 import dev.cel.runtime.standard.LessOperator;
 import dev.cel.runtime.standard.LogicalNotOperator;
+import dev.cel.runtime.standard.MultiplyOperator;
 import dev.cel.runtime.standard.NotStrictlyFalseFunction;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -118,7 +120,7 @@ public final class ProgramPlannerTest {
 
   private static final ProgramPlanner PLANNER =
       ProgramPlanner.newPlanner(
-          TYPE_PROVIDER, VALUE_PROVIDER, newDispatcher(), CEL_VALUE_CONVERTER, CEL_CONTAINER);
+          TYPE_PROVIDER, VALUE_PROVIDER, newDispatcher(), CEL_VALUE_CONVERTER, CEL_CONTAINER, CEL_OPTIONS);
 
   private static final CelCompiler CEL_COMPILER =
       CelCompilerFactory.standardCelCompilerBuilder()
@@ -176,6 +178,8 @@ public final class ProgramPlannerTest {
         builder, Operator.DIVIDE.getFunction(), fromStandardFunction(DivideOperator.create()));
     addBindings(
         builder, Operator.EQUALS.getFunction(), fromStandardFunction(EqualsOperator.create()));
+    addBindings(
+        builder, Operator.MULTIPLY.getFunction(), fromStandardFunction(MultiplyOperator.create()));
     addBindings(
         builder,
         Operator.NOT_STRICTLY_FALSE.getFunction(),
@@ -804,6 +808,51 @@ public final class ProgramPlannerTest {
     assertThat(result).isTrue();
   }
 
+  @Test
+  @TestParameters("{expression: '[1, 2, 3, 4, 5, 6].map(x, x)'}")
+  @TestParameters("{expression: '[1, 2, 3].map(x, [1, 2].map(y, x * y))'}")
+  public void plan_comprehension_iterationLimit_throws(String expression) throws Exception {
+    CelOptions options = CelOptions.current().comprehensionMaxIterations(5).build();
+    ProgramPlanner planner =
+            ProgramPlanner.newPlanner(
+                    TYPE_PROVIDER,
+                    ProtoMessageValueProvider.newInstance(options, DYNAMIC_PROTO),
+                    newDispatcher(),
+                    CEL_VALUE_CONVERTER,
+                    CEL_CONTAINER,
+                    options);
+    CelAbstractSyntaxTree ast = compile(expression);
+
+    Program program = planner.plan(ast);
+
+    CelEvaluationException e = assertThrows(CelEvaluationException.class, program::eval);
+    assertThat(e).hasMessageThat().contains("Iteration budget exceeded: 5");
+    assertThat(e.getCause()).isInstanceOf(CelIterationLimitExceededException.class);
+    assertThat(e.getErrorCode()).isEqualTo(CelErrorCode.ITERATION_BUDGET_EXCEEDED);
+  }
+
+  @Test
+  public void plan_comprehension_iterationLimit_success() throws Exception {
+    CelOptions options = CelOptions.current().comprehensionMaxIterations(10).build();
+    ProgramPlanner planner =
+            ProgramPlanner.newPlanner(
+                    TYPE_PROVIDER,
+                    ProtoMessageValueProvider.newInstance(options, DYNAMIC_PROTO),
+                    newDispatcher(),
+                    CEL_VALUE_CONVERTER,
+                    CEL_CONTAINER,
+                    options);
+    CelAbstractSyntaxTree ast = compile("[1, 2, 3].map(x, [1, 2].map(y, x * y))");
+
+    Program program = planner.plan(ast);
+
+    Object result = program.eval();
+    assertThat(result).isEqualTo(ImmutableList.of(
+            ImmutableList.of(1L, 2L),
+            ImmutableList.of(2L, 4L),
+            ImmutableList.of(3L, 6L)));
+  }
+
   private CelAbstractSyntaxTree compile(String expression) throws Exception {
     CelAbstractSyntaxTree ast = CEL_COMPILER.parse(expression).getAst();
     if (isParseOnly) {
@@ -899,7 +948,10 @@ public final class ProgramPlannerTest {
     PresenceTestCase(String expression, Object inputParam, Object expected) {
       this.expression = expression;
       this.inputParam = inputParam;
+
       this.expected = expected;
     }
   }
+
+
 }

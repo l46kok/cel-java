@@ -21,6 +21,7 @@ import com.google.errorprone.annotations.CheckReturnValue;
 import com.google.errorprone.annotations.Immutable;
 import dev.cel.common.CelAbstractSyntaxTree;
 import dev.cel.common.CelContainer;
+import dev.cel.common.CelOptions;
 import dev.cel.common.Operator;
 import dev.cel.common.annotations.Internal;
 import dev.cel.common.ast.CelConstant;
@@ -60,6 +61,7 @@ public final class ProgramPlanner {
   private final DefaultDispatcher dispatcher;
   private final AttributeFactory attributeFactory;
   private final CelContainer container;
+  private final CelOptions celOptions;
 
   /**
    * Plans a {@link Program} from the provided parsed-only or type-checked {@link
@@ -75,7 +77,7 @@ public final class ProgramPlanner {
 
     ErrorMetadata errorMetadata =
         ErrorMetadata.create(ast.getSource().getPositionsMap(), ast.getSource().getDescription());
-    return PlannedProgram.create(plannedInterpretable, errorMetadata);
+    return PlannedProgram.create(plannedInterpretable, errorMetadata, celOptions);
   }
 
   private PlannedInterpretable plan(CelExpr celExpr, PlannerContext ctx) {
@@ -451,9 +453,10 @@ public final class ProgramPlanner {
       CelValueProvider valueProvider,
       DefaultDispatcher dispatcher,
       CelValueConverter celValueConverter,
-      CelContainer container) {
+      CelContainer container,
+      CelOptions celOptions) {
     return new ProgramPlanner(
-        typeProvider, valueProvider, dispatcher, celValueConverter, container);
+        typeProvider, valueProvider, dispatcher, celValueConverter, container, celOptions);
   }
 
   private ProgramPlanner(
@@ -461,11 +464,13 @@ public final class ProgramPlanner {
       CelValueProvider valueProvider,
       DefaultDispatcher dispatcher,
       CelValueConverter celValueConverter,
-      CelContainer container) {
+      CelContainer container,
+      CelOptions celOptions) {
     this.typeProvider = typeProvider;
     this.valueProvider = valueProvider;
     this.dispatcher = dispatcher;
     this.container = container;
+    this.celOptions = celOptions;
     this.attributeFactory =
         AttributeFactory.newAttributeFactory(container, typeProvider, celValueConverter);
   }

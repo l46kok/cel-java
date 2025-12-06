@@ -393,7 +393,8 @@ abstract class CelRuntimeImpl implements CelRuntime {
               protoMessageValueProvider,
               dispatcher,
               celValueConverter,
-              CelContainer.newBuilder().build() // TODO: Accept CEL container
+              CelContainer.newBuilder().build(), // TODO: Accept CEL container
+              options()
               );
       setPlanner(planner);
 

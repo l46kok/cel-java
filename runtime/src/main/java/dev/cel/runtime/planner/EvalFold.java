@@ -23,7 +23,6 @@ import dev.cel.runtime.GlobalResolver;
 import dev.cel.runtime.MutableComprehensionMap;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
@@ -84,16 +83,16 @@ final class EvalFold extends PlannedInterpretable {
   }
 
   @Override
-  public Object eval(GlobalResolver resolver) throws CelEvaluationException {
-    Object iterRangeRaw = iterRange.eval(resolver);
+  public Object eval(GlobalResolver resolver, ExecutionFrame frame) throws CelEvaluationException {
+    Object iterRangeRaw = iterRange.eval(resolver, frame);
     Folder folder = new Folder(resolver, accuVar, iterVar, iterVar2);
-    folder.accuVal = maybeWrapAccumulator(accuInit.eval(folder));
+    folder.accuVal = maybeWrapAccumulator(accuInit.eval(folder, frame));
 
     Object result;
     if (iterRangeRaw instanceof Map) {
-      result = evalMap((Map<?, ?>) iterRangeRaw, folder);
+      result = evalMap((Map<?, ?>) iterRangeRaw, folder, frame);
     } else if (iterRangeRaw instanceof Collection) {
-      result = evalList((Collection<?>) iterRangeRaw, folder);
+      result = evalList((Collection<?>) iterRangeRaw, folder, frame);
     } else {
       throw new IllegalArgumentException("Unexpected iter_range type: " + iterRangeRaw.getClass());
     }
@@ -101,11 +100,12 @@ final class EvalFold extends PlannedInterpretable {
     return maybeUnwrapAccumulator(result);
   }
 
-  private Object evalMap(Map<?, ?> iterRange, Folder folder) throws CelEvaluationException {
+  private Object evalMap(Map<?, ?> iterRange, Folder folder, ExecutionFrame frame) throws CelEvaluationException {
     for (Map.Entry<?, ?> entry : iterRange.entrySet()) {
-      boolean cond = (boolean) condition.eval(folder);
+      frame.incrementIterations();
+      boolean cond = (boolean) condition.eval(folder, frame);
       if (!cond) {
-        return result.eval(folder);
+        return result.eval(folder, frame);
       }
 
       folder.iterVarVal = entry.getKey();
@@ -114,17 +114,18 @@ final class EvalFold extends PlannedInterpretable {
       }
 
       // TODO: Introduce comprehension safety controls, such as iteration limit.
-      folder.accuVal = loopStep.eval(folder);
+      folder.accuVal = loopStep.eval(folder, frame);
     }
-    return result.eval(folder);
+    return result.eval(folder, frame);
   }
 
-  private Object evalList(Collection<?> iterRange, Folder folder) throws CelEvaluationException {
+  private Object evalList(Collection<?> iterRange, Folder folder, ExecutionFrame frame) throws CelEvaluationException {
     int index = 0;
     for (Object item : iterRange) {
-      boolean cond = (boolean) condition.eval(folder);
+      frame.incrementIterations();
+      boolean cond = (boolean) condition.eval(folder, frame);
       if (!cond) {
-        return result.eval(folder);
+        return result.eval(folder, frame);
       }
 
       if (iterVar2.isEmpty()) {
@@ -134,11 +135,10 @@ final class EvalFold extends PlannedInterpretable {
         folder.iterVar2Val = item;
       }
 
-      // TODO: Introduce comprehension safety controls, such as iteration limit.
-      folder.accuVal = loopStep.eval(folder);
+      folder.accuVal = loopStep.eval(folder, frame);
       index++;
     }
-    return result.eval(folder);
+    return result.eval(folder, frame);
   }
 
   @SuppressWarnings("unchecked")
@@ -161,27 +161,6 @@ final class EvalFold extends PlannedInterpretable {
     return val;
   }
 
-  @Override
-  public Object eval(GlobalResolver resolver, CelEvaluationListener listener)
-      throws CelEvaluationException {
-    return null;
-  }
-
-  @Override
-  public Object eval(GlobalResolver resolver, CelFunctionResolver lateBoundFunctionResolver)
-      throws CelEvaluationException {
-    return null;
-  }
-
-  @Override
-  public Object eval(
-      GlobalResolver resolver,
-      CelFunctionResolver lateBoundFunctionResolver,
-      CelEvaluationListener listener)
-      throws CelEvaluationException {
-    return null;
-  }
-
   private static class Folder implements GlobalResolver {
     private final GlobalResolver resolver;
     private final String accuVar;
@@ -192,7 +171,11 @@ final class EvalFold extends PlannedInterpretable {
     private Object iterVar2Val;
     private Object accuVal;
 
-    private Folder(GlobalResolver resolver, String accuVar, String iterVar, String iterVar2) {
+    private Folder(
+        GlobalResolver resolver,
+        String accuVar,
+        String iterVar,
+        String iterVar2) {
       this.resolver = resolver;
       this.accuVar = accuVar;
       this.iterVar = iterVar;

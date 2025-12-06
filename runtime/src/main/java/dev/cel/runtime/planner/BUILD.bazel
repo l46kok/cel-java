@@ -74,7 +74,10 @@ java_library(
         "//runtime:interpretable",
         "//runtime:program",
         "//runtime:variable_resolver",
+        ":execution_frame",
+        "//common:options",
         "@maven//:com_google_errorprone_error_prone_annotations",
+        "@maven//:org_jspecify_jspecify",
     ],
 )
 
@@ -82,6 +85,7 @@ java_library(
     name = "eval_const",
     srcs = ["EvalConstant.java"],
     deps = [
+        ":execution_frame",
         ":planned_interpretable",
         "//common/values",
         "//common/values:cel_byte_string",
@@ -114,6 +118,7 @@ java_library(
         "RelativeAttribute.java",
     ],
     deps = [
+        ":execution_frame",
         ":eval_helpers",
         ":planned_interpretable",
         ":qualifier",
@@ -162,6 +167,7 @@ java_library(
     srcs = ["EvalAttribute.java"],
     deps = [
         ":attribute",
+        ":execution_frame",
         ":interpretable_attribute",
         ":qualifier",
         "//runtime:evaluation_listener",
@@ -177,6 +183,7 @@ java_library(
     srcs = ["EvalTestOnly.java"],
     deps = [
         ":interpretable_attribute",
+        ":execution_frame",
         ":presence_test_qualifier",
         ":qualifier",
         "//runtime:evaluation_exception",
@@ -191,6 +198,7 @@ java_library(
     name = "eval_zero_arity",
     srcs = ["EvalZeroArity.java"],
     deps = [
+        ":execution_frame",
         ":planned_interpretable",
         "//runtime:evaluation_exception",
         "//runtime:evaluation_listener",
@@ -205,6 +213,7 @@ java_library(
     srcs = ["EvalUnary.java"],
     deps = [
         ":eval_helpers",
+        ":execution_frame",
         ":planned_interpretable",
         "//runtime:evaluation_exception",
         "//runtime:evaluation_listener",
@@ -219,6 +228,7 @@ java_library(
     srcs = ["EvalVarArgsCall.java"],
     deps = [
         ":eval_helpers",
+        ":execution_frame",
         ":planned_interpretable",
         "//runtime:evaluation_exception",
         "//runtime:evaluation_listener",
@@ -233,6 +243,7 @@ java_library(
     srcs = ["EvalOr.java"],
     deps = [
         ":eval_helpers",
+        ":execution_frame",
         ":planned_interpretable",
         "//common/values",
         "//runtime:evaluation_listener",
@@ -247,6 +258,7 @@ java_library(
     srcs = ["EvalAnd.java"],
     deps = [
         ":eval_helpers",
+        ":execution_frame",
         ":planned_interpretable",
         "//common/values",
         "//runtime:evaluation_listener",
@@ -261,6 +273,7 @@ java_library(
     srcs = ["EvalConditional.java"],
     deps = [
         ":planned_interpretable",
+        ":execution_frame",
         "//runtime:evaluation_exception",
         "//runtime:evaluation_listener",
         "//runtime:function_resolver",
@@ -274,6 +287,7 @@ java_library(
     srcs = ["EvalCreateStruct.java"],
     deps = [
         ":planned_interpretable",
+        ":execution_frame",
         "//common/types",
         "//common/values",
         "//common/values:cel_value_provider",
@@ -291,6 +305,7 @@ java_library(
     srcs = ["EvalCreateList.java"],
     deps = [
         ":planned_interpretable",
+        ":execution_frame",
         "//runtime:evaluation_exception",
         "//runtime:evaluation_listener",
         "//runtime:function_resolver",
@@ -305,6 +320,7 @@ java_library(
     srcs = ["EvalCreateMap.java"],
     deps = [
         ":planned_interpretable",
+        ":execution_frame",
         "//runtime:evaluation_exception",
         "//runtime:evaluation_listener",
         "//runtime:function_resolver",
@@ -328,6 +344,20 @@ java_library(
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
         "@maven//:org_jspecify_jspecify",
+        ":execution_frame",
+    ],
+)
+
+
+java_library(
+    name = "execution_frame",
+    srcs = ["ExecutionFrame.java"],
+    deps = [
+        "//common:options",
+        "//runtime:interpretable",
+        "//common/exceptions:iteration_budget_exceeded",
+        "@maven//:org_jspecify_jspecify",
+        "@maven//:com_google_guava_guava",
     ],
 )
 
@@ -335,6 +365,7 @@ java_library(
     name = "eval_helpers",
     srcs = ["EvalHelpers.java"],
     deps = [
+        ":execution_frame",
         ":planned_interpretable",
         ":strict_error_exception",
         "//common:error_codes",
@@ -367,7 +398,11 @@ java_library(
     name = "planned_interpretable",
     srcs = ["PlannedInterpretable.java"],
     deps = [
+        ":execution_frame",
+        "//runtime:evaluation_exception",
         "//runtime:interpretable",
+        "//runtime:evaluation_listener",
+        "//runtime:function_resolver",
         "@maven//:com_google_errorprone_error_prone_annotations",
     ],
 )

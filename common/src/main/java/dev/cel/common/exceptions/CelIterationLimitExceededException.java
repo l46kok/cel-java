@@ -12,24 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dev.cel.runtime.planner;
+package dev.cel.common.exceptions;
 
-import com.google.errorprone.annotations.Immutable;
-import dev.cel.runtime.CelEvaluationException;
-import dev.cel.runtime.GlobalResolver;
+import dev.cel.common.CelErrorCode;
+import dev.cel.common.annotations.Internal;
 
-@Immutable
-abstract class PlannedInterpretable {
-  private final long exprId;
+/** Indicates that the iteration budget for a comprehension has been exceeded. */
+@Internal
+public final class CelIterationLimitExceededException extends CelRuntimeException {
 
-  /** Runs interpretation with the given activation which supplies name/value bindings. */
-  abstract Object eval(GlobalResolver resolver, ExecutionFrame frame) throws CelEvaluationException;
-
-  long exprId() {
-    return exprId;
-  }
-
-  PlannedInterpretable(long exprId) {
-    this.exprId = exprId;
+  public CelIterationLimitExceededException(int budget) {
+    super(String.format("Iteration budget exceeded: %d", budget), CelErrorCode.ITERATION_BUDGET_EXCEEDED);
   }
 }

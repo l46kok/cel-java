@@ -16,6 +16,7 @@ package dev.cel.runtime.planner;
 
 import com.google.auto.value.AutoValue;
 import com.google.errorprone.annotations.Immutable;
+import dev.cel.common.CelOptions;
 import dev.cel.common.exceptions.CelRuntimeException;
 import dev.cel.common.values.ErrorValue;
 import dev.cel.runtime.Activation;
@@ -34,6 +35,8 @@ abstract class PlannedProgram implements Program {
 
   abstract ErrorMetadata metadata();
 
+  abstract CelOptions options();
+
   @Override
   public Object eval() throws CelEvaluationException {
     return evalOrThrow(interpretable(), GlobalResolver.EMPTY);
@@ -46,7 +49,7 @@ abstract class PlannedProgram implements Program {
 
   @Override
   public Object eval(Map<String, ?> mapValue, CelFunctionResolver lateBoundFunctionResolver)
-      throws CelEvaluationException {
+          throws CelEvaluationException {
     throw new UnsupportedOperationException("Late bound functions not supported yet");
   }
 
@@ -56,9 +59,10 @@ abstract class PlannedProgram implements Program {
   }
 
   private Object evalOrThrow(PlannedInterpretable interpretable, GlobalResolver resolver)
-      throws CelEvaluationException {
+          throws CelEvaluationException {
     try {
-      Object evalResult = interpretable.eval(resolver);
+      ExecutionFrame frame = ExecutionFrame.create(resolver, options());
+      Object evalResult = interpretable.eval(resolver, frame);
       if (evalResult instanceof ErrorValue) {
         ErrorValue errorValue = (ErrorValue) evalResult;
         throw newCelEvaluationException(errorValue.exprId(), errorValue.value());
@@ -84,7 +88,8 @@ abstract class PlannedProgram implements Program {
     return builder.setMetadata(metadata(), exprId).build();
   }
 
-  static Program create(PlannedInterpretable interpretable, ErrorMetadata metadata) {
-    return new AutoValue_PlannedProgram(interpretable, metadata);
+  static Program create(
+          PlannedInterpretable interpretable, ErrorMetadata metadata, CelOptions options) {
+    return new AutoValue_PlannedProgram(interpretable, metadata, options);
   }
 }
