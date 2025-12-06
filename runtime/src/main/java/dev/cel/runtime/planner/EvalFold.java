@@ -18,9 +18,13 @@ import com.google.errorprone.annotations.Immutable;
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelEvaluationListener;
 import dev.cel.runtime.CelFunctionResolver;
+import dev.cel.runtime.ConcatenatedListView;
 import dev.cel.runtime.GlobalResolver;
+import dev.cel.runtime.MutableComprehensionMap;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
 
@@ -36,45 +40,125 @@ final class EvalFold extends PlannedInterpretable {
   private final PlannedInterpretable loopStep;
   private final PlannedInterpretable result;
 
-  private static Collection<Object> adaptIterRange(Object iterRangeRaw) {
-    // TODO: Adapt to mutable list/map. At the moment, this is O(n^2) for certain
-    // operations like filter.
-    if (iterRangeRaw instanceof Collection) {
-      return (Collection<Object>) iterRangeRaw;
-    } else if (iterRangeRaw instanceof Map) {
-      return ((Map<Object, Object>) iterRangeRaw).keySet();
-    }
+  static EvalFold create(
+      long exprId,
+      String accuVar,
+      PlannedInterpretable accuInit,
+      String iterVar,
+      String iterVar2,
+      PlannedInterpretable iterRange,
+      PlannedInterpretable loopCondition,
+      PlannedInterpretable loopStep,
+      PlannedInterpretable result) {
+    return new EvalFold(
+        exprId,
+        accuVar,
+        accuInit,
+        iterVar,
+        iterVar2,
+        iterRange,
+        loopCondition,
+        loopStep,
+        result);
+  }
 
-    throw new IllegalArgumentException("Unexpected iter_range type: " + iterRangeRaw.getClass());
+  private EvalFold(
+      long exprId,
+      String accuVar,
+      PlannedInterpretable accuInit,
+      String iterVar,
+      String iterVar2,
+      PlannedInterpretable iterRange,
+      PlannedInterpretable condition,
+      PlannedInterpretable loopStep,
+      PlannedInterpretable result) {
+    super(exprId);
+    this.accuVar = accuVar;
+    this.accuInit = accuInit;
+    this.iterVar = iterVar;
+    this.iterVar2 = iterVar2;
+    this.iterRange = iterRange;
+    this.condition = condition;
+    this.loopStep = loopStep;
+    this.result = result;
   }
 
   @Override
   public Object eval(GlobalResolver resolver) throws CelEvaluationException {
-    Collection<Object> foldRange = adaptIterRange(iterRange.eval(resolver));
-
+    Object iterRangeRaw = iterRange.eval(resolver);
     Folder folder = new Folder(resolver, accuVar, iterVar, iterVar2);
+    folder.accuVal = maybeWrapAccumulator(accuInit.eval(folder));
 
-    folder.accuVal = accuInit.eval(folder);
+    Object result;
+    if (iterRangeRaw instanceof Map) {
+      result = evalMap((Map<?, ?>) iterRangeRaw, folder);
+    } else if (iterRangeRaw instanceof Collection) {
+      result = evalList((Collection<?>) iterRangeRaw, folder);
+    } else {
+      throw new IllegalArgumentException("Unexpected iter_range type: " + iterRangeRaw.getClass());
+    }
 
-    long index = 0;
-    for (Iterator<Object> iterator = foldRange.iterator(); iterator.hasNext(); ) {
+    return maybeUnwrapAccumulator(result);
+  }
+
+  private Object evalMap(Map<?, ?> iterRange, Folder folder) throws CelEvaluationException {
+    for (Map.Entry<?, ?> entry : iterRange.entrySet()) {
       boolean cond = (boolean) condition.eval(folder);
       if (!cond) {
         return result.eval(folder);
       }
+
+      folder.iterVarVal = entry.getKey();
+      if (!iterVar2.isEmpty()) {
+        folder.iterVar2Val = entry.getValue();
+      }
+
+      // TODO: Introduce comprehension safety controls, such as iteration limit.
+      folder.accuVal = loopStep.eval(folder);
+    }
+    return result.eval(folder);
+  }
+
+  private Object evalList(Collection<?> iterRange, Folder folder) throws CelEvaluationException {
+    int index = 0;
+    for (Object item : iterRange) {
+      boolean cond = (boolean) condition.eval(folder);
+      if (!cond) {
+        return result.eval(folder);
+      }
+
       if (iterVar2.isEmpty()) {
-        folder.iterVarVal = iterator.next();
+        folder.iterVarVal = item;
       } else {
-        folder.iterVarVal = index;
-        folder.iterVar2Val = iterator.next();
+        folder.iterVarVal = (long) index;
+        folder.iterVar2Val = item;
       }
 
       // TODO: Introduce comprehension safety controls, such as iteration limit.
       folder.accuVal = loopStep.eval(folder);
       index++;
     }
-
     return result.eval(folder);
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Object maybeWrapAccumulator(Object val) {
+    if (val instanceof List) {
+      return new ConcatenatedListView<>((List<Object>) val);
+    } else if (val instanceof Map) {
+      return new MutableComprehensionMap<>((Map<?, ?>) val);
+    }
+    return val;
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Object maybeUnwrapAccumulator(Object val) {
+    if (val instanceof ConcatenatedListView) {
+      return new ArrayList<>((List<?>) val);
+    } else if (val instanceof MutableComprehensionMap) {
+      return ((MutableComprehensionMap<?, ?>) val).toImmutableMap();
+    }
+    return val;
   }
 
   @Override
@@ -131,40 +215,5 @@ final class EvalFold extends PlannedInterpretable {
 
       return resolver.resolve(name);
     }
-  }
-
-  static EvalFold create(
-      long exprId,
-      String accuVar,
-      PlannedInterpretable accuInit,
-      String iterVar,
-      String iterVar2,
-      PlannedInterpretable iterRange,
-      PlannedInterpretable condition,
-      PlannedInterpretable loopStep,
-      PlannedInterpretable result) {
-    return new EvalFold(
-        exprId, accuVar, accuInit, iterVar, iterVar2, iterRange, condition, loopStep, result);
-  }
-
-  private EvalFold(
-      long exprId,
-      String accuVar,
-      PlannedInterpretable accuInit,
-      String iterVar,
-      String iterVar2,
-      PlannedInterpretable iterRange,
-      PlannedInterpretable condition,
-      PlannedInterpretable loopStep,
-      PlannedInterpretable result) {
-    super(exprId);
-    this.accuVar = accuVar;
-    this.accuInit = accuInit;
-    this.iterVar = iterVar;
-    this.iterVar2 = iterVar2;
-    this.iterRange = iterRange;
-    this.condition = condition;
-    this.loopStep = loopStep;
-    this.result = result;
   }
 }

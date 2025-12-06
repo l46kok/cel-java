@@ -313,6 +313,7 @@ java_library(
         "//runtime",
         "//runtime:function_binding",
         "//runtime:runtime_equality",
+        "//runtime:mutable_comprehension_map",
         "@maven//:com_google_guava_guava",
     ],
 )

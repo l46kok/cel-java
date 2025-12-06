@@ -261,3 +261,13 @@ java_library(
     name = "variable_resolver",
     exports = ["//runtime/src/main/java/dev/cel/runtime:variable_resolver"],
 )
+
+java_library(
+    name = "concatenated_list_view",
+    exports = ["//runtime/src/main/java/dev/cel/runtime:concatenated_list_view"],
+)
+
+java_library(
+    name = "mutable_comprehension_map",
+    exports = ["//runtime/src/main/java/dev/cel/runtime:mutable_comprehension_map"],
+)

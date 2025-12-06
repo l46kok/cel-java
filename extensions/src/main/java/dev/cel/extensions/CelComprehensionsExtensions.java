@@ -37,6 +37,7 @@ import dev.cel.runtime.CelFunctionBinding;
 import dev.cel.runtime.CelInternalRuntimeLibrary;
 import dev.cel.runtime.CelRuntimeBuilder;
 import dev.cel.runtime.RuntimeEquality;
+import dev.cel.runtime.MutableComprehensionMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -180,23 +181,25 @@ final class CelComprehensionsExtensions
 
   // TODO: Implement a more efficient map insertion based on mutability once mutable
   // maps are supported in Java stack.
-  private static ImmutableMap<Object, Object> mapInsertMap(
+  @SuppressWarnings("unchecked")
+  private static Map<Object, Object> mapInsertMap(
       Map<?, ?> targetMap, Map<?, ?> mapToMerge, RuntimeEquality equality) {
-    ImmutableMap.Builder<Object, Object> resultBuilder =
-        ImmutableMap.builderWithExpectedSize(targetMap.size() + mapToMerge.size());
-
-    for (Map.Entry<?, ?> entry : mapToMerge.entrySet()) {
-      if (equality.findInMap(targetMap, entry.getKey()).isPresent()) {
-        throw new IllegalArgumentException(
-            String.format("insert failed: key '%s' already exists", entry.getKey()));
-      } else {
-        resultBuilder.put(entry.getKey(), entry.getValue());
+    if (targetMap instanceof MutableComprehensionMap) {
+      for (Map.Entry<?, ?> entry : mapToMerge.entrySet()) {
+        Object key = entry.getKey();
+        if (equality.findInMap(targetMap, key).isPresent()) {
+          throw new IllegalArgumentException(
+              String.format("insert failed: key '%s' already exists", key));
+        }
+        ((MutableComprehensionMap<Object, Object>) targetMap).put(key, entry.getValue());
       }
+      return (Map<Object, Object>) targetMap;
     }
-    return resultBuilder.putAll(targetMap).buildOrThrow();
+    throw new IllegalStateException("Aggregating map expected to be MutableComprehensionMap");
   }
 
-  private static ImmutableMap<Object, Object> mapInsertKeyValue(
+  @SuppressWarnings("unchecked")
+  private static Map<Object, Object> mapInsertKeyValue(
       Object[] args, RuntimeEquality equality) {
     Map<?, ?> map = (Map<?, ?>) args[0];
     Object key = args[1];
@@ -207,9 +210,12 @@ final class CelComprehensionsExtensions
           String.format("insert failed: key '%s' already exists", key));
     }
 
-    ImmutableMap.Builder<Object, Object> builder =
-        ImmutableMap.builderWithExpectedSize(map.size() + 1);
-    return builder.put(key, value).putAll(map).buildOrThrow();
+    if (map instanceof MutableComprehensionMap) {
+      ((MutableComprehensionMap<Object, Object>) map).put(key, value);
+      return (Map<Object, Object>) map;
+    }
+
+    throw new IllegalStateException("Aggregating map expected to be MutableComprehensionMap");
   }
 
   private static Optional<CelExpr> expandAllMacro(

@@ -5,6 +5,7 @@ bazel-genfiles
 bazel-cel-java
 bazel-out
 bazel-testlogs
+.vscode
 
 # IntelliJ IDEA
 .idea

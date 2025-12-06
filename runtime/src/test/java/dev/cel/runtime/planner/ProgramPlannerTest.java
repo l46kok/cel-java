@@ -782,6 +782,7 @@ public final class ProgramPlannerTest {
   @TestParameters("{expression: '[1,2,3].exists(i, v, i >= 0 && v > 0) == true'}")
   @TestParameters("{expression: '[1,2,3].exists(i, v, i < 0 || v < 0) == false'}")
   @TestParameters("{expression: '[1,2,3].map(x, x + 1) == [2,3,4]'}")
+  @TestParameters("{expression: '[1,2,3].filter(x, x > 0) == [1,2,3]'}")
   public void plan_comprehension_lists(String expression) throws Exception {
     CelAbstractSyntaxTree ast = compile(expression);
     Program program = PLANNER.plan(ast);
@@ -792,10 +793,8 @@ public final class ProgramPlannerTest {
   }
 
   @Test
-  @TestParameters("{expression: '[1,2,3].exists(x, x > 0) == true'}")
-  @TestParameters("{expression: '[1,2,3].exists(x, x < 0) == false'}")
-  @TestParameters("{expression: '[1,2,3].exists(i, v, i >= 0 && v > 0) == true'}")
-  @TestParameters("{expression: '[1,2,3].exists(i, v, i < 0 || v < 0) == false'}")
+  @TestParameters("{expression: '{\"a\": \"b\", \"c\": \"c\"}.exists(k, v, k == v)'}")
+  @TestParameters("{expression: '{\"a\": 1, \"b\": 2}.exists(k, v, v == 3) == false'}")
   public void plan_comprehension_maps(String expression) throws Exception {
     CelAbstractSyntaxTree ast = compile(expression);
     Program program = PLANNER.plan(ast);

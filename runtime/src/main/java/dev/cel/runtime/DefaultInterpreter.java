@@ -959,6 +959,23 @@ final class DefaultInterpreter implements Interpreter {
     }
 
     @SuppressWarnings("unchecked")
+    private IntermediateResult maybeAdaptToMutableMapView(IntermediateResult accuValue) {
+      if (accuValue.value() instanceof Map && !(accuValue.value() instanceof MutableComprehensionMap)) {
+        Map<Object, Object> map = (Map<Object, Object>) accuValue.value();
+        return IntermediateResult.create(new MutableComprehensionMap<>(map));
+      }
+      return accuValue;
+    }
+
+    private IntermediateResult maybeAdaptMutableMapToImmutable(IntermediateResult accuValue) {
+      if (accuValue.value() instanceof MutableComprehensionMap) {
+        return IntermediateResult.create(
+            ((MutableComprehensionMap<?, ?>) accuValue.value()).toImmutableMap());
+      }
+      return accuValue;
+    }
+
+    @SuppressWarnings("unchecked")
     private IntermediateResult evalComprehension(
         ExecutionFrame frame, CelExpr unusedExpr, CelComprehension compre)
         throws CelEvaluationException {
@@ -990,6 +1007,7 @@ final class DefaultInterpreter implements Interpreter {
         // This ensures macros such as filter/map that uses "add_list" functions under the hood
         // remain linear in time complexity
         accuValue = maybeAdaptToListView(accuValue);
+        accuValue = maybeAdaptToMutableMapView(accuValue);
       }
       int i = 0;
       for (Object elem : iterRange) {
@@ -1035,6 +1053,7 @@ final class DefaultInterpreter implements Interpreter {
       }
 
       accuValue = maybeAdaptViewToList(accuValue);
+      accuValue = maybeAdaptMutableMapToImmutable(accuValue);
 
       Map<String, IntermediateResult> scopedAttributes =
           Collections.singletonMap(accuVar, accuValue);

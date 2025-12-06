@@ -307,6 +307,7 @@ java_library(
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
         "@maven//:com_google_protobuf_protobuf_java",
+        ":mutable_comprehension_map",
     ],
 )
 
@@ -346,6 +347,7 @@ cel_android_library(
         "@maven//:com_google_guava_guava",
         "@maven_android//:com_google_guava_guava",
         "@maven_android//:com_google_protobuf_protobuf_javalite",
+        ":mutable_comprehension_map",
     ],
 )
 
@@ -951,7 +953,6 @@ cel_android_library(
         "//common/values:cel_value_provider_android",
         "//common/values:values_android",
         "//runtime/standard:standard_function_android",
-        "//third_party/java/jsr305_annotations",
         "@maven//:com_google_code_findbugs_annotations",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
@@ -1157,7 +1158,6 @@ java_library(
     name = "concatenated_list_view",
     srcs = ["ConcatenatedListView.java"],
     # used_by_android
-    visibility = ["//visibility:private"],
 )
 
 java_library(
@@ -1274,5 +1274,14 @@ java_library(
     tags = [
     ],
     deps = [
+    ],
+)
+
+java_library(
+    name = "mutable_comprehension_map",
+    srcs = ["MutableComprehensionMap.java"],
+    deps = [
+        "@maven//:com_google_guava_guava",
+        "@maven//:org_jspecify_jspecify",
     ],
 )

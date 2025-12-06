@@ -2,7 +2,7 @@
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
-// You may obtain a copy of the License aj
+// You may obtain a copy of the License at
 //
 //      https://www.apache.org/licenses/LICENSE-2.0
 //
@@ -24,19 +24,19 @@ import java.util.NoSuchElementException;
 /**
  * A custom list view implementation that allows O(1) concatenation of two lists. Its primary
  * purpose is to facilitate efficient accumulation of lists for later materialization. (ex:
- * comprehensions that dispatch `add_list` to concat N lists together).
+ * comprehensions that dispatch add_list to concat N lists together).
  *
  * <p>This does not support any of the standard list operations from {@link java.util.List}.
  */
-final class ConcatenatedListView<E> extends AbstractList<E> {
+public final class ConcatenatedListView<E> extends AbstractList<E> {
   private final List<List<? extends E>> sourceLists;
   private int totalSize = 0;
 
-  ConcatenatedListView() {
+  public ConcatenatedListView() {
     this.sourceLists = new ArrayList<>();
   }
 
-  ConcatenatedListView(Collection<? extends E> collection) {
+  public ConcatenatedListView(Collection<? extends E> collection) {
     this();
     addAll(collection);
   }
