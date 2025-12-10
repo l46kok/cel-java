@@ -15,7 +15,10 @@
 package dev.cel.runtime;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.errorprone.annotations.Immutable;
+import java.util.Collection;
 
 @Immutable
 final class FunctionBindingImpl implements CelFunctionBinding {
@@ -57,5 +60,46 @@ final class FunctionBindingImpl implements CelFunctionBinding {
     this.argTypes = argTypes;
     this.definition = definition;
     this.isStrict = isStrict;
+  }
+
+  static ImmutableSet<CelFunctionBinding> groupOverloadsToFunction(
+      String functionName,
+      ImmutableSet<CelFunctionBinding> overloadBindings
+  ) {
+    if (overloadBindings.size() == 1) {
+      CelFunctionBinding singleBinding = Iterables.getOnlyElement(overloadBindings);
+      FunctionBindingImpl functionBindingImpl = new FunctionBindingImpl(functionName,
+          singleBinding.getArgTypes(),
+          singleBinding.getDefinition(),
+          singleBinding.isStrict());
+
+      return ImmutableSet.of(functionBindingImpl);
+    }
+
+    ImmutableSet.Builder<CelFunctionBinding> builder = ImmutableSet.builder();
+    overloadBindings.forEach(builder::add);
+
+    // Setup dynamic dispatch
+    CelFunctionOverload dynamicDispatchDef =
+        args -> {
+          for (CelFunctionBinding overload : overloadBindings) {
+            // TODO: Avoid checking twice (See CelRuntimeImpl)
+            // TODO: Pull canHandle to somewhere else?
+            if (CelResolvedOverload.canHandle(
+                args, overload.getArgTypes(), overload.isStrict())) {
+              return overload.getDefinition().apply(args);
+            }
+          }
+
+          throw new IllegalArgumentException(
+              "No matching overload for function: " + functionName);
+        };
+
+    boolean allOverloadsStrict = overloadBindings.stream().allMatch(CelFunctionBinding::isStrict);
+    builder.add(
+        new FunctionBindingImpl(
+            functionName, ImmutableList.of(),  dynamicDispatchDef, allOverloadsStrict));
+
+    return builder.build();
   }
 }

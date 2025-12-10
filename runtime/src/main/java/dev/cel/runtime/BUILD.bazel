@@ -288,6 +288,7 @@ java_library(
         ":interpretable",
         ":interpreter_util",
         ":metadata",
+        ":mutable_comprehension_map",
         ":resolved_overload",
         ":runtime_helpers",
         ":runtime_type_provider",
@@ -307,7 +308,6 @@ java_library(
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
         "@maven//:com_google_protobuf_protobuf_java",
-        ":mutable_comprehension_map",
     ],
 )
 
@@ -327,6 +327,7 @@ cel_android_library(
         ":interpretable_android",
         ":interpreter_util_android",
         ":metadata",
+        ":mutable_comprehension_map",
         ":resolved_overload_android",
         ":runtime_helpers_android",
         ":runtime_type_provider_android",
@@ -347,7 +348,6 @@ cel_android_library(
         "@maven//:com_google_guava_guava",
         "@maven_android//:com_google_guava_guava",
         "@maven_android//:com_google_protobuf_protobuf_javalite",
-        ":mutable_comprehension_map",
     ],
 )
 
@@ -729,6 +729,7 @@ java_library(
     ],
     deps = [
         ":function_overload",
+        ":resolved_overload",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
     ],

@@ -318,8 +318,7 @@ abstract class CelRuntimeImpl implements CelRuntime {
             binding.isStrict(),
             args ->
                 guardedOp(
-                    // TODO: FunctionName
-                    "temp_func", args, binding));
+                    binding.getOverloadId(), args, binding));
       }
 
       for (CelFunctionBinding binding : customFunctionBindings) {
@@ -329,8 +328,7 @@ abstract class CelRuntimeImpl implements CelRuntime {
             binding.isStrict(),
             args ->
                 guardedOp(
-                    // TODO: FunctionName
-                    "cust_func", args, binding));
+                    binding.getOverloadId(), args, binding));
       }
 
       return builder.build();

@@ -14,8 +14,13 @@
 
 package dev.cel.runtime;
 
+import static com.google.common.base.Preconditions.checkArgument;
+
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.errorprone.annotations.Immutable;
+import java.util.Collection;
 
 /**
  * Binding consisting of an overload id, a Java-native argument signature, and an overload
@@ -69,5 +74,14 @@ public interface CelFunctionBinding {
       String overloadId, Iterable<Class<?>> argTypes, CelFunctionOverload impl) {
     return new FunctionBindingImpl(
         overloadId, ImmutableList.copyOf(argTypes), impl, /* isStrict= */ true);
+  }
+
+  /** TODO */
+  static ImmutableSet<CelFunctionBinding> groupOverloads(
+      String functionName, Collection<CelFunctionBinding> overloadBindings) {
+    checkArgument(Strings.isNullOrEmpty(functionName), "Function name cannot be null or empty");
+    checkArgument(overloadBindings.isEmpty(), "You must provide at least one binding.");
+
+    return FunctionBindingImpl.groupOverloadsToFunction(functionName, ImmutableSet.copyOf(overloadBindings));
   }
 }
