@@ -65,6 +65,10 @@ final class FunctionBindingImpl implements CelFunctionBinding {
       String functionName, ImmutableSet<CelFunctionBinding> overloadBindings) {
     if (overloadBindings.size() == 1) {
       CelFunctionBinding singleBinding = Iterables.getOnlyElement(overloadBindings);
+      if (singleBinding.getOverloadId().equals(functionName)) {
+        return ImmutableSet.of(singleBinding);
+      }
+
       FunctionBindingImpl functionBindingImpl =
           new FunctionBindingImpl(
               functionName,

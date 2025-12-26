@@ -47,9 +47,9 @@ import java.util.Optional;
  * a type call (type('foo'), type(1), etc.) or as a type literal (type, int, string, etc.)
  */
 @Immutable
-class TypeResolver {
+public class TypeResolver {
 
-  static TypeResolver create() {
+  public static TypeResolver create() {
     return new TypeResolver();
   }
 
@@ -93,7 +93,7 @@ class TypeResolver {
           .buildOrThrow();
 
   /** Adapt the type-checked {@link CelType} into a runtime type value {@link TypeType}. */
-  TypeType adaptType(CelType typeCheckedType) {
+  public TypeType adaptType(CelType typeCheckedType) {
     checkNotNull(typeCheckedType);
 
     switch (typeCheckedType.kind()) {
@@ -112,7 +112,7 @@ class TypeResolver {
     }
   }
 
-  Optional<TypeType> resolveWellKnownObjectType(Object obj) {
+  public Optional<TypeType> resolveWellKnownObjectType(Object obj) {
     if (obj instanceof TypeType) {
       return Optional.of(RUNTIME_TYPE_TYPE);
     }
@@ -135,7 +135,7 @@ class TypeResolver {
   }
 
   /** Resolve the CEL type of the {@code obj}. */
-  TypeType resolveObjectType(Object obj, CelType typeCheckedType) {
+  public TypeType resolveObjectType(Object obj, CelType typeCheckedType) {
     checkNotNull(obj);
     Optional<TypeType> wellKnownTypeType = resolveWellKnownObjectType(obj);
     if (wellKnownTypeType.isPresent()) {

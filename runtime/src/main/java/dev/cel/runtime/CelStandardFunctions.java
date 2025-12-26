@@ -115,6 +115,8 @@ import dev.cel.runtime.standard.SubtractOperator;
 import dev.cel.runtime.standard.SubtractOperator.SubtractOverload;
 import dev.cel.runtime.standard.TimestampFunction;
 import dev.cel.runtime.standard.TimestampFunction.TimestampOverload;
+import dev.cel.runtime.standard.TypeFunction;
+import dev.cel.runtime.standard.TypeFunction.TypeOverload;
 import dev.cel.runtime.standard.UintFunction;
 import dev.cel.runtime.standard.UintFunction.UintOverload;
 
@@ -250,6 +252,9 @@ public final class CelStandardFunctions {
         Conversions.STRING_TO_TIMESTAMP,
         Conversions.TIMESTAMP_TO_TIMESTAMP,
         Conversions.INT64_TO_TIMESTAMP),
+
+    TYPE("type", Conversions.TO_TYPE),
+
     DYN("dyn", Conversions.TO_DYN),
     MATCHES("matches", StringMatchers.MATCHES, StringMatchers.MATCHES_STRING),
     CONTAINS("contains", StringMatchers.CONTAINS_STRING),
@@ -522,6 +527,8 @@ public final class CelStandardFunctions {
         STRING_TO_TIMESTAMP(TimestampOverload.STRING_TO_TIMESTAMP),
         TIMESTAMP_TO_TIMESTAMP(TimestampOverload.TIMESTAMP_TO_TIMESTAMP),
         INT64_TO_TIMESTAMP(TimestampOverload.INT64_TO_TIMESTAMP),
+
+        TO_TYPE(TypeOverload.TYPE),
 
         TO_DYN(DynOverload.TO_DYN);
 

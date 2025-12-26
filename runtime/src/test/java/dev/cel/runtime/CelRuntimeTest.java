@@ -300,6 +300,19 @@ public class CelRuntimeTest {
   }
 
   @Test
+  public void smokeTest() throws Exception {
+    Cel cel = CelFactory.standardCelBuilder()
+            .addMessageTypes(TestAllTypes.getDescriptor())
+            .build();
+//    CelAbstractSyntaxTree ast = cel.compile("type(cel.expr.conformance.proto3.TestAllTypes{})").getAst();
+    CelAbstractSyntaxTree ast = cel.compile("type").getAst();
+
+    Object result = cel.createProgram(ast).eval();
+
+    assertThat(result).isEqualTo("hello world");
+  }
+
+  @Test
   public void trace_ident() throws Exception {
     CelEvaluationListener listener =
         (expr, res) -> {

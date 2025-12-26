@@ -41,6 +41,7 @@ public class DefaultTypeProvider implements CelTypeProvider {
   private DefaultTypeProvider() {
     ImmutableMap.Builder<String, CelType> typeMapBuilder = ImmutableMap.builder();
     typeMapBuilder.putAll(SimpleType.TYPE_MAP);
+    typeMapBuilder.put("type", SimpleType.DYN);
     typeMapBuilder.put("list", ListType.create(SimpleType.DYN));
     typeMapBuilder.put("map", MapType.create(SimpleType.DYN, SimpleType.DYN));
     typeMapBuilder.put(

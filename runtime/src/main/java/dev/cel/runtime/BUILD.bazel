@@ -231,7 +231,7 @@ cel_android_library(
 java_library(
     name = "descriptor_type_resolver",
     srcs = ["DescriptorTypeResolver.java"],
-    visibility = ["//visibility:private"],
+    visibility = ["//visibility:public"],
     deps = [
         ":type_resolver",
         "//common/types",
@@ -658,6 +658,7 @@ java_library(
         "//runtime/standard:string",
         "//runtime/standard:subtract",
         "//runtime/standard:timestamp",
+        "//runtime/standard:type",
         "//runtime/standard:uint",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
@@ -715,6 +716,7 @@ cel_android_library(
         "//runtime/standard:string_android",
         "//runtime/standard:subtract_android",
         "//runtime/standard:timestamp_android",
+        "//runtime/standard:type_android",
         "//runtime/standard:uint_android",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",

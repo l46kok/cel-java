@@ -281,6 +281,7 @@ public final class CelRuntimeLegacyImpl implements CelRuntime {
           ImmutableMap.builder();
       for (CelFunctionBinding standardFunctionBinding :
           newStandardFunctionBindings(runtimeEquality)) {
+
         functionBindingsBuilder.put(
             standardFunctionBinding.getOverloadId(), standardFunctionBinding);
       }
