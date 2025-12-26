@@ -17,6 +17,7 @@ package dev.cel.runtime;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import com.google.errorprone.annotations.CheckReturnValue;
 import dev.cel.common.CelOptions;
+import dev.cel.common.types.CelTypeProvider;
 import dev.cel.common.values.CelValueProvider;
 import dev.cel.runtime.standard.CelStandardFunction;
 
@@ -46,6 +47,9 @@ public interface CelLiteRuntimeBuilder {
   /** Bind a collection of {@link CelFunctionBinding} objects to the runtime. */
   @CanIgnoreReturnValue
   CelLiteRuntimeBuilder addFunctionBindings(Iterable<CelFunctionBinding> bindings);
+
+  @CanIgnoreReturnValue
+  CelLiteRuntimeBuilder setTypeProvider(CelTypeProvider celTypeProvider);
 
   /**
    * Sets the {@link CelValueProvider} for resolving struct values during evaluation. Multiple

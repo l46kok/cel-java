@@ -42,6 +42,7 @@ import dev.cel.common.CelContainer;
 import dev.cel.common.CelFunctionDecl;
 import dev.cel.common.CelOverloadDecl;
 import dev.cel.common.internal.ProtoTimeUtils;
+import dev.cel.common.types.ProtoMessageLiteTypeProvider;
 import dev.cel.common.types.SimpleType;
 import dev.cel.common.types.StructTypeReference;
 import dev.cel.common.values.CelByteString;
@@ -86,6 +87,11 @@ public class CelLiteRuntimeTest {
   private static final CelLiteRuntime CEL_RUNTIME =
       CelLiteRuntimeFactory.newLiteRuntimeBuilder()
           .setStandardFunctions(CelStandardFunctions.ALL_STANDARD_FUNCTIONS)
+          .setTypeProvider(
+              ProtoMessageLiteTypeProvider.newInstance(
+                  dev.cel.expr.conformance.proto2.TestAllTypesCelDescriptor.getDescriptor(),
+                  TestAllTypesCelDescriptor.getDescriptor())
+          )
           .setValueProvider(
               ProtoMessageLiteValueProvider.newInstance(
                   dev.cel.expr.conformance.proto2.TestAllTypesCelDescriptor.getDescriptor(),

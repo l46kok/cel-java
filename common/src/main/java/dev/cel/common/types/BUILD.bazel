@@ -191,6 +191,9 @@ java_library(
     tags = [
     ],
     deps = [
+        ":types",
+        ":type_providers",
+        "//protobuf:cel_lite_descriptor",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
     ],

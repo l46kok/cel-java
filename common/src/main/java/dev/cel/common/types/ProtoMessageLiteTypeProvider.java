@@ -18,6 +18,7 @@ import static com.google.common.collect.ImmutableMap.toImmutableMap;
 
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import dev.cel.protobuf.CelLiteDescriptor;
 import dev.cel.protobuf.CelLiteDescriptor.FieldLiteDescriptor;
 import dev.cel.protobuf.CelLiteDescriptor.MessageLiteDescriptor;
@@ -51,12 +52,17 @@ public final class ProtoMessageLiteTypeProvider implements CelTypeProvider {
 
   @Override
   public ImmutableCollection<CelType> types() {
-    return null;
+    return allTypes.values();
   }
 
   @Override
   public Optional<CelType> findType(String typeName) {
     return Optional.empty();
+  }
+
+  public static ProtoMessageLiteTypeProvider newInstance(
+          CelLiteDescriptor... celLiteDescriptors) {
+    return newInstance(ImmutableSet.copyOf(celLiteDescriptors));
   }
 
   public static ProtoMessageLiteTypeProvider newInstance(
