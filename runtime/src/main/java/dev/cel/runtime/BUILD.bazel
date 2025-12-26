@@ -614,6 +614,7 @@ java_library(
     deps = [
         ":function_binding",
         ":runtime_equality",
+        "//common:operator",
         "//common:options",
         "//common/annotations",
         "//runtime/standard:add",
