@@ -17,6 +17,7 @@ package dev.cel.runtime;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.auto.value.AutoValue;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
@@ -42,7 +43,9 @@ import dev.cel.common.values.CelValueConverter;
 import dev.cel.common.values.CelValueProvider;
 import dev.cel.common.values.CombinedCelValueProvider;
 import dev.cel.common.values.ProtoMessageValueProvider;
+import dev.cel.runtime.CelLateFunctionBindings;
 import dev.cel.runtime.planner.ProgramPlanner;
+import dev.cel.runtime.standard.CelStandardFunction;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -390,7 +393,9 @@ abstract class CelRuntimeImpl implements CelRuntime {
               dispatcher,
               celValueConverter,
               CelContainer.newBuilder().build(), // TODO: Accept CEL container
-              options());
+              options(),
+              ImmutableSet.of(),
+              CelLateFunctionBindings.from(ImmutableList.of()));
       setPlanner(planner);
 
       setFunctionBindings(ImmutableMap.copyOf(mutableFunctionBindings));

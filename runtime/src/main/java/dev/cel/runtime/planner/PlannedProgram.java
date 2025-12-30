@@ -55,15 +55,17 @@ abstract class PlannedProgram implements Program {
 
   abstract CelOptions options();
 
+  abstract CelFunctionResolver lateBoundResolver();
+
   @Override
   public Object eval() throws CelEvaluationException {
-    return evalOrThrow(interpretable(), GlobalResolver.EMPTY, NO_LATE_BOUND_FUNCTIONS);
+    return evalOrThrow(interpretable(), GlobalResolver.EMPTY, lateBoundResolver());
   }
 
   @Override
   public Object eval(Map<String, ?> mapValue) throws CelEvaluationException {
     return evalOrThrow(
-        interpretable(), Activation.copyOf(mapValue), NO_LATE_BOUND_FUNCTIONS);
+        interpretable(), Activation.copyOf(mapValue), lateBoundResolver());
   }
 
   @Override
@@ -78,7 +80,7 @@ abstract class PlannedProgram implements Program {
     return evalOrThrow(
         interpretable(),
         ((name) -> resolver.find(name).orElse(null)),
-        NO_LATE_BOUND_FUNCTIONS);
+        lateBoundResolver());
   }
 
   private Object evalOrThrow(
@@ -105,17 +107,18 @@ abstract class PlannedProgram implements Program {
     if (e instanceof StrictErrorException) {
       // Preserve detailed error, including error codes if one exists.
       builder = CelEvaluationExceptionBuilder.newBuilder((CelRuntimeException) e.getCause());
-    } else if (e instanceof CelRuntimeException) {
-      builder = CelEvaluationExceptionBuilder.newBuilder((CelRuntimeException) e);
     } else {
-      builder = CelEvaluationExceptionBuilder.newBuilder(e.getMessage()).setCause(e);
+      builder = CelEvaluationExceptionBuilder.newBuilder(e.getMessage());
     }
 
     return builder.setMetadata(metadata(), exprId).build();
   }
 
   static Program create(
-      PlannedInterpretable interpretable, ErrorMetadata metadata, CelOptions options) {
-    return new AutoValue_PlannedProgram(interpretable, metadata, options);
+      PlannedInterpretable interpretable,
+      ErrorMetadata metadata,
+      CelOptions options,
+      CelFunctionResolver lateBoundResolver) {
+    return new AutoValue_PlannedProgram(interpretable, metadata, options, lateBoundResolver);
   }
 }

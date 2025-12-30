@@ -811,6 +811,8 @@ java_library(
     tags = [
     ],
     deps = [
+        ":late_function_binding",
+        "//runtime/src/main/java/dev/cel/runtime/standard:standard_function",
         ":activation",
         ":descriptor_message_provider",
         ":descriptor_type_resolver",
@@ -868,6 +870,7 @@ java_library(
     tags = [
     ],
     deps = [
+        "//common:compiler_common",
         ":evaluation_exception",
         ":function_binding",
         ":program",
@@ -891,6 +894,9 @@ java_library(
     tags = [
     ],
     deps = [
+        "//common:compiler_common",
+        "//common:cel_descriptor_util",
+        ":late_function_binding",
         ":dispatcher",
         ":function_binding",
         ":interpreter",
@@ -900,6 +906,7 @@ java_library(
         ":runtime_equality",
         ":runtime_helpers",
         ":type_resolver",
+        ":function_resolver",
         "//:auto_value",
         "//common:cel_ast",
         "//common:container",
@@ -954,6 +961,7 @@ cel_android_library(
     tags = [
     ],
     deps = [
+        ":late_function_binding_android",
         ":dispatcher_android",
         ":evaluation_exception",
         ":function_binding_android",

@@ -14,6 +14,7 @@
 
 package dev.cel.runtime;
 
+import com.google.errorprone.annotations.Immutable;
 import javax.annotation.concurrent.ThreadSafe;
 import java.util.List;
 import java.util.Optional;
@@ -23,6 +24,7 @@ import java.util.Optional;
  * arguments.
  */
 @ThreadSafe
+@Immutable
 public interface CelFunctionResolver {
 
   /**

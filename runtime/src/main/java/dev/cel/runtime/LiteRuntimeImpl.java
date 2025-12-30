@@ -30,9 +30,12 @@ import dev.cel.common.values.CelValue;
 import dev.cel.common.values.CelValueConverter;
 import dev.cel.common.values.CelValueProvider;
 import dev.cel.runtime.planner.ProgramPlanner;
+import dev.cel.runtime.CelLateFunctionBindings;
 import dev.cel.runtime.standard.CelStandardFunction;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -82,6 +85,7 @@ final class LiteRuntimeImpl implements CelLiteRuntime {
     // Following is visible to test `toBuilder`.
     @VisibleForTesting CelOptions celOptions;
     @VisibleForTesting final HashMap<String, CelFunctionBinding> customFunctionBindings;
+    @VisibleForTesting final ImmutableList.Builder<CelFunctionBinding> lateBoundBindingsBuilder;
     @VisibleForTesting final ImmutableSet.Builder<CelLiteRuntimeLibrary> runtimeLibrariesBuilder;
     @VisibleForTesting final ImmutableSet.Builder<CelStandardFunction> standardFunctionBuilder;
     @VisibleForTesting CelTypeProvider celTypeProvider;
@@ -113,6 +117,19 @@ final class LiteRuntimeImpl implements CelLiteRuntime {
     @Override
     public CelLiteRuntimeBuilder addFunctionBindings(Iterable<CelFunctionBinding> bindings) {
       bindings.forEach(o -> customFunctionBindings.putIfAbsent(o.getOverloadId(), o));
+      return this;
+    }
+
+    @Override
+    public CelLiteRuntimeBuilder addLateBoundBindings(CelFunctionBinding... bindings) {
+      checkNotNull(bindings);
+      return addLateBoundBindings(Arrays.asList(bindings));
+    }
+
+    @Override
+    public CelLiteRuntimeBuilder addLateBoundBindings(Iterable<CelFunctionBinding> bindings) {
+      checkNotNull(bindings);
+      lateBoundBindingsBuilder.addAll(bindings);
       return this;
     }
 
@@ -215,6 +232,13 @@ final class LiteRuntimeImpl implements CelLiteRuntime {
             new CelTypeProvider.CombinedCelTypeProvider(celTypeProvider, this.celTypeProvider);
       }
 
+      ImmutableList<CelFunctionBinding> lateBoundBindings = lateBoundBindingsBuilder.build();
+      CelFunctionResolver lateBoundResolver = CelLateFunctionBindings.from(lateBoundBindings);
+      ImmutableSet<String> lateBoundFunctions =
+          lateBoundBindings.stream()
+              .map(CelFunctionBinding::getOverloadId)
+              .collect(ImmutableSet.toImmutableSet());
+
       ProgramPlanner planner =
           ProgramPlanner.newPlanner(
               celTypeProvider,
@@ -222,7 +246,9 @@ final class LiteRuntimeImpl implements CelLiteRuntime {
               dispatcherBuilder.build(),
               celValueProvider.celValueConverter(),
               CelContainer.newBuilder().build(),
-              celOptions);
+              celOptions,
+              lateBoundFunctions,
+              lateBoundResolver);
 
       return new LiteRuntimeImpl(
           celOptions,
@@ -255,6 +281,7 @@ final class LiteRuntimeImpl implements CelLiteRuntime {
             }
           };
       this.customFunctionBindings = new HashMap<>();
+      this.lateBoundBindingsBuilder = ImmutableList.builder();
       this.standardFunctionBuilder = ImmutableSet.builder();
       this.runtimeLibrariesBuilder = ImmutableSet.builder();
       this.container = CelContainer.newBuilder().build();

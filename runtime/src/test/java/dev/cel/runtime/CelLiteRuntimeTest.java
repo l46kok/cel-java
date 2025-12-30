@@ -50,6 +50,10 @@ import dev.cel.common.values.NullValue;
 import dev.cel.common.values.ProtoMessageLiteValueProvider;
 import dev.cel.compiler.CelCompiler;
 import dev.cel.compiler.CelCompilerFactory;
+import dev.cel.runtime.CelFunctionBinding;
+import dev.cel.runtime.CelLiteRuntime;
+import dev.cel.runtime.CelLiteRuntimeFactory;
+import dev.cel.compiler.CelCompilerFactory;
 import dev.cel.expr.conformance.proto3.TestAllTypes;
 import dev.cel.expr.conformance.proto3.TestAllTypes.NestedEnum;
 import dev.cel.expr.conformance.proto3.TestAllTypes.NestedMessage;
@@ -631,18 +635,17 @@ public class CelLiteRuntimeTest {
                     CelOverloadDecl.newGlobalOverload(
                         "lateBoundFunc_string", SimpleType.STRING, SimpleType.STRING)))
             .build();
-    CelLiteRuntime celRuntime = CelLiteRuntimeFactory.newLiteRuntimeBuilder().build();
+    CelLiteRuntime celRuntime =
+        CelLiteRuntimeFactory.newLiteRuntimeBuilder()
+            .addLateBoundBindings(
+                CelFunctionBinding.groupOverloads(
+                    "lateBoundFunc",
+                    CelFunctionBinding.from(
+                        "lateBoundFunc_string", String.class, arg -> arg + " world")))
+            .build();
     CelAbstractSyntaxTree ast = celCompiler.compile("lateBoundFunc('hello')").getAst();
 
-    String result =
-        (String)
-            celRuntime
-                .createProgram(ast)
-                .eval(
-                    ImmutableMap.of(),
-                    CelLateFunctionBindings.from(
-                        CelFunctionBinding.from(
-                            "lateBoundFunc_string", String.class, arg -> arg + " world")));
+    String result = (String) celRuntime.createProgram(ast).eval();
 
     assertThat(result).isEqualTo("hello world");
   }

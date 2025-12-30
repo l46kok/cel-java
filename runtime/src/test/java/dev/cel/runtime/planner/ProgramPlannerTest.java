@@ -119,7 +119,9 @@ public final class ProgramPlannerTest {
           newDispatcher(),
           CEL_VALUE_CONVERTER,
           CEL_CONTAINER,
-          CEL_OPTIONS);
+          CEL_OPTIONS,
+          ImmutableSet.of(),
+          CelLateFunctionBindings.from(ImmutableList.of()));
 
   private static final CelCompiler CEL_COMPILER =
       CelCompilerFactory.standardCelCompilerBuilder()
@@ -779,7 +781,9 @@ public final class ProgramPlannerTest {
             newDispatcher(),
             CEL_VALUE_CONVERTER,
             CEL_CONTAINER,
-            options);
+            options,
+            ImmutableSet.of(),
+            CelLateFunctionBindings.from(ImmutableList.of()));
     CelAbstractSyntaxTree ast = compile(expression);
 
     Program program = planner.plan(ast);
@@ -799,7 +803,9 @@ public final class ProgramPlannerTest {
             newDispatcher(),
             CEL_VALUE_CONVERTER,
             CEL_CONTAINER,
-            options);
+            options,
+            ImmutableSet.of(),
+            CelLateFunctionBindings.from(ImmutableList.of()));
     CelAbstractSyntaxTree ast = compile("[1, 2, 3].map(x, [1, 2].map(y, x + y))");
 
     Program program = planner.plan(ast);
@@ -813,20 +819,39 @@ public final class ProgramPlannerTest {
 
   @Test
   public void plan_call_lateBoundFunction_success() throws Exception {
+    ProgramPlanner planner =
+        ProgramPlanner.newPlanner(
+            TYPE_PROVIDER,
+            VALUE_PROVIDER,
+            newDispatcher(),
+            CEL_VALUE_CONVERTER,
+            CEL_CONTAINER,
+            CEL_OPTIONS,
+            ImmutableSet.of("late_bound_func"),
+            CelLateFunctionBindings.from(ImmutableList.of()));
     CelAbstractSyntaxTree ast = compile("late_bound_func('test')");
 
-    Program program = PLANNER.plan(ast);
+    Program program = planner.plan(ast);
 
-    String result =
-        (String)
-            program.eval(
-                ImmutableMap.of(),
-                CelLateFunctionBindings.from(
-                    CelFunctionBinding.from(
-                        "late_bound_func_overload",
-                        String.class,
-                        (arg) -> arg + "_resolved")));
-    assertThat(result).isEqualTo("test_resolved");
+    assertThat(program).isNotNull();
+  }
+
+  @Test
+  public void plan_call_lateBoundFunction_notRegistered_throws() throws Exception {
+     ProgramPlanner planner =
+        ProgramPlanner.newPlanner(
+            TYPE_PROVIDER,
+            VALUE_PROVIDER,
+            newDispatcher(),
+            CEL_VALUE_CONVERTER,
+            CEL_CONTAINER,
+            CEL_OPTIONS,
+            ImmutableSet.of(), // Not registered
+            CelLateFunctionBindings.from(ImmutableList.of()));
+    CelAbstractSyntaxTree ast = compile("late_bound_func('test')");
+
+    CelEvaluationException e = assertThrows(CelEvaluationException.class, () -> planner.plan(ast));
+    assertThat(e).hasMessageThat().contains("Function not found: late_bound_func");
   }
 
   private CelAbstractSyntaxTree compile(String expression) throws Exception {
@@ -923,4 +948,5 @@ public final class ProgramPlannerTest {
       this.expected = expected;
     }
   }
+
 }

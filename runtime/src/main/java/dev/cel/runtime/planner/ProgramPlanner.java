@@ -17,6 +17,7 @@ package dev.cel.runtime.planner;
 import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.errorprone.annotations.CheckReturnValue;
 import com.google.errorprone.annotations.Immutable;
 import dev.cel.common.CelAbstractSyntaxTree;
@@ -46,6 +47,7 @@ import dev.cel.runtime.CelEvaluationExceptionBuilder;
 import dev.cel.runtime.CelResolvedOverload;
 import dev.cel.runtime.DefaultDispatcher;
 import dev.cel.runtime.Program;
+import dev.cel.runtime.CelFunctionResolver;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 
@@ -62,7 +64,8 @@ public final class ProgramPlanner {
   private final AttributeFactory attributeFactory;
   private final CelContainer container;
   private final CelOptions options;
-
+  private final ImmutableSet<String> lateBoundFunctions;
+  private final CelFunctionResolver lateBoundResolver;
 
   /**
    * Plans a {@link Program} from the provided parsed-only or type-checked {@link
@@ -78,7 +81,47 @@ public final class ProgramPlanner {
 
     ErrorMetadata errorMetadata =
         ErrorMetadata.create(ast.getSource().getPositionsMap(), ast.getSource().getDescription());
-    return PlannedProgram.create(plannedInterpretable, errorMetadata, options);
+    return PlannedProgram.create(plannedInterpretable, errorMetadata, options, lateBoundResolver);
+  }
+
+  public static ProgramPlanner newPlanner(
+      CelTypeProvider typeProvider,
+      CelValueProvider valueProvider,
+      DefaultDispatcher dispatcher,
+      CelValueConverter celValueConverter,
+      CelContainer container,
+      CelOptions options,
+      ImmutableSet<String> lateBoundFunctions,
+      CelFunctionResolver lateBoundResolver) {
+    return new ProgramPlanner(
+        typeProvider,
+        valueProvider,
+        dispatcher,
+        celValueConverter,
+        container,
+        options,
+        lateBoundFunctions,
+        lateBoundResolver);
+  }
+
+  private ProgramPlanner(
+      CelTypeProvider typeProvider,
+      CelValueProvider valueProvider,
+      DefaultDispatcher dispatcher,
+      CelValueConverter celValueConverter,
+      CelContainer container,
+      CelOptions options,
+      ImmutableSet<String> lateBoundFunctions,
+      CelFunctionResolver lateBoundResolver) {
+    this.typeProvider = typeProvider;
+    this.valueProvider = valueProvider;
+    this.dispatcher = dispatcher;
+    this.container = container;
+    this.options = options;
+    this.lateBoundFunctions = lateBoundFunctions;
+    this.lateBoundResolver = lateBoundResolver;
+    this.attributeFactory =
+        AttributeFactory.newAttributeFactory(container, typeProvider, celValueConverter);
   }
 
   private PlannedInterpretable plan(CelExpr celExpr, PlannerContext ctx) {
@@ -228,6 +271,12 @@ public final class ProgramPlanner {
     }
 
     if (resolvedOverload == null) {
+      if (!lateBoundFunctions.contains(functionName)) {
+        throw new NoSuchElementException(
+            "Function not found: " + functionName + ". If this is a late-bound function, "
+                + "ensure it is registered using CelLiteRuntimeBuilder.addLateBoundFunction.");
+      }
+
       // Logic for late bound functions
       ImmutableList<String> overloadIds;
       if (resolvedFunction.overloadId().isPresent()) {
@@ -456,32 +505,5 @@ public final class ProgramPlanner {
     private static PlannerContext create(CelAbstractSyntaxTree ast) {
       return new AutoValue_ProgramPlanner_PlannerContext(ast.getReferenceMap(), ast.getTypeMap());
     }
-  }
-
-  public static ProgramPlanner newPlanner(
-      CelTypeProvider typeProvider,
-      CelValueProvider valueProvider,
-      DefaultDispatcher dispatcher,
-      CelValueConverter celValueConverter,
-      CelContainer container,
-      CelOptions options) {
-    return new ProgramPlanner(
-        typeProvider, valueProvider, dispatcher, celValueConverter, container, options);
-  }
-
-  private ProgramPlanner(
-      CelTypeProvider typeProvider,
-      CelValueProvider valueProvider,
-      DefaultDispatcher dispatcher,
-      CelValueConverter celValueConverter,
-      CelContainer container,
-      CelOptions options) {
-    this.typeProvider = typeProvider;
-    this.valueProvider = valueProvider;
-    this.dispatcher = dispatcher;
-    this.container = container;
-    this.options = options;
-    this.attributeFactory =
-        AttributeFactory.newAttributeFactory(container, typeProvider, celValueConverter);
   }
 }

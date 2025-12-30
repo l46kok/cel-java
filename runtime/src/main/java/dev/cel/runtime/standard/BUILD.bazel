@@ -6,6 +6,7 @@ package(
     default_visibility = [
         "//publish:__pkg__",
         "//runtime/standard:__pkg__",
+        "//runtime/src/main/java/dev/cel/runtime:__pkg__",
     ],
 )
 

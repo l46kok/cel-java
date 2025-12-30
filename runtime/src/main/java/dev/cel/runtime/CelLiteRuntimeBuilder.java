@@ -17,10 +17,12 @@ package dev.cel.runtime;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import com.google.errorprone.annotations.CheckReturnValue;
 import dev.cel.common.CelContainer;
+import dev.cel.common.CelFunctionDecl;
 import dev.cel.common.CelOptions;
 import dev.cel.common.types.CelTypeProvider;
 import dev.cel.common.values.CelValueProvider;
 import dev.cel.runtime.standard.CelStandardFunction;
+import java.util.Arrays;
 
 /** Interface for building an instance of {@link CelLiteRuntime} */
 public interface CelLiteRuntimeBuilder {
@@ -48,6 +50,26 @@ public interface CelLiteRuntimeBuilder {
   /** Bind a collection of {@link CelFunctionBinding} objects to the runtime. */
   @CanIgnoreReturnValue
   CelLiteRuntimeBuilder addFunctionBindings(Iterable<CelFunctionBinding> bindings);
+
+  /**
+   * Registers bindings for functions that are allowed to be late-bound (resolved at execution time).
+   *
+   * <p>These functions will not be checked for presence during the planning phase. If a function
+   * overload is not found, the planner will generate a {@link
+   * dev.cel.runtime.planner.EvalLateBoundCall} node instead of throwing an exception.
+   */
+  @CanIgnoreReturnValue
+  CelLiteRuntimeBuilder addLateBoundBindings(CelFunctionBinding... bindings);
+
+  /**
+   * Registers bindings for functions that are allowed to be late-bound (resolved at execution time).
+   *
+   * <p>These functions will not be checked for presence during the planning phase. If a function
+   * overload is not found, the planner will generate a {@link
+   * dev.cel.runtime.planner.EvalLateBoundCall} node instead of throwing an exception.
+   */
+  @CanIgnoreReturnValue
+  CelLiteRuntimeBuilder addLateBoundBindings(Iterable<CelFunctionBinding> bindings);
 
   /**
    * Sets the {@link CelTypeProvider} for resolving CEL types during evaluation, such as a fully
