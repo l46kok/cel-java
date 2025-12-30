@@ -82,6 +82,7 @@ import dev.cel.runtime.standard.IndexOperator;
 import dev.cel.runtime.standard.LessOperator;
 import dev.cel.runtime.standard.LogicalNotOperator;
 import dev.cel.runtime.standard.NotStrictlyFalseFunction;
+import dev.cel.runtime.CelLateFunctionBindings;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -123,12 +124,15 @@ public final class ProgramPlannerTest {
   private static final CelCompiler CEL_COMPILER =
       CelCompilerFactory.standardCelCompilerBuilder()
           .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
+          .addFunctionDeclarations(
+                  newFunctionDeclaration(
+                          "late_bound_func",
+                          newGlobalOverload("late_bound_func_overload", SimpleType.STRING, SimpleType.STRING)))
           .addVar("msg", StructTypeReference.create(TestAllTypes.getDescriptor().getFullName()))
           .addVar("map_var", MapType.create(SimpleType.STRING, SimpleType.DYN))
           .addVar("int_var", SimpleType.INT)
           .addVar("dyn_var", SimpleType.DYN)
           .addVar("really.long.abbr.ident", SimpleType.DYN)
-          .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
           .setContainer(CEL_CONTAINER)
           .addFunctionDeclarations(
               newFunctionDeclaration("zero", newGlobalOverload("zero_overload", SimpleType.INT)),
@@ -805,6 +809,24 @@ public final class ProgramPlannerTest {
         .isEqualTo(
             ImmutableList.of(
                 ImmutableList.of(2L, 3L), ImmutableList.of(3L, 4L), ImmutableList.of(4L, 5L)));
+  }
+
+  @Test
+  public void plan_call_lateBoundFunction_success() throws Exception {
+    CelAbstractSyntaxTree ast = compile("late_bound_func('test')");
+
+    Program program = PLANNER.plan(ast);
+
+    String result =
+        (String)
+            program.eval(
+                ImmutableMap.of(),
+                CelLateFunctionBindings.from(
+                    CelFunctionBinding.from(
+                        "late_bound_func_overload",
+                        String.class,
+                        (arg) -> arg + "_resolved")));
+    assertThat(result).isEqualTo("test_resolved");
   }
 
   private CelAbstractSyntaxTree compile(String expression) throws Exception {

@@ -37,4 +37,16 @@ public interface CelFunctionResolver {
    */
   Optional<CelResolvedOverload> findOverloadMatchingArgs(
       String functionName, List<String> overloadIds, Object[] args) throws CelEvaluationException;
+
+  /**
+   * Finds a specific function overload to invoke based on given parameters, scanning all available
+   * overloads if necessary.
+   *
+   * @param functionName the logical name of the function being invoked.
+   * @param args The arguments to pass to the function.
+   * @return an optional value of the resolved overload.
+   * @throws CelEvaluationException if the overload resolution is ambiguous.
+   */
+  Optional<CelResolvedOverload> findOverloadMatchingArgs(String functionName, Object[] args)
+      throws CelEvaluationException;
 }

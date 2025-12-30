@@ -16,6 +16,7 @@ package dev.cel.runtime;
 
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.errorprone.annotations.Immutable;
 import java.util.Arrays;
@@ -39,6 +40,13 @@ public final class CelLateFunctionBindings implements CelFunctionResolver {
   public Optional<CelResolvedOverload> findOverloadMatchingArgs(
       String functionName, List<String> overloadIds, Object[] args) throws CelEvaluationException {
     return DefaultDispatcher.findOverloadMatchingArgs(functionName, overloadIds, functions, args);
+  }
+
+  @Override
+  public Optional<CelResolvedOverload> findOverloadMatchingArgs(String functionName, Object[] args)
+      throws CelEvaluationException {
+    return DefaultDispatcher.findOverloadMatchingArgs(
+        functionName, ImmutableList.copyOf(functions.keySet()), functions, args);
   }
 
   public static CelLateFunctionBindings from(CelFunctionBinding... functions) {

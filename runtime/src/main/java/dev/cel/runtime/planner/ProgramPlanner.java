@@ -224,10 +224,19 @@ public final class ProgramPlanner {
 
     if (resolvedOverload == null) {
       // Parsed-only function dispatch
-      resolvedOverload =
-          dispatcher
-              .findOverload(functionName)
-              .orElseThrow(() -> new NoSuchElementException("Overload not found: " + functionName));
+      resolvedOverload = dispatcher.findOverload(functionName).orElse(null);
+    }
+
+    if (resolvedOverload == null) {
+      // Logic for late bound functions
+      ImmutableList<String> overloadIds;
+      if (resolvedFunction.overloadId().isPresent()) {
+        overloadIds = ImmutableList.of(resolvedFunction.overloadId().get());
+      } else {
+        overloadIds = ImmutableList.of();
+      }
+
+      return EvalLateBoundCall.create(expr.id(), functionName, overloadIds, evaluatedArgs);
     }
 
     switch (argCount) {

@@ -24,6 +24,7 @@ java_library(
         ":eval_create_map",
         ":eval_create_struct",
         ":eval_fold",
+        ":eval_late_bound_call",
         ":eval_or",
         ":eval_test_only",
         ":eval_unary",
@@ -72,6 +73,7 @@ cel_android_library(
         ":eval_create_map_android",
         ":eval_create_struct_android",
         ":eval_fold_android",
+        ":eval_late_bound_call_android",
         ":eval_or_android",
         ":eval_test_only_android",
         ":eval_unary_android",
@@ -121,6 +123,7 @@ java_library(
         "//runtime:function_resolver",
         "//runtime:interpretable",
         "//runtime:program",
+        "//runtime:resolved_overload",
         "//runtime:variable_resolver",
         "@maven//:com_google_errorprone_error_prone_annotations",
     ],
@@ -143,6 +146,7 @@ cel_android_library(
         "//runtime:evaluation_exception_builder",
         "//runtime:interpretable_android",
         "//runtime:program_android",
+        "//runtime:resolved_overload_android",
         "//runtime:variable_resolver",
         "//runtime/src/main/java/dev/cel/runtime:function_resolver_android",
         "@maven//:com_google_errorprone_error_prone_annotations",
@@ -632,7 +636,10 @@ java_library(
     deps = [
         "//common:options",
         "//common/exceptions:iteration_budget_exceeded",
+        "//runtime:evaluation_exception",
+        "//runtime:function_resolver",
         "//runtime:interpretable",
+        "//runtime:resolved_overload",
         "@maven//:org_jspecify_jspecify",
     ],
 )
@@ -643,8 +650,43 @@ cel_android_library(
     deps = [
         "//common:options",
         "//common/exceptions:iteration_budget_exceeded",
+        "//runtime:evaluation_exception",
+        "//runtime:function_resolver",
         "//runtime:interpretable_android",
+        "//runtime:resolved_overload_android",
         "@maven//:org_jspecify_jspecify",
+    ],
+)
+
+java_library(
+    name = "eval_late_bound_call",
+    srcs = ["EvalLateBoundCall.java"],
+    deps = [
+        ":eval_helpers",
+        ":execution_frame",
+        ":planned_interpretable",
+        "//common:error_codes",
+        "//runtime:evaluation_exception",
+        "//runtime:evaluation_exception_builder",
+        "//runtime:interpretable",
+        "//runtime:resolved_overload",
+        "@maven//:com_google_guava_guava",
+    ],
+)
+
+cel_android_library(
+    name = "eval_late_bound_call_android",
+    srcs = ["EvalLateBoundCall.java"],
+    deps = [
+        ":eval_helpers_android",
+        ":execution_frame_android",
+        ":planned_interpretable_android",
+        "//common:error_codes",
+        "//runtime:evaluation_exception",
+        "//runtime:evaluation_exception_builder",
+        "//runtime:interpretable_android",
+        "//runtime:resolved_overload_android",
+        "@maven_android//:com_google_guava_guava",
     ],
 )
 

@@ -52,6 +52,12 @@ public final class DefaultDispatcher implements CelFunctionResolver {
     return findOverloadMatchingArgs(functionName, overloadIds, overloads, args);
   }
 
+  @Override
+  public Optional<CelResolvedOverload> findOverloadMatchingArgs(String functionName, Object[] args)
+      throws CelEvaluationException {
+    return findOverloadMatchingArgs(functionName, ImmutableList.copyOf(overloads.keySet()), overloads, args);
+  }
+
   /** Finds the overload that matches the given function name, overload IDs, and arguments. */
   static Optional<CelResolvedOverload> findOverloadMatchingArgs(
       String functionName,
@@ -62,7 +68,11 @@ public final class DefaultDispatcher implements CelFunctionResolver {
     int matchingOverloadCount = 0;
     CelResolvedOverload match = null;
     List<String> candidates = null;
-    for (String overloadId : overloadIds) {
+    Iterable<String> idsToScan = overloadIds;
+    if (overloadIds.isEmpty()) {
+       idsToScan = overloads.keySet();
+    }
+    for (String overloadId : idsToScan) {
       CelResolvedOverload overload = overloads.get(overloadId);
       // If the overload is null, it means that the function was not registered; however, it is
       // possible that the overload refers to a late-bound function.
