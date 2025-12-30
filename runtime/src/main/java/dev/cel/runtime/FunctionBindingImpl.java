@@ -80,8 +80,15 @@ final class FunctionBindingImpl implements CelFunctionBinding {
       builder.add(binding);
     }
 
-    // Setup dynamic dispatch
-    builder.add(new DynamicDispatchBinding(functionName, overloadBindings));
+    // If there is already a binding with the same name as the function, we treat it as a
+    // "Singleton" binding and do not create a dynamic dispatch wrapper for it. (Ex: "matches" function)
+    // This allows manual control over the "main" overload for a function group.
+    boolean hasSingletonBinding =
+        overloadBindings.stream().anyMatch(b -> b.getOverloadId().equals(functionName));
+
+    if (!hasSingletonBinding) {
+      builder.add(new DynamicDispatchBinding(functionName, overloadBindings));
+    }
 
     return builder.build();
   }

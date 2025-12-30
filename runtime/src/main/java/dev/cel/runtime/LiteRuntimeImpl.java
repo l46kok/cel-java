@@ -191,9 +191,11 @@ final class LiteRuntimeImpl implements CelLiteRuntime {
         for (CelStandardFunction standardFunction : standardFunctions) {
           ImmutableSet<CelFunctionBinding> standardFunctionBinding =
               standardFunction.newFunctionBindings(celOptions, runtimeEquality);
+
           for (CelFunctionBinding func : standardFunctionBinding) {
             functionBindingsBuilder.put(func.getOverloadId(), func);
           }
+
         }
       }
 

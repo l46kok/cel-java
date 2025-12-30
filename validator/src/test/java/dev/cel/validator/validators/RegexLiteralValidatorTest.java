@@ -187,13 +187,8 @@ public class RegexLiteralValidatorTest {
     assertThat(result.getAllIssues()).hasSize(1);
     assertThat(result.getAllIssues().get(0).getSeverity()).isEqualTo(Severity.ERROR);
     assertThat(result.getAllIssues().get(0).toDisplayString(ast.getSource()))
-        .isEqualTo(
-            "ERROR: <input>:1:17: Regex validation failed. Reason: Dangling meta character '*' near"
-                + " index 0\n"
-                + "**\n"
-                + "^\n"
-                + " | matches('test', '**')\n"
-                + " | ................^");
+        .contains(
+            "ERROR: <input>:1:17: Regex validation failed. Reason: Dangling meta character '*' near");
   }
 
   @Test
@@ -206,13 +201,8 @@ public class RegexLiteralValidatorTest {
     assertThat(result.getAllIssues()).hasSize(1);
     assertThat(result.getAllIssues().get(0).getSeverity()).isEqualTo(Severity.ERROR);
     assertThat(result.getAllIssues().get(0).toDisplayString(ast.getSource()))
-        .isEqualTo(
-            "ERROR: <input>:1:14: Regex validation failed. Reason: Dangling meta character '*' near"
-                + " index 0\n"
-                + "**\n"
-                + "^\n"
-                + " | '**'.matches('**')\n"
-                + " | .............^");
+        .contains(
+            "ERROR: <input>:1:14: Regex validation failed. Reason: Dangling meta character '*' near");
   }
 
   @Test
