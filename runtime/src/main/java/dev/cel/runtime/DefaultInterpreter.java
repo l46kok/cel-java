@@ -864,7 +864,7 @@ final class DefaultInterpreter implements Interpreter {
           throw CelEvaluationExceptionBuilder.newBuilder(
                   "duplicate map key [%s]", keyResult.value())
               .setErrorCode(CelErrorCode.DUPLICATE_ATTRIBUTE)
-              .setMetadata(metadata, entry.id())
+              .setMetadata(metadata, entry.key().id())
               .build();
         }
 

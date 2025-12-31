@@ -12,31 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dev.cel.runtime.planner;
+package dev.cel.common.exceptions;
 
 import dev.cel.common.CelErrorCode;
 import dev.cel.common.CelRuntimeException;
+import dev.cel.common.annotations.Internal;
 
-/**
- * An exception that's raised when a strict call failed to invoke, which includes the source of
- * expression ID, along with canonical CelErrorCode.
- *
- * <p>Note that StrictErrorException should not be surfaced directly back to the user.
- */
-final class StrictErrorException extends CelRuntimeException {
+/** Indicates an attempt to create a map using duplicate keys. */
+@Internal
+public final class CelDuplicateKeyException extends CelRuntimeException {
 
-  private final long exprId;
-
-  long exprId() {
-    return exprId;
+  public static CelDuplicateKeyException of(Object key) {
+    return new CelDuplicateKeyException(String.format("duplicate map key [%s]", key));
   }
 
-  StrictErrorException(CelRuntimeException cause, long exprId) {
-    this(cause, cause.getErrorCode(), exprId);
-  }
-
-  StrictErrorException(Throwable cause, CelErrorCode errorCode, long exprId) {
-    super(cause, errorCode);
-    this.exprId = exprId;
+  private CelDuplicateKeyException(String message) {
+    super(message, CelErrorCode.DUPLICATE_ATTRIBUTE);
   }
 }
