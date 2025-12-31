@@ -36,4 +36,12 @@ public interface Program {
 
   /** Evaluate a compiled program with a custom variable {@code resolver}. */
   Object eval(CelVariableResolver resolver) throws CelEvaluationException;
+
+  /**
+   * Evaluate a compiled program with a custom variable {@code resolver} and late-bound functions
+   * {@code lateBoundFunctionResolver}.
+   */
+  Object eval(CelVariableResolver resolver, CelFunctionResolver lateBoundFunctionResolver)
+          throws CelEvaluationException;
+
 }

@@ -631,7 +631,9 @@ public class CelLiteRuntimeTest {
                     CelOverloadDecl.newGlobalOverload(
                         "lateBoundFunc_string", SimpleType.STRING, SimpleType.STRING)))
             .build();
-    CelLiteRuntime celRuntime = CelLiteRuntimeFactory.newLiteRuntimeBuilder().build();
+    CelLiteRuntime celRuntime = CelLiteRuntimeFactory.newLiteRuntimeBuilder()
+            .addLateBoundFunctions("lateBoundFunc")
+            .build();
     CelAbstractSyntaxTree ast = celCompiler.compile("lateBoundFunc('hello')").getAst();
 
     String result =

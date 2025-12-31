@@ -25,6 +25,7 @@ public class PlannerInterpreterTest extends BaseInterpreterTest {
   public PlannerInterpreterTest() {
     super(
         CelRuntimeFactory.plannerCelRuntimeBuilder()
+            .addLateBoundFunctions("record")
             .setOptions(newBaseCelOptions())
             .addLibraries(CelExtensions.optional())
             .addFileTypes(TEST_FILE_DESCRIPTORS)

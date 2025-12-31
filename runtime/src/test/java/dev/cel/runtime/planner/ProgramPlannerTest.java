@@ -102,12 +102,6 @@ public final class ProgramPlannerTest {
           .setName("cel.expr.conformance.proto3")
           .addAbbreviations("really.long.abbr")
           .build();
-  private static final CelLateFunctionBindings LATE_FUNCTION_BINDINGS =
-      CelLateFunctionBindings.from(
-          CelFunctionBinding.fromOverloads(
-              "late_bound_func",
-              CelFunctionBinding.from(
-                  "late_bound_func_overload", String.class, (arg) -> arg + "_resolved")));
 
   private static final ProgramPlanner PLANNER =
       ProgramPlanner.newPlanner(
@@ -117,7 +111,7 @@ public final class ProgramPlannerTest {
           CEL_VALUE_CONVERTER,
           CEL_CONTAINER,
           CEL_OPTIONS,
-          LATE_FUNCTION_BINDINGS);
+          ImmutableSet.of("late_bound_func"));
 
   private static final CelCompiler CEL_COMPILER =
       CelCompilerFactory.standardCelCompilerBuilder()
@@ -576,7 +570,11 @@ public final class ProgramPlannerTest {
 
     Program program = PLANNER.plan(ast);
 
-    String result = (String) program.eval(ImmutableMap.of(), LATE_FUNCTION_BINDINGS);
+    String result = (String) program.eval(
+            ImmutableMap.of(),
+            CelLateFunctionBindings.from(
+                    CelFunctionBinding.from(
+                            "late_bound_func_overload", String.class, (arg) -> arg + "_resolved")));
 
     assertThat(result).isEqualTo("test_resolved");
   }
@@ -783,7 +781,7 @@ public final class ProgramPlannerTest {
             CEL_VALUE_CONVERTER,
             CEL_CONTAINER,
             options,
-            LATE_FUNCTION_BINDINGS);
+            ImmutableSet.of());
     CelAbstractSyntaxTree ast = compile(expression);
 
     Program program = planner.plan(ast);
@@ -804,7 +802,7 @@ public final class ProgramPlannerTest {
             CEL_VALUE_CONVERTER,
             CEL_CONTAINER,
             options,
-            LATE_FUNCTION_BINDINGS);
+            ImmutableSet.of());
     CelAbstractSyntaxTree ast = compile("[1, 2, 3].map(x, [1, 2].map(y, x + y))");
 
     Program program = planner.plan(ast);

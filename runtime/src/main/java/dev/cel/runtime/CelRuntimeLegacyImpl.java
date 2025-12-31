@@ -156,6 +156,16 @@ public final class CelRuntimeLegacyImpl implements CelRuntime {
     }
 
     @Override
+    public CelRuntimeBuilder addLateBoundFunctions(String... lateBoundFunctionNames) {
+      throw new UnsupportedOperationException("This method is not supported for the legacy runtime");
+    }
+
+    @Override
+    public CelRuntimeBuilder addLateBoundFunctions(Iterable<String> lateBoundFunctionNames) {
+      throw new UnsupportedOperationException("This method is not supported for the legacy runtime");
+    }
+
+    @Override
     public CelRuntimeBuilder addMessageTypes(Descriptor... descriptors) {
       return addMessageTypes(Arrays.asList(descriptors));
     }

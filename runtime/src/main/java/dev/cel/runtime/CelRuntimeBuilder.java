@@ -50,6 +50,18 @@ public interface CelRuntimeBuilder {
   CelRuntimeBuilder addFunctionBindings(Iterable<CelFunctionBinding> bindings);
 
   /**
+   * Adds bindings for functions that are allowed to be late-bound (resolved at execution time).
+   */
+  @CanIgnoreReturnValue
+  CelRuntimeBuilder addLateBoundFunctions(String... lateBoundFunctionNames);
+
+  /**
+   * Adds bindings for functions that are allowed to be late-bound (resolved at execution time).
+   */
+  @CanIgnoreReturnValue
+  CelRuntimeBuilder addLateBoundFunctions(Iterable<String> lateBoundFunctionNames);
+
+  /**
    * Add message {@link Descriptor}s to the builder for type-checking and object creation at
    * interpretation time.
    *

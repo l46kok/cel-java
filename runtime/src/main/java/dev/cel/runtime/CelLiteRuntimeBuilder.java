@@ -50,6 +50,18 @@ public interface CelLiteRuntimeBuilder {
   CelLiteRuntimeBuilder addFunctionBindings(Iterable<CelFunctionBinding> bindings);
 
   /**
+   * Adds bindings for functions that are allowed to be late-bound (resolved at execution time).
+   */
+  @CanIgnoreReturnValue
+  CelLiteRuntimeBuilder addLateBoundFunctions(String... lateBoundFunctionNames);
+
+  /**
+   * Adds bindings for functions that are allowed to be late-bound (resolved at execution time).
+   */
+  @CanIgnoreReturnValue
+  CelLiteRuntimeBuilder addLateBoundFunctions(Iterable<String> lateBoundFunctionNames);
+
+  /**
    * Sets the {@link CelTypeProvider} for resolving CEL types during evaluation, such as a fully
    * qualified type name to a struct or an enum value.
    */

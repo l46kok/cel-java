@@ -69,6 +69,8 @@ abstract class CelRuntimeImpl implements CelRuntime {
   @AutoValue.CopyAnnotations
   abstract ImmutableSet<CelRuntimeLibrary> runtimeLibraries();
 
+  abstract ImmutableSet<String> lateBoundFunctionNames();
+
   abstract CelStandardFunctions standardFunctions();
 
   abstract @Nullable CelTypeProvider typeProvider();
@@ -117,7 +119,7 @@ abstract class CelRuntimeImpl implements CelRuntime {
       public Object eval(
           CelVariableResolver resolver, CelFunctionResolver lateBoundFunctionResolver)
           throws CelEvaluationException {
-        throw new UnsupportedOperationException("Not yet supported.");
+        return program.eval(resolver, lateBoundFunctionResolver);
       }
 
       @Override
@@ -201,6 +203,8 @@ abstract class CelRuntimeImpl implements CelRuntime {
 
     abstract ImmutableSet.Builder<CelRuntimeLibrary> runtimeLibrariesBuilder();
 
+    abstract ImmutableSet.Builder<String> lateBoundFunctionNamesBuilder();
+
     private final Map<String, CelFunctionBinding> mutableFunctionBindings = new HashMap<>();
 
     @CanIgnoreReturnValue
@@ -215,6 +219,20 @@ abstract class CelRuntimeImpl implements CelRuntime {
       bindings.forEach(o -> mutableFunctionBindings.putIfAbsent(o.getOverloadId(), o));
       return this;
     }
+
+    @CanIgnoreReturnValue
+    public Builder addLateBoundFunctions(String... lateBoundFunctionNames) {
+      checkNotNull(lateBoundFunctionNames);
+      return addLateBoundFunctions(Arrays.asList(lateBoundFunctionNames));
+    }
+
+    @CanIgnoreReturnValue
+    public Builder addLateBoundFunctions(Iterable<String> lateBoundFunctionNames) {
+      checkNotNull(lateBoundFunctionNames);
+      this.lateBoundFunctionNamesBuilder().addAll(lateBoundFunctionNames);
+      return this;
+    }
+
 
     @CanIgnoreReturnValue
     public Builder addMessageTypes(Descriptors.Descriptor... descriptors) {
@@ -391,7 +409,7 @@ abstract class CelRuntimeImpl implements CelRuntime {
               celValueConverter,
               CelContainer.newBuilder().build(), // TODO: Accept CEL container
               options(),
-              CelLateFunctionBindings.from() // TODO: Add
+              lateBoundFunctionNamesBuilder().build()
               );
       setPlanner(planner);
 

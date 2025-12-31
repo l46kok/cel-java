@@ -17,6 +17,7 @@ package dev.cel.runtime.planner;
 import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.errorprone.annotations.CheckReturnValue;
 import com.google.errorprone.annotations.Immutable;
 import dev.cel.common.CelAbstractSyntaxTree;
@@ -43,7 +44,6 @@ import dev.cel.common.values.CelValueConverter;
 import dev.cel.common.values.CelValueProvider;
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelEvaluationExceptionBuilder;
-import dev.cel.runtime.CelLateFunctionBindings;
 import dev.cel.runtime.CelResolvedOverload;
 import dev.cel.runtime.DefaultDispatcher;
 import dev.cel.runtime.Program;
@@ -63,7 +63,7 @@ public final class ProgramPlanner {
   private final AttributeFactory attributeFactory;
   private final CelContainer container;
   private final CelOptions options;
-  private final CelLateFunctionBindings registeredLateBindings;
+  private final ImmutableSet<String> lateBoundFunctionNames;
 
   /**
    * Plans a {@link Program} from the provided parsed-only or type-checked {@link
@@ -231,7 +231,7 @@ public final class ProgramPlanner {
     }
 
     if (resolvedOverload == null) {
-      if (!registeredLateBindings.containsFunction(functionName)) {
+      if (!lateBoundFunctionNames.contains(functionName)) {
         StringBuilder sb = new StringBuilder();
         sb.append("No matching overload for function '").append(functionName).append("'.");
 
@@ -243,11 +243,9 @@ public final class ProgramPlanner {
         throw new NoSuchElementException(sb.toString());
       }
 
-      ImmutableList<String> overloadIds;
+      ImmutableList<String> overloadIds = ImmutableList.of();
       if (resolvedFunction.overloadId().isPresent()) {
         overloadIds = ImmutableList.of(resolvedFunction.overloadId().get());
-      } else {
-        overloadIds = ImmutableList.of();
       }
 
       return EvalLateBoundCall.create(expr.id(), functionName, overloadIds, evaluatedArgs);
@@ -479,7 +477,7 @@ public final class ProgramPlanner {
       CelValueConverter celValueConverter,
       CelContainer container,
       CelOptions options,
-      CelLateFunctionBindings lateFunctionBindings) {
+      ImmutableSet<String> lateBoundFunctionNames) {
     return new ProgramPlanner(
         typeProvider,
         valueProvider,
@@ -487,23 +485,23 @@ public final class ProgramPlanner {
         celValueConverter,
         container,
         options,
-        lateFunctionBindings);
+        lateBoundFunctionNames);
   }
 
   private ProgramPlanner(
-      CelTypeProvider typeProvider,
-      CelValueProvider valueProvider,
-      DefaultDispatcher dispatcher,
-      CelValueConverter celValueConverter,
-      CelContainer container,
-      CelOptions options,
-      CelLateFunctionBindings lateFunctionBindings) {
+          CelTypeProvider typeProvider,
+          CelValueProvider valueProvider,
+          DefaultDispatcher dispatcher,
+          CelValueConverter celValueConverter,
+          CelContainer container,
+          CelOptions options,
+          ImmutableSet<String> lateBoundFunctionNames) {
     this.typeProvider = typeProvider;
     this.valueProvider = valueProvider;
     this.dispatcher = dispatcher;
     this.container = container;
     this.options = options;
-    this.registeredLateBindings = lateFunctionBindings;
+    this.lateBoundFunctionNames = lateBoundFunctionNames;
     this.attributeFactory =
         AttributeFactory.newAttributeFactory(container, typeProvider, celValueConverter);
   }

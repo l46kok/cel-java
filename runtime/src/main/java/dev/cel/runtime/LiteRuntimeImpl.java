@@ -82,6 +82,7 @@ final class LiteRuntimeImpl implements CelLiteRuntime {
     // Following is visible to test `toBuilder`.
     @VisibleForTesting CelOptions celOptions;
     @VisibleForTesting final HashMap<String, CelFunctionBinding> customFunctionBindings;
+    @VisibleForTesting final ImmutableSet.Builder<String> lateBoundFunctionNamesBuilder;
     @VisibleForTesting final ImmutableSet.Builder<CelLiteRuntimeLibrary> runtimeLibrariesBuilder;
     @VisibleForTesting final ImmutableSet.Builder<CelStandardFunction> standardFunctionBuilder;
     @VisibleForTesting CelTypeProvider celTypeProvider;
@@ -113,6 +114,17 @@ final class LiteRuntimeImpl implements CelLiteRuntime {
     @Override
     public CelLiteRuntimeBuilder addFunctionBindings(Iterable<CelFunctionBinding> bindings) {
       bindings.forEach(o -> customFunctionBindings.putIfAbsent(o.getOverloadId(), o));
+      return this;
+    }
+
+    @Override
+    public CelLiteRuntimeBuilder addLateBoundFunctions(String... lateBoundFunctionNames) {
+      return addLateBoundFunctions(Arrays.asList(lateBoundFunctionNames));
+    }
+
+    @Override
+    public CelLiteRuntimeBuilder addLateBoundFunctions(Iterable<String> lateBoundFunctionNames) {
+      lateBoundFunctionNamesBuilder.addAll(lateBoundFunctionNames);
       return this;
     }
 
@@ -221,7 +233,7 @@ final class LiteRuntimeImpl implements CelLiteRuntime {
               celValueProvider.celValueConverter(),
               CelContainer.newBuilder().build(),
               celOptions,
-              CelLateFunctionBindings.from() // TODO: Add
+              lateBoundFunctionNamesBuilder.build()
               );
 
       return new LiteRuntimeImpl(
@@ -257,6 +269,7 @@ final class LiteRuntimeImpl implements CelLiteRuntime {
       this.customFunctionBindings = new HashMap<>();
       this.standardFunctionBuilder = ImmutableSet.builder();
       this.runtimeLibrariesBuilder = ImmutableSet.builder();
+      this.lateBoundFunctionNamesBuilder = ImmutableSet.builder();
       this.container = CelContainer.newBuilder().build();
     }
   }
