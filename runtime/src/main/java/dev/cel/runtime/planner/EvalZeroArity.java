@@ -14,6 +14,7 @@
 
 package dev.cel.runtime.planner;
 
+import dev.cel.common.values.CelValueConverter;
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelResolvedOverload;
 import dev.cel.runtime.GlobalResolver;
@@ -22,18 +23,27 @@ final class EvalZeroArity extends PlannedInterpretable {
   private static final Object[] EMPTY_ARRAY = new Object[0];
 
   private final CelResolvedOverload resolvedOverload;
+  private final CelValueConverter celValueConverter;
 
   @Override
   public Object eval(GlobalResolver resolver, ExecutionFrame frame) throws CelEvaluationException {
-    return resolvedOverload.getDefinition().apply(EMPTY_ARRAY);
+    Object result = resolvedOverload.getDefinition().apply(EMPTY_ARRAY);
+    Object runtimeValue = celValueConverter.toRuntimeValue(result);
+    if (runtimeValue instanceof dev.cel.common.values.CelValue) {
+      return celValueConverter.unwrap((dev.cel.common.values.CelValue) runtimeValue);
+    }
+    return runtimeValue;
   }
 
-  static EvalZeroArity create(long exprId, CelResolvedOverload resolvedOverload) {
-    return new EvalZeroArity(exprId, resolvedOverload);
+  static EvalZeroArity create(
+      long exprId, CelResolvedOverload resolvedOverload, CelValueConverter celValueConverter) {
+    return new EvalZeroArity(exprId, resolvedOverload, celValueConverter);
   }
 
-  private EvalZeroArity(long exprId, CelResolvedOverload resolvedOverload) {
+  private EvalZeroArity(
+      long exprId, CelResolvedOverload resolvedOverload, CelValueConverter celValueConverter) {
     super(exprId);
     this.resolvedOverload = resolvedOverload;
+    this.celValueConverter = celValueConverter;
   }
 }

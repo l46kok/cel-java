@@ -18,16 +18,18 @@ import static dev.cel.runtime.planner.EvalHelpers.evalStrictly;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
+import dev.cel.common.values.CelValueConverter;
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelResolvedOverload;
 import dev.cel.runtime.GlobalResolver;
 
-@SuppressWarnings("Immutable")
 final class EvalLateBoundCall extends PlannedInterpretable {
 
   private final String functionName;
   private final ImmutableList<String> overloadIds;
+  @SuppressWarnings("Immutable")
   private final PlannedInterpretable[] args;
+  private final CelValueConverter celValueConverter;
 
   @Override
   public Object eval(GlobalResolver resolver, ExecutionFrame frame) throws CelEvaluationException {
@@ -48,27 +50,33 @@ final class EvalLateBoundCall extends PlannedInterpretable {
                             "No matching overload for function '%s'. Overload candidates: %s",
                             functionName, Joiner.on(", ").join(overloadIds))));
 
-    return resolvedOverload.getDefinition().apply(argVals);
+    Object result = resolvedOverload.getDefinition().apply(argVals);
+    Object runtimeValue = celValueConverter.toRuntimeValue(result);
+    if (runtimeValue instanceof dev.cel.common.values.CelValue) {
+      return celValueConverter.unwrap((dev.cel.common.values.CelValue) runtimeValue);
+    }
+    return runtimeValue;
   }
 
   static EvalLateBoundCall create(
       long exprId,
       String functionName,
       ImmutableList<String> overloadIds,
-      PlannedInterpretable[] args) {
-    return new EvalLateBoundCall(exprId, functionName, overloadIds, args);
+      PlannedInterpretable[] args,
+      CelValueConverter celValueConverter) {
+    return new EvalLateBoundCall(exprId, functionName, overloadIds, args, celValueConverter);
   }
-
-
 
   private EvalLateBoundCall(
       long exprId,
       String functionName,
       ImmutableList<String> overloadIds,
-      PlannedInterpretable[] args) {
+      PlannedInterpretable[] args,
+      CelValueConverter celValueConverter) {
     super(exprId);
     this.functionName = functionName;
     this.overloadIds = overloadIds;
     this.args = args;
+    this.celValueConverter = celValueConverter;
   }
 }

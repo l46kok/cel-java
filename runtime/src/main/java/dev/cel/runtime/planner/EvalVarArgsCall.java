@@ -17,15 +17,17 @@ package dev.cel.runtime.planner;
 import static dev.cel.runtime.planner.EvalHelpers.evalNonstrictly;
 import static dev.cel.runtime.planner.EvalHelpers.evalStrictly;
 
+import dev.cel.common.values.CelValueConverter;
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelResolvedOverload;
 import dev.cel.runtime.GlobalResolver;
 
-@SuppressWarnings("Immutable")
 final class EvalVarArgsCall extends PlannedInterpretable {
 
   private final CelResolvedOverload resolvedOverload;
+  @SuppressWarnings("Immutable")
   private final PlannedInterpretable[] args;
+  private final CelValueConverter celValueConverter;
 
   @Override
   public Object eval(GlobalResolver resolver, ExecutionFrame frame) throws CelEvaluationException {
@@ -38,18 +40,30 @@ final class EvalVarArgsCall extends PlannedInterpretable {
               : evalNonstrictly(arg, resolver, frame);
     }
 
-    return resolvedOverload.getDefinition().apply(argVals);
+    Object result = resolvedOverload.getDefinition().apply(argVals);
+    Object runtimeValue = celValueConverter.toRuntimeValue(result);
+    if (runtimeValue instanceof dev.cel.common.values.CelValue) {
+      return celValueConverter.unwrap((dev.cel.common.values.CelValue) runtimeValue);
+    }
+    return runtimeValue;
   }
 
   static EvalVarArgsCall create(
-      long exprId, CelResolvedOverload resolvedOverload, PlannedInterpretable[] args) {
-    return new EvalVarArgsCall(exprId, resolvedOverload, args);
+      long exprId,
+      CelResolvedOverload resolvedOverload,
+      PlannedInterpretable[] args,
+      CelValueConverter celValueConverter) {
+    return new EvalVarArgsCall(exprId, resolvedOverload, args, celValueConverter);
   }
 
   private EvalVarArgsCall(
-      long exprId, CelResolvedOverload resolvedOverload, PlannedInterpretable[] args) {
+      long exprId,
+      CelResolvedOverload resolvedOverload,
+      PlannedInterpretable[] args,
+      CelValueConverter celValueConverter) {
     super(exprId);
     this.resolvedOverload = resolvedOverload;
     this.args = args;
+    this.celValueConverter = celValueConverter;
   }
 }

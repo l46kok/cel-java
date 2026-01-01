@@ -27,6 +27,7 @@ final class ExecutionFrame {
 
   private final int comprehensionIterationLimit;
   private final CelFunctionResolver functionResolver;
+  private final CelOptions celOptions;
   private int iterationCount;
 
   Optional<CelResolvedOverload> findOverload(
@@ -47,12 +48,21 @@ final class ExecutionFrame {
     }
   }
 
-  static ExecutionFrame create(CelFunctionResolver functionResolver, CelOptions celOptions) {
-    return new ExecutionFrame(functionResolver, celOptions.comprehensionMaxIterations());
+  CelOptions options() {
+    return celOptions;
   }
 
-  private ExecutionFrame(CelFunctionResolver functionResolver, int limit) {
-    this.comprehensionIterationLimit = limit;
+  static ExecutionFrame create(
+      CelFunctionResolver functionResolver,
+      CelOptions celOptions) {
+    return new ExecutionFrame(functionResolver, celOptions);
+  }
+
+  private ExecutionFrame(
+      CelFunctionResolver functionResolver,
+      CelOptions celOptions) {
+    this.comprehensionIterationLimit = celOptions.comprehensionMaxIterations();
     this.functionResolver = functionResolver;
+    this.celOptions = celOptions;
   }
 }

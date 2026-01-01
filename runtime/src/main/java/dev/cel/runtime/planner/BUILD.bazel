@@ -371,11 +371,15 @@ java_library(
     name = "eval_zero_arity",
     srcs = ["EvalZeroArity.java"],
     deps = [
+        ":eval_helpers",
         ":execution_frame",
         ":planned_interpretable",
         "//runtime:evaluation_exception",
         "//runtime:interpretable",
         "//runtime:resolved_overload",
+        "//common/values",
+        "//common/values:cel_value",
+        "@maven//:com_google_guava_guava",
     ],
 )
 
@@ -401,6 +405,8 @@ java_library(
         "//runtime:evaluation_exception",
         "//runtime:interpretable",
         "//runtime:resolved_overload",
+        "//common/values",
+        "//common/values:cel_value",
     ],
 )
 
@@ -427,6 +433,8 @@ java_library(
         "//runtime:evaluation_exception",
         "//runtime:interpretable",
         "//runtime:resolved_overload",
+        "//common/values",
+        "//common/values:cel_value",
     ],
 )
 
@@ -453,6 +461,8 @@ java_library(
         "//runtime:evaluation_exception",
         "//runtime:interpretable",
         "//runtime:resolved_overload",
+        "//common/values",
+        "//common/values:cel_value",
         "@maven//:com_google_guava_guava",
     ],
 )

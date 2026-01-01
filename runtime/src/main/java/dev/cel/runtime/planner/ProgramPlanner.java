@@ -63,6 +63,7 @@ public final class ProgramPlanner {
   private final AttributeFactory attributeFactory;
   private final CelContainer container;
   private final CelOptions options;
+  private final CelValueConverter celValueConverter;
   private final ImmutableSet<String> lateBoundFunctionNames;
 
   /**
@@ -82,9 +83,9 @@ public final class ProgramPlanner {
           .build();
     }
 
-    return PlannedProgram.create(plannedInterpretable, errorMetadata, options);
+    return PlannedProgram.create(
+        plannedInterpretable, errorMetadata, options);
   }
-
   private PlannedInterpretable plan(CelExpr celExpr, PlannerContext ctx) {
     switch (celExpr.getKind()) {
       case CONSTANT:
@@ -248,16 +249,17 @@ public final class ProgramPlanner {
         overloadIds = ImmutableList.of(resolvedFunction.overloadId().get());
       }
 
-      return EvalLateBoundCall.create(expr.id(), functionName, overloadIds, evaluatedArgs);
+      return EvalLateBoundCall.create(
+          expr.id(), functionName, overloadIds, evaluatedArgs, celValueConverter);
     }
 
     switch (argCount) {
       case 0:
-        return EvalZeroArity.create(expr.id(), resolvedOverload);
+        return EvalZeroArity.create(expr.id(), resolvedOverload, celValueConverter);
       case 1:
-        return EvalUnary.create(expr.id(), resolvedOverload, evaluatedArgs[0]);
+        return EvalUnary.create(expr.id(), resolvedOverload, evaluatedArgs[0], celValueConverter);
       default:
-        return EvalVarArgsCall.create(expr.id(), resolvedOverload, evaluatedArgs);
+        return EvalVarArgsCall.create(expr.id(), resolvedOverload, evaluatedArgs, celValueConverter);
     }
   }
 
@@ -499,6 +501,7 @@ public final class ProgramPlanner {
     this.typeProvider = typeProvider;
     this.valueProvider = valueProvider;
     this.dispatcher = dispatcher;
+    this.celValueConverter = celValueConverter;
     this.container = container;
     this.options = options;
     this.lateBoundFunctionNames = lateBoundFunctionNames;

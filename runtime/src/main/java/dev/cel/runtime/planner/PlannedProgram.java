@@ -18,6 +18,7 @@ import com.google.auto.value.AutoValue;
 import com.google.errorprone.annotations.Immutable;
 import dev.cel.common.CelOptions;
 import dev.cel.common.CelRuntimeException;
+import dev.cel.common.values.CelValueConverter;
 import dev.cel.common.values.ErrorValue;
 import dev.cel.runtime.Activation;
 import dev.cel.runtime.CelEvaluationException;
@@ -119,7 +120,9 @@ abstract class PlannedProgram implements Program {
   }
 
   static Program create(
-      PlannedInterpretable interpretable, ErrorMetadata metadata, CelOptions options) {
+      PlannedInterpretable interpretable,
+      ErrorMetadata metadata,
+      CelOptions options) {
     return new AutoValue_PlannedProgram(interpretable, metadata, options);
   }
 }
