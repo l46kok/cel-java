@@ -388,7 +388,7 @@ public final class ProgramPlannerTest {
     Program program = PLANNER.plan(ast);
 
     CelEvaluationException e = assertThrows(CelEvaluationException.class, program::eval);
-    assertThat(e).hasMessageThat().contains("evaluation error at <input>:5: Intentional error");
+    assertThat(e).hasMessageThat().contains("evaluation error at <input>:5: Function 'error' failed with arg(s)");
     assertThat(e).hasCauseThat().isInstanceOf(IllegalArgumentException.class);
   }
 
@@ -447,12 +447,19 @@ public final class ProgramPlannerTest {
   public void plan_call_noMatchingOverload_throws() throws Exception {
     CelAbstractSyntaxTree ast = compile("concat(b'abc', dyn_var)");
     Program program = PLANNER.plan(ast);
+    String errorMsg;
+    if (isParseOnly) {
+      errorMsg = "No matching overload for function 'concat'. Overload candidates: concat_bytes_bytes, bytes_concat_bytes";
+    } else {
+      errorMsg = "No matching overload for function 'concat_bytes_bytes'";
+    }
 
     CelEvaluationException e =
         assertThrows(
             CelEvaluationException.class,
             () -> program.eval(ImmutableMap.of("dyn_var", "Impossible Overload")));
-    assertThat(e).hasMessageThat().contains("No matching overload for function: concat");
+
+    assertThat(e).hasMessageThat().contains(errorMsg);
   }
 
   @Test
