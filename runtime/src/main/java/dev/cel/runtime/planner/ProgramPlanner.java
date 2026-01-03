@@ -47,7 +47,9 @@ import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelEvaluationExceptionBuilder;
 import dev.cel.runtime.CelResolvedOverload;
 import dev.cel.runtime.DefaultDispatcher;
+import dev.cel.runtime.DescriptorTypeResolver;
 import dev.cel.runtime.Program;
+import dev.cel.runtime.TypeResolver;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 
@@ -66,6 +68,7 @@ public final class ProgramPlanner {
   private final CelOptions options;
   private final CelValueConverter celValueConverter;
   private final ImmutableSet<String> lateBoundFunctionNames;
+  private final TypeResolver typeResolver;
 
   /**
    * Plans a {@link Program} from the provided parsed-only or type-checked {@link
@@ -160,8 +163,15 @@ public final class ProgramPlanner {
       return planCheckedIdent(celExpr.id(), ref, ctx.typeMap());
     }
 
+    // For parsed-only mode, attempt to resolve the identifier as a type literal.
+    String identName = celExpr.ident().name();
+    Optional<CelType> maybeType = typeProvider.findType(identName);
+    if (maybeType.isPresent()) {
+      return EvalConstant.create(celExpr.id(), TypeType.create(maybeType.get()));
+    }
+
     return EvalAttribute.create(
-        celExpr.id(), attributeFactory.newMaybeAttribute(celExpr.ident().name()));
+        celExpr.id(), attributeFactory.newMaybeAttribute(identName));
   }
 
   private PlannedInterpretable planCheckedIdent(
@@ -172,14 +182,9 @@ public final class ProgramPlanner {
 
     CelType type = typeMap.get(id);
     if (type.kind().equals(CelKind.TYPE)) {
-      TypeType identType =
-          typeProvider
-              .findType(identRef.name())
-              .map(TypeType::create)
-              .orElseThrow(
-                  () ->
-                      new NoSuchElementException(
-                          "Reference to an undefined type: " + identRef.name()));
+      // Use typeResolver.adaptType() to properly normalize types like
+      // google.protobuf.Duration -> SimpleType.DURATION for correct equality comparisons.
+      TypeType identType = typeResolver.adaptType(type);
       return EvalConstant.create(id, identType);
     }
 
@@ -486,7 +491,8 @@ public final class ProgramPlanner {
         celValueConverter,
         container,
         options,
-        lateBoundFunctionNames);
+        lateBoundFunctionNames,
+        DescriptorTypeResolver.create());
   }
 
   private ProgramPlanner(
@@ -496,7 +502,8 @@ public final class ProgramPlanner {
       CelValueConverter celValueConverter,
       CelContainer container,
       CelOptions options,
-      ImmutableSet<String> lateBoundFunctionNames) {
+      ImmutableSet<String> lateBoundFunctionNames,
+      TypeResolver typeResolver) {
     this.typeProvider = typeProvider;
     this.valueProvider = valueProvider;
     this.dispatcher = dispatcher;
@@ -504,6 +511,7 @@ public final class ProgramPlanner {
     this.container = container;
     this.options = options;
     this.lateBoundFunctionNames = lateBoundFunctionNames;
+    this.typeResolver = typeResolver;
     this.attributeFactory =
         AttributeFactory.newAttributeFactory(container, typeProvider, celValueConverter);
   }

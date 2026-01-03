@@ -159,6 +159,7 @@ public final class ProgramPlannerTest {
     CelStandardFunctions stdFunctions =
         CelStandardFunctions.newBuilder()
             .includeFunctions(
+                StandardFunction.TYPE,
                 StandardFunction.INDEX,
                 StandardFunction.LOGICAL_NOT,
                 StandardFunction.ADD,
@@ -602,6 +603,16 @@ public final class ProgramPlannerTest {
   }
 
   @Test
+  public void plan_call_typeResolution(@TestParameter TypeObjectTestCase testCase) throws Exception {
+    CelAbstractSyntaxTree ast = compile(testCase.expression);
+    Program program = PLANNER.plan(ast);
+
+    TypeType result = (TypeType) program.eval();
+
+    assertThat(result).isEqualTo(testCase.type);
+  }
+
+  @Test
   public void plan_select_protoMessageField() throws Exception {
     CelAbstractSyntaxTree ast = compile("msg.single_string");
     Program program = PLANNER.plan(ast);
@@ -899,6 +910,24 @@ public final class ProgramPlannerTest {
     private final TypeType type;
 
     TypeLiteralTestCase(String expression, CelType type) {
+      this.expression = expression;
+      this.type = TypeType.create(type);
+    }
+  }
+
+  private enum TypeObjectTestCase {
+    BOOL("type(true)", SimpleType.BOOL),
+    INT("type(1)", SimpleType.INT),
+    DOUBLE("type(1.5)", SimpleType.DOUBLE),
+    PROTO_MESSAGE_TYPE(
+            "type(cel.expr.conformance.proto3.TestAllTypes{})",
+            StructTypeReference.create(TestAllTypes.getDescriptor().getFullName()));
+    ;
+
+    private final String expression;
+    private final TypeType type;
+
+    TypeObjectTestCase(String expression, CelType type) {
       this.expression = expression;
       this.type = TypeType.create(type);
     }

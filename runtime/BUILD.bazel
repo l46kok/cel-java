@@ -177,6 +177,18 @@ java_library(
     exports = ["//runtime/src/main/java/dev/cel/runtime:type_resolver"],
 )
 
+cel_android_library(
+    name = "type_resolver_android",
+    visibility = ["//:internal"],
+    exports = ["//runtime/src/main/java/dev/cel/runtime:type_resolver_android"],
+)
+
+java_library(
+    name = "descriptor_type_resolver",
+    visibility = ["//:internal"],
+    exports = ["//runtime/src/main/java/dev/cel/runtime:descriptor_type_resolver"],
+)
+
 java_library(
     name = "unknown_attributes",
     exports = ["//runtime/src/main/java/dev/cel/runtime:unknown_attributes"],

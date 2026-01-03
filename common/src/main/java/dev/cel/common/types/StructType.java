@@ -94,6 +94,31 @@ public class StructType extends CelType {
   }
 
   /**
+   * Struct types are equal if they have the same name. This includes comparisons between
+   * StructType, ProtoMessageType, and StructTypeReference instances. This ensures that different
+   * representations of the same message type are considered equal for CEL type comparison
+   * operations.
+   */
+  @Override
+  public boolean equals(Object obj) {
+    if (this == obj) {
+      return true;
+    }
+    if (obj instanceof StructType) {
+      return name.equals(((StructType) obj).name);
+    }
+    if (obj instanceof StructTypeReference) {
+      return name.equals(((StructTypeReference) obj).name());
+    }
+    return false;
+  }
+
+  @Override
+  public int hashCode() {
+    return name.hashCode();
+  }
+
+  /**
    * The {@code FieldResolver} is used to lookup the type of a {@code StructType}'s {@code
    * fieldName}.
    */

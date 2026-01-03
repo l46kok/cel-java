@@ -46,6 +46,29 @@ public abstract class StructTypeReference extends CelType {
             && other.name().equals(name()));
   }
 
+  /**
+   * Struct type references are equal if they have the same name. This includes comparisons between
+   * StructTypeReference, StructType, and ProtoMessageType instances with the same name.
+   */
+  @Override
+  public final boolean equals(Object obj) {
+    if (this == obj) {
+      return true;
+    }
+    if (obj instanceof StructTypeReference) {
+      return name().equals(((StructTypeReference) obj).name());
+    }
+    if (obj instanceof StructType) {
+      return name().equals(((StructType) obj).name());
+    }
+    return false;
+  }
+
+  @Override
+  public final int hashCode() {
+    return name().hashCode();
+  }
+
   public static StructTypeReference create(String name) {
     return new AutoValue_StructTypeReference(CelKind.STRUCT, name);
   }

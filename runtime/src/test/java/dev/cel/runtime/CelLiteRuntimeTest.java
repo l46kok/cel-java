@@ -45,6 +45,7 @@ import dev.cel.common.internal.ProtoTimeUtils;
 import dev.cel.common.types.ProtoMessageLiteTypeProvider;
 import dev.cel.common.types.SimpleType;
 import dev.cel.common.types.StructTypeReference;
+import dev.cel.common.types.TypeType;
 import dev.cel.common.values.CelByteString;
 import dev.cel.common.values.NullValue;
 import dev.cel.common.values.ProtoMessageLiteValueProvider;
@@ -703,5 +704,17 @@ public class CelLiteRuntimeTest {
                         "msg", MessageWithEnum.newBuilder().setSimpleEnum(SimpleEnum.BAR)));
 
     assertThat(result).isEqualTo(SimpleEnum.BAR.getNumber());
+  }
+
+  @Test
+  public void typeResolution() throws Exception {
+    CelAbstractSyntaxTree ast =
+            CEL_COMPILER
+                    .compile("type(cel.expr.conformance.proto3.TestAllTypes{})")
+                    .getAst();
+
+    TypeType result = (TypeType) CEL_RUNTIME.createProgram(ast).eval();
+
+    assertThat(result).isNotNull();
   }
 }

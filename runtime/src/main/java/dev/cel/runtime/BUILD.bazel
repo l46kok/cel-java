@@ -205,9 +205,11 @@ java_library(
     tags = [
     ],
     deps = [
+        "//common/annotations",
         "//common/types",
         "//common/types:type_providers",
         "//common/values:cel_byte_string",
+        "//common/values",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
         "@maven//:com_google_protobuf_protobuf_java",
@@ -217,10 +219,16 @@ java_library(
 cel_android_library(
     name = "type_resolver_android",
     srcs = ["TypeResolver.java"],
-    visibility = ["//visibility:private"],
+    visibility = [
+        "//runtime:__pkg__",
+        "//runtime/src/main/java/dev/cel/runtime/planner:__pkg__",
+        "//runtime/src/main/java/dev/cel/runtime/standard:__pkg__",
+    ],
     deps = [
+        "//common/annotations",
         "//common/types:type_providers_android",
         "//common/types:types_android",
+        "//common/values:values_android",
         "//common/values:cel_byte_string",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
@@ -232,7 +240,10 @@ cel_android_library(
 java_library(
     name = "descriptor_type_resolver",
     srcs = ["DescriptorTypeResolver.java"],
-    visibility = ["//visibility:private"],
+    visibility = [
+        "//runtime:__pkg__",
+        "//runtime/src/main/java/dev/cel/runtime/standard:__pkg__",
+    ],
     deps = [
         ":type_resolver",
         "//common/types",
@@ -240,6 +251,42 @@ java_library(
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
         "@maven//:com_google_protobuf_protobuf_java",
+    ],
+)
+
+java_library(
+    name = "lite_descriptor_type_resolver",
+    srcs = ["LiteDescriptorTypeResolver.java"],
+    visibility = [
+        "//runtime:__pkg__",
+        "//runtime/src/main/java/dev/cel/runtime/standard:__pkg__",
+    ],
+    deps = [
+        ":type_resolver",
+        "//common/internal:cel_lite_descriptor_pool",
+        "//common/types",
+        "//protobuf:cel_lite_descriptor",
+        "@maven//:com_google_errorprone_error_prone_annotations",
+        "@maven//:com_google_guava_guava",
+        "@maven//:com_google_protobuf_protobuf_java",
+    ],
+)
+
+cel_android_library(
+    name = "lite_descriptor_type_resolver_android",
+    srcs = ["LiteDescriptorTypeResolver.java"],
+    visibility = [
+        "//runtime:__pkg__",
+        "//runtime/src/main/java/dev/cel/runtime/standard:__pkg__",
+    ],
+    deps = [
+        ":type_resolver_android",
+        "//common/internal:cel_lite_descriptor_pool_android",
+        "//common/types:types_android",
+        "//protobuf:cel_lite_descriptor_android",
+        "@maven//:com_google_errorprone_error_prone_annotations",
+        "@maven_android//:com_google_guava_guava",
+        "@maven_android//:com_google_protobuf_protobuf_javalite",
     ],
 )
 
@@ -614,6 +661,7 @@ java_library(
     tags = [
     ],
     deps = [
+        ":descriptor_type_resolver",
         ":function_binding",
         ":runtime_equality",
         "//common:operator",
@@ -641,6 +689,7 @@ java_library(
         "//runtime/standard:get_seconds",
         "//runtime/standard:greater",
         "//runtime/standard:greater_equals",
+        "//runtime/standard:type",
         "//runtime/standard:in",
         "//runtime/standard:index",
         "//runtime/standard:int",
@@ -718,6 +767,7 @@ cel_android_library(
         "//runtime/standard:string_android",
         "//runtime/standard:subtract_android",
         "//runtime/standard:timestamp_android",
+        "//runtime/standard:type_android",
         "//runtime/standard:uint_android",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",

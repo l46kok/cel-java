@@ -28,14 +28,14 @@ import java.util.Optional;
  * protobuf message types using descriptors.
  */
 @Immutable
-final class DescriptorTypeResolver extends TypeResolver {
+public final class DescriptorTypeResolver extends TypeResolver {
 
-  static DescriptorTypeResolver create() {
+  public static DescriptorTypeResolver create() {
     return new DescriptorTypeResolver();
   }
 
   @Override
-  TypeType resolveObjectType(Object obj, CelType typeCheckedType) {
+  public TypeType resolveObjectType(Object obj, CelType typeCheckedType) {
     checkNotNull(obj);
 
     Optional<TypeType> wellKnownTypeType = resolveWellKnownObjectType(obj);

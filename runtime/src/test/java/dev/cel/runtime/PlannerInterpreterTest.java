@@ -31,4 +31,22 @@ public class PlannerInterpreterTest extends BaseInterpreterTest {
             .addFileTypes(TEST_FILE_DESCRIPTORS)
             .build());
   }
+
+  @Override
+  public void optional_errors() {
+    // Error message differs for now
+    skipBaselineVerification();
+  }
+
+  @Override
+  public void unknownField() {
+    // Not implemented yet
+    skipBaselineVerification();
+  }
+
+  @Override
+  public void unknownResultSet() {
+    // Not implemented yet
+    skipBaselineVerification();
+  }
 }

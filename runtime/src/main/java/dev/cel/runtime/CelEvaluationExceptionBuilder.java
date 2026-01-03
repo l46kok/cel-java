@@ -85,10 +85,13 @@ public final class CelEvaluationExceptionBuilder {
   public static CelEvaluationExceptionBuilder newBuilder(CelRuntimeException celRuntimeException) {
     // TODO: Temporary until migration is complete.
     Throwable cause = celRuntimeException.getCause();
-    String message =
-        cause == null
-            ? celRuntimeException.getMessage()
-            : celRuntimeException.getCause().getMessage();
+    String message;
+    if (cause == null) {
+      message = celRuntimeException.getMessage();
+    } else {
+      // Handle case where cause.getMessage() might be null
+      message = cause.getMessage() != null ? cause.getMessage() : celRuntimeException.getMessage();
+    }
 
     return new CelEvaluationExceptionBuilder(message)
         .setErrorCode(celRuntimeException.getErrorCode())

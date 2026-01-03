@@ -110,8 +110,15 @@ abstract class PlannedProgram implements Program {
       // Use the localized expr ID (most specific error location)
       LocalizedEvaluationException localized = (LocalizedEvaluationException) e;
       exprId = localized.exprId();
-      builder =
-          CelEvaluationExceptionBuilder.newBuilder((CelRuntimeException) localized.getCause());
+      Throwable cause = localized.getCause();
+      if (cause instanceof CelRuntimeException) {
+        builder = CelEvaluationExceptionBuilder.newBuilder((CelRuntimeException) cause);
+      } else {
+        // Handle case where cause is null or not a CelRuntimeException
+        String message = cause != null ? cause.getMessage() : localized.getMessage();
+        builder = CelEvaluationExceptionBuilder.newBuilder(message != null ? message : "")
+            .setCause(cause);
+      }
     } else if (e instanceof CelRuntimeException) {
       builder = CelEvaluationExceptionBuilder.newBuilder((CelRuntimeException) e);
     } else {

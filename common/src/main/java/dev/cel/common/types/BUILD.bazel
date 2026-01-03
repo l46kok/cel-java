@@ -219,6 +219,7 @@ java_library(
     deps = [
         ":type_providers",
         ":types",
+        "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
     ],
 )
@@ -233,6 +234,7 @@ cel_android_library(
     deps = [
         "//common/types:type_providers_android",
         "//common/types:types_android",
+        "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven_android//:com_google_guava_guava",
     ],
 )

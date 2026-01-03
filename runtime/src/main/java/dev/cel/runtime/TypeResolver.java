@@ -26,13 +26,13 @@ import com.google.protobuf.Duration;
 import com.google.protobuf.MessageLiteOrBuilder;
 import com.google.protobuf.NullValue;
 import com.google.protobuf.Timestamp;
+import dev.cel.common.annotations.Internal;
 import dev.cel.common.types.CelType;
 import dev.cel.common.types.ListType;
 import dev.cel.common.types.MapType;
 import dev.cel.common.types.OptionalType;
 import dev.cel.common.types.SimpleType;
 import dev.cel.common.types.StructType;
-import dev.cel.common.types.StructTypeReference;
 import dev.cel.common.types.TypeType;
 import dev.cel.common.values.CelByteString;
 import java.time.Instant;
@@ -47,9 +47,10 @@ import java.util.Optional;
  * a type call (type('foo'), type(1), etc.) or as a type literal (type, int, string, etc.)
  */
 @Immutable
-class TypeResolver {
+@Internal
+public class TypeResolver {
 
-  static TypeResolver create() {
+  public static TypeResolver create() {
     return new TypeResolver();
   }
 
@@ -64,7 +65,8 @@ class TypeResolver {
           .put(Long.class, TypeType.create(SimpleType.INT))
           .put(UnsignedLong.class, TypeType.create(SimpleType.UINT))
           .put(String.class, TypeType.create(SimpleType.STRING))
-          .put(NullValue.class, TypeType.create(SimpleType.NULL_TYPE))
+          .put(com.google.protobuf.NullValue.class, TypeType.create(SimpleType.NULL_TYPE))
+          .put(dev.cel.common.values.NullValue.class, TypeType.create(SimpleType.NULL_TYPE))
           .put(java.time.Duration.class, TypeType.create(SimpleType.DURATION))
           .put(Instant.class, TypeType.create(SimpleType.TIMESTAMP))
           .put(
@@ -93,7 +95,7 @@ class TypeResolver {
           .buildOrThrow();
 
   /** Adapt the type-checked {@link CelType} into a runtime type value {@link TypeType}. */
-  TypeType adaptType(CelType typeCheckedType) {
+  public TypeType adaptType(CelType typeCheckedType) {
     checkNotNull(typeCheckedType);
 
     switch (typeCheckedType.kind()) {
@@ -135,7 +137,7 @@ class TypeResolver {
   }
 
   /** Resolve the CEL type of the {@code obj}. */
-  TypeType resolveObjectType(Object obj, CelType typeCheckedType) {
+  public TypeType resolveObjectType(Object obj, CelType typeCheckedType) {
     checkNotNull(obj);
     Optional<TypeType> wellKnownTypeType = resolveWellKnownObjectType(obj);
     if (wellKnownTypeType.isPresent()) {
@@ -173,19 +175,15 @@ class TypeResolver {
 
   private static CelType adaptStructType(StructType typeOfType) {
     String structName = typeOfType.name();
-    CelType newTypeOfType;
+    // Adapt well-known types to SimpleType equivalents
     if (structName.equals(SimpleType.DURATION.name())) {
-      newTypeOfType = SimpleType.DURATION;
+      return SimpleType.DURATION;
     } else if (structName.equals(SimpleType.TIMESTAMP.name())) {
-      newTypeOfType = SimpleType.TIMESTAMP;
-    } else {
-      // Coerces ProtoMessageTypeProvider to be a struct type reference for accurate
-      // equality tests.
-      // In the future, we can plumb ProtoMessageTypeProvider through the runtime to retain
-      // ProtoMessageType here.
-      newTypeOfType = StructTypeReference.create(typeOfType.name());
+      return SimpleType.TIMESTAMP;
     }
-    return newTypeOfType;
+    // Preserve the original struct type (e.g., ProtoMessageType) rather than
+    // normalizing to StructTypeReference.
+    return typeOfType;
   }
 
   TypeResolver() {}
