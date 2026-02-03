@@ -157,7 +157,7 @@ public final class ExprChecker {
     Map<Long, CelType> typeMap =
         Maps.transformValues(env.getTypeMap(), checker.inferenceContext::finalize);
 
-    CelAbstractSyntaxTree parsedAst = mutableAst.toParsedAst();
+    CelAbstractSyntaxTree parsedAst = mutableAst.toParsedAst(true);
     return CelAbstractSyntaxTree.newCheckedAst(
         parsedAst.getExpr(), parsedAst.getSource(), env.getRefMap(), typeMap);
   }

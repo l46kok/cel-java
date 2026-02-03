@@ -97,10 +97,18 @@ public final class CelMutableSource {
   }
 
   public CelSource toCelSource() {
-    return CelSource.newBuilder(codePoints, lineOffsets)
+    return toCelSource(false);
+  }
+
+  public CelSource toCelSource(boolean retainSourcePositions) {
+    CelSource.Builder builder =
+        retainSourcePositions
+            ? CelSource.newBuilder(codePoints, lineOffsets).addPositionsMap(positions)
+            : CelSource.newBuilder();
+
+    return builder
         .setDescription(description)
         .addAllExtensions(extensions)
-        .addPositionsMap(positions)
         .addAllMacroCalls(
             macroCalls.entrySet().stream()
                 .collect(
