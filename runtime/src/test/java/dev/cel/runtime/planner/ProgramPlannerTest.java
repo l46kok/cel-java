@@ -69,6 +69,7 @@ import dev.cel.parser.CelStandardMacro;
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelFunctionBinding;
 import dev.cel.runtime.CelLateFunctionBindings;
+import dev.cel.runtime.CelRuntimeFactory;
 import dev.cel.runtime.CelStandardFunctions;
 import dev.cel.runtime.CelStandardFunctions.StandardFunction;
 import dev.cel.runtime.DefaultDispatcher;
@@ -130,7 +131,10 @@ public final class ProgramPlannerTest {
           .setContainer(CEL_CONTAINER)
           .addFunctionDeclarations(
               newFunctionDeclaration("zero", newGlobalOverload("zero_overload", SimpleType.INT)),
-              newFunctionDeclaration("error", newGlobalOverload("error_overload", SimpleType.INT)),
+              newFunctionDeclaration("error",
+                      newGlobalOverload("error_overload", SimpleType.INT),
+                      newGlobalOverload("error_overload_int", SimpleType.INT, SimpleType.INT)
+              ),
               newFunctionDeclaration(
                   "neg",
                   newGlobalOverload("neg_int", SimpleType.INT, SimpleType.INT),
@@ -189,7 +193,13 @@ public final class ProgramPlannerTest {
                 ImmutableList.of(),
                 (unused) -> {
                   throw new IllegalArgumentException("Intentional error");
-                })));
+                }),
+            CelFunctionBinding.from(
+                    "error_overload_int",
+                    Long.class,
+                    (unused) -> {
+                      throw new IllegalArgumentException("Intentional error");
+                    })));
 
     addBindingsToDispatcher(
         builder,
@@ -398,10 +408,24 @@ public final class ProgramPlannerTest {
   public void plan_call_throws() throws Exception {
     CelAbstractSyntaxTree ast = compile("error()");
     Program program = PLANNER.plan(ast);
+    String expectedOverloadId = isParseOnly ? "error" : "error_overload";
 
     CelEvaluationException e = assertThrows(CelEvaluationException.class, program::eval);
-    assertThat(e).hasMessageThat().contains("evaluation error at <input>:5: Intentional error");
-    assertThat(e).hasCauseThat().isInstanceOf(IllegalArgumentException.class);
+    assertThat(e).hasMessageThat().contains("evaluation error at <input>:5: Function '" + expectedOverloadId + "' failed with arg(s) ''");
+    assertThat(e.getCause()).isInstanceOf(IllegalArgumentException.class);
+    assertThat(e.getCause().getMessage()).contains("Intentional error");
+  }
+
+  @Test
+  public void plan_call_withArgs_throws() throws Exception {
+    CelAbstractSyntaxTree ast = compile("error(1)");
+    Program program = PLANNER.plan(ast);
+    String expectedOverloadId = isParseOnly ? "error" : "error_overload_int";
+
+    CelEvaluationException e = assertThrows(CelEvaluationException.class, program::eval);
+    assertThat(e).hasMessageThat().contains("evaluation error at <input>:5: Function '" + expectedOverloadId + "' failed with arg(s) '1'");
+    assertThat(e.getCause()).isInstanceOf(IllegalArgumentException.class);
+    assertThat(e.getCause().getMessage()).contains("Intentional error");
   }
 
   @Test

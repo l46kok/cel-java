@@ -125,6 +125,7 @@ java_library(
         "//common:error_codes",
         "//common/annotations",
         "//common/exceptions:overload_not_found",
+        "//common/exceptions:runtime_exception",
         "@maven//:com_google_code_findbugs_annotations",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",

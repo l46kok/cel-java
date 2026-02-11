@@ -390,11 +390,16 @@ java_library(
     deps = [
         ":execution_frame",
         ":planned_interpretable",
+        "//common:error_codes",
+        "//common/exceptions:runtime_exception",
+        "//common/exceptions:invalid_argument",
+        ":localized_evaluation_exception",
         "//common/values",
         "//common/values:cel_value",
         "//runtime:evaluation_exception",
         "//runtime:interpretable",
         "//runtime:resolved_overload",
+        "@maven//:com_google_guava_guava",
     ],
 )
 
@@ -404,11 +409,13 @@ cel_android_library(
     deps = [
         ":execution_frame_android",
         ":planned_interpretable_android",
+        "//common/exceptions:runtime_exception",
         "//common/values:cel_value_android",
         "//common/values:values_android",
         "//runtime:evaluation_exception",
         "//runtime:interpretable_android",
         "//runtime:resolved_overload_android",
+        "@maven_android//:com_google_guava_guava",
     ],
 )
 
@@ -419,11 +426,13 @@ java_library(
         ":eval_helpers",
         ":execution_frame",
         ":planned_interpretable",
+        "//common/exceptions:runtime_exception",
         "//common/values",
         "//common/values:cel_value",
         "//runtime:evaluation_exception",
         "//runtime:interpretable",
         "//runtime:resolved_overload",
+        "@maven//:com_google_guava_guava",
     ],
 )
 
@@ -434,11 +443,13 @@ cel_android_library(
         ":eval_helpers_android",
         ":execution_frame_android",
         ":planned_interpretable_android",
+        "//common/exceptions:runtime_exception",
         "//common/values:cel_value_android",
         "//common/values:values_android",
         "//runtime:evaluation_exception",
         "//runtime:interpretable_android",
         "//runtime:resolved_overload_android",
+        "@maven_android//:com_google_guava_guava",
     ],
 )
 
@@ -449,11 +460,13 @@ java_library(
         ":eval_helpers",
         ":execution_frame",
         ":planned_interpretable",
+        "//common/exceptions:runtime_exception",
         "//common/values",
         "//common/values:cel_value",
         "//runtime:evaluation_exception",
         "//runtime:interpretable",
         "//runtime:resolved_overload",
+        "@maven//:com_google_guava_guava",
     ],
 )
 
@@ -464,11 +477,13 @@ cel_android_library(
         ":eval_helpers_android",
         ":execution_frame_android",
         ":planned_interpretable_android",
+        "//common/exceptions:runtime_exception",
         "//common/values:cel_value_android",
         "//common/values:values_android",
         "//runtime:evaluation_exception",
         "//runtime:interpretable_android",
         "//runtime:resolved_overload_android",
+        "@maven_android//:com_google_guava_guava",
     ],
 )
 
@@ -480,6 +495,7 @@ java_library(
         ":execution_frame",
         ":planned_interpretable",
         "//common/exceptions:overload_not_found",
+        "//common/exceptions:runtime_exception",
         "//common/values",
         "//common/values:cel_value",
         "//runtime:evaluation_exception",
@@ -497,6 +513,7 @@ cel_android_library(
         ":execution_frame_android",
         ":planned_interpretable_android",
         "//common/exceptions:overload_not_found",
+        "//common/exceptions:runtime_exception",
         "//common/values:cel_value_android",
         "//common/values:values_android",
         "//runtime:evaluation_exception",

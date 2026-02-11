@@ -26,6 +26,7 @@ import com.google.errorprone.annotations.Immutable;
 import dev.cel.common.CelErrorCode;
 import dev.cel.common.annotations.Internal;
 import dev.cel.common.exceptions.CelOverloadNotFoundException;
+import dev.cel.common.exceptions.CelRuntimeException;
 import dev.cel.runtime.FunctionBindingImpl.DynamicDispatchOverload;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -171,7 +172,18 @@ public final class DefaultDispatcher implements CelFunctionResolver {
     // Argument checking for DynamicDispatch is handled inside the overload's apply method itself.
     if (overload instanceof DynamicDispatchOverload
         || CelFunctionOverload.canHandle(args, argTypes, isStrict)) {
-      return overload.apply(args);
+      try {
+        return overload.apply(args);
+      } catch (CelRuntimeException e) {
+        // Function dispatch failure that's already been handled -- just propagate.
+        throw e;
+      } catch (RuntimeException e) {
+        // Unexpected function dispatch failure.
+        throw new IllegalArgumentException(String.format(
+                "Function '%s' failed with arg(s) '%s'",
+                functionName, Joiner.on(", ").join(args)),
+                e);
+      }
     }
 
     throw new CelOverloadNotFoundException(functionName);
