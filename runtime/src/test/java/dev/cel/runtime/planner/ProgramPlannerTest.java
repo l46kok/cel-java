@@ -69,13 +69,14 @@ import dev.cel.parser.CelStandardMacro;
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelFunctionBinding;
 import dev.cel.runtime.CelLateFunctionBindings;
-import dev.cel.runtime.CelRuntimeFactory;
 import dev.cel.runtime.CelStandardFunctions;
 import dev.cel.runtime.CelStandardFunctions.StandardFunction;
 import dev.cel.runtime.DefaultDispatcher;
 import dev.cel.runtime.Program;
 import dev.cel.runtime.RuntimeEquality;
 import dev.cel.runtime.RuntimeHelpers;
+import dev.cel.runtime.DescriptorTypeResolver;
+import dev.cel.runtime.standard.TypeFunction;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -177,6 +178,10 @@ public final class ProgramPlannerTest {
             .build();
     addBindingsToDispatcher(
         builder, stdFunctions.newFunctionBindings(RUNTIME_EQUALITY, CEL_OPTIONS));
+
+    TypeFunction typeFunction = TypeFunction.create(DescriptorTypeResolver.create(TYPE_PROVIDER));
+    addBindingsToDispatcher(
+        builder, typeFunction.newFunctionBindings(CEL_OPTIONS, RUNTIME_EQUALITY));
 
     // Custom functions
     addBindingsToDispatcher(
@@ -627,6 +632,16 @@ public final class ProgramPlannerTest {
   }
 
   @Test
+  public void plan_call_typeResolution(@TestParameter TypeObjectTestCase testCase) throws Exception {
+    CelAbstractSyntaxTree ast = compile(testCase.expression);
+    Program program = PLANNER.plan(ast);
+
+    TypeType result = (TypeType) program.eval();
+
+    assertThat(result).isEqualTo(testCase.type);
+  }
+
+  @Test
   public void plan_select_protoMessageField() throws Exception {
     CelAbstractSyntaxTree ast = compile("msg.single_string");
     Program program = PLANNER.plan(ast);
@@ -1025,6 +1040,25 @@ public final class ProgramPlannerTest {
     private final TypeType type;
 
     TypeLiteralTestCase(String expression, CelType type) {
+      this.expression = expression;
+      this.type = TypeType.create(type);
+    }
+  }
+
+
+  private enum TypeObjectTestCase {
+    BOOL("type(true)", SimpleType.BOOL),
+    INT("type(1)", SimpleType.INT),
+    DOUBLE("type(1.5)", SimpleType.DOUBLE),
+    PROTO_MESSAGE_TYPE(
+            "type(cel.expr.conformance.proto3.TestAllTypes{})",
+            TYPE_PROVIDER.findType("cel.expr.conformance.proto3.TestAllTypes").get())
+    ;
+
+    private final String expression;
+    private final TypeType type;
+
+    TypeObjectTestCase(String expression, CelType type) {
       this.expression = expression;
       this.type = TypeType.create(type);
     }

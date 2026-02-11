@@ -31,6 +31,7 @@ import dev.cel.common.values.CelValueConverter;
 import dev.cel.common.values.CelValueProvider;
 import dev.cel.runtime.planner.ProgramPlanner;
 import dev.cel.runtime.standard.CelStandardFunction;
+import dev.cel.runtime.standard.TypeFunction;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -196,9 +197,11 @@ final class LiteRuntimeImpl implements CelLiteRuntime {
           ImmutableMap.builder();
 
       ImmutableSet<CelStandardFunction> standardFunctions = standardFunctionBuilder.build();
+
+      RuntimeHelpers runtimeHelpers = RuntimeHelpers.create();
+      RuntimeEquality runtimeEquality = RuntimeEquality.create(runtimeHelpers, celOptions);
+
       if (!standardFunctions.isEmpty()) {
-        RuntimeHelpers runtimeHelpers = RuntimeHelpers.create();
-        RuntimeEquality runtimeEquality = RuntimeEquality.create(runtimeHelpers, celOptions);
         for (CelStandardFunction standardFunction : standardFunctions) {
           ImmutableSet<CelFunctionBinding> standardFunctionBinding =
               standardFunction.newFunctionBindings(celOptions, runtimeEquality);
@@ -206,6 +209,12 @@ final class LiteRuntimeImpl implements CelLiteRuntime {
             functionBindingsBuilder.put(func.getOverloadId(), func);
           }
         }
+      }
+
+      TypeResolver typeResolver = TypeResolver.create();
+      TypeFunction typeFunction = TypeFunction.create(typeResolver);
+      for (CelFunctionBinding binding : typeFunction.newFunctionBindings(celOptions, runtimeEquality)) {
+        functionBindingsBuilder.put(binding.getOverloadId(), binding);
       }
 
       functionBindingsBuilder.putAll(customFunctionBindings);

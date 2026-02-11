@@ -40,6 +40,7 @@ import dev.cel.common.exceptions.CelOverloadNotFoundException;
 import dev.cel.common.types.CelKind;
 import dev.cel.common.types.CelType;
 import dev.cel.common.types.CelTypeProvider;
+import dev.cel.common.types.SimpleType;
 import dev.cel.common.types.StructType;
 import dev.cel.common.types.TypeType;
 import dev.cel.common.values.CelValueConverter;
@@ -181,11 +182,14 @@ public final class ProgramPlanner {
       TypeType identType =
           typeProvider
               .findType(identRef.name())
-              .map(TypeType::create)
+                  .map(t -> (t instanceof TypeType)
+                          ? TypeType.create(SimpleType.DYN)
+                          : TypeType.create(t))
               .orElseThrow(
                   () ->
                       new NoSuchElementException(
                           "Reference to an undefined type: " + identRef.name()));
+
       return EvalConstant.create(id, identType);
     }
 

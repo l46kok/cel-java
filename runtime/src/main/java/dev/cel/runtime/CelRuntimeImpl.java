@@ -45,6 +45,7 @@ import dev.cel.common.values.CelValueConverter;
 import dev.cel.common.values.CelValueProvider;
 import dev.cel.common.values.CombinedCelValueProvider;
 import dev.cel.common.values.ProtoMessageValueProvider;
+import dev.cel.runtime.standard.TypeFunction;
 import dev.cel.runtime.planner.ProgramPlanner;
 import java.util.Arrays;
 import java.util.Collection;
@@ -446,10 +447,16 @@ abstract class CelRuntimeImpl implements CelRuntime {
 
       CelTypeProvider combinedTypeProvider =
           new CelTypeProvider.CombinedCelTypeProvider(
-              messageTypeProvider, DefaultTypeProvider.getInstance());
+              DefaultTypeProvider.getInstance(), messageTypeProvider);
       if (typeProvider() != null) {
         combinedTypeProvider =
             new CelTypeProvider.CombinedCelTypeProvider(combinedTypeProvider, typeProvider());
+      }
+
+      DescriptorTypeResolver descriptorTypeResolver = DescriptorTypeResolver.create(combinedTypeProvider);
+      TypeFunction typeFunction = TypeFunction.create(descriptorTypeResolver);
+      for (CelFunctionBinding binding : typeFunction.newFunctionBindings(options(), runtimeEquality)) {
+        mutableFunctionBindings.put(binding.getOverloadId(), binding);
       }
 
       DefaultDispatcher dispatcher =

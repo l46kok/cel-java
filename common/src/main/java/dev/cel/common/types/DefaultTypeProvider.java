@@ -45,6 +45,7 @@ public class DefaultTypeProvider implements CelTypeProvider {
     typeMapBuilder.putAll(SimpleType.TYPE_MAP);
     typeMapBuilder.put("list", ListType.create(SimpleType.DYN));
     typeMapBuilder.put("map", MapType.create(SimpleType.DYN, SimpleType.DYN));
+    typeMapBuilder.put("type", TypeType.create(SimpleType.DYN));
     typeMapBuilder.put(
         "optional_type",
         // TODO: Move to CelOptionalLibrary and register it on demand

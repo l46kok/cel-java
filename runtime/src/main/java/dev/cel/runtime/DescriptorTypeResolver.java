@@ -19,8 +19,11 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.errorprone.annotations.Immutable;
 import com.google.protobuf.MessageOrBuilder;
 import dev.cel.common.types.CelType;
+import dev.cel.common.types.CelTypeProvider;
 import dev.cel.common.types.StructTypeReference;
 import dev.cel.common.types.TypeType;
+import org.jspecify.annotations.Nullable;
+
 import java.util.Optional;
 
 /**
@@ -28,14 +31,20 @@ import java.util.Optional;
  * protobuf message types using descriptors.
  */
 @Immutable
-final class DescriptorTypeResolver extends TypeResolver {
+public final class DescriptorTypeResolver extends TypeResolver {
 
-  static DescriptorTypeResolver create() {
+  private final @Nullable CelTypeProvider typeProvider;
+
+  public static DescriptorTypeResolver create() {
     return new DescriptorTypeResolver();
   }
 
+  public static DescriptorTypeResolver create(CelTypeProvider typeProvider) {
+    return new DescriptorTypeResolver(typeProvider);
+  }
+
   @Override
-  TypeType resolveObjectType(Object obj, CelType typeCheckedType) {
+  public TypeType resolveObjectType(Object obj, CelType typeCheckedType) {
     checkNotNull(obj);
 
     Optional<TypeType> wellKnownTypeType = resolveWellKnownObjectType(obj);
@@ -45,11 +54,25 @@ final class DescriptorTypeResolver extends TypeResolver {
 
     if (obj instanceof MessageOrBuilder) {
       MessageOrBuilder msg = (MessageOrBuilder) obj;
-      return TypeType.create(StructTypeReference.create(msg.getDescriptorForType().getFullName()));
+      String typeName = msg.getDescriptorForType().getFullName();
+      if (typeProvider != null) {
+        Optional<CelType> type = typeProvider.findType(typeName);
+        if (type.isPresent()) {
+          return TypeType.create(type.get());
+        }
+      }
+
+      return TypeType.create(StructTypeReference.create(typeName));
     }
 
     return super.resolveObjectType(obj, typeCheckedType);
   }
 
-  private DescriptorTypeResolver() {}
+  private DescriptorTypeResolver() {
+    this(null);
+  }
+
+  private DescriptorTypeResolver(CelTypeProvider typeProvider) {
+    this.typeProvider = typeProvider;
+  }
 }

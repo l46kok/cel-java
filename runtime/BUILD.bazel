@@ -178,6 +178,12 @@ java_library(
 )
 
 java_library(
+    name = "descriptor_type_resolver",
+    visibility = ["//:internal"],
+    exports = ["//runtime/src/main/java/dev/cel/runtime:descriptor_type_resolver"],
+)
+
+java_library(
     name = "unknown_attributes",
     exports = ["//runtime/src/main/java/dev/cel/runtime:unknown_attributes"],
 )

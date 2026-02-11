@@ -397,6 +397,16 @@ cel_android_library(
 )
 
 java_library(
+    name = "type",
+    exports = ["//runtime/src/main/java/dev/cel/runtime/standard:type"],
+)
+
+cel_android_library(
+    name = "type_android",
+    exports = ["//runtime/src/main/java/dev/cel/runtime/standard:type_android"],
+)
+
+java_library(
     name = "uint",
     exports = ["//runtime/src/main/java/dev/cel/runtime/standard:uint"],
 )

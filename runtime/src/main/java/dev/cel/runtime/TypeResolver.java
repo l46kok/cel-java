@@ -47,9 +47,9 @@ import java.util.Optional;
  * a type call (type('foo'), type(1), etc.) or as a type literal (type, int, string, etc.)
  */
 @Immutable
-class TypeResolver {
+public class TypeResolver {
 
-  static TypeResolver create() {
+  public static TypeResolver create() {
     return new TypeResolver();
   }
 
@@ -65,6 +65,7 @@ class TypeResolver {
           .put(UnsignedLong.class, TypeType.create(SimpleType.UINT))
           .put(String.class, TypeType.create(SimpleType.STRING))
           .put(NullValue.class, TypeType.create(SimpleType.NULL_TYPE))
+          .put(dev.cel.common.values.NullValue.class, TypeType.create(SimpleType.NULL_TYPE))
           .put(java.time.Duration.class, TypeType.create(SimpleType.DURATION))
           .put(Instant.class, TypeType.create(SimpleType.TIMESTAMP))
           .put(
@@ -135,7 +136,7 @@ class TypeResolver {
   }
 
   /** Resolve the CEL type of the {@code obj}. */
-  TypeType resolveObjectType(Object obj, CelType typeCheckedType) {
+  public TypeType resolveObjectType(Object obj, CelType typeCheckedType) {
     checkNotNull(obj);
     Optional<TypeType> wellKnownTypeType = resolveWellKnownObjectType(obj);
     if (wellKnownTypeType.isPresent()) {
@@ -188,5 +189,5 @@ class TypeResolver {
     return newTypeOfType;
   }
 
-  TypeResolver() {}
+  protected TypeResolver() {}
 }
