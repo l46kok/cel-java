@@ -277,7 +277,7 @@ public final class ProgramPlanner {
 
   private PlannedInterpretable planCreateStruct(CelExpr celExpr, PlannerContext ctx) {
     CelStruct struct = celExpr.struct();
-    StructType structType = resolveStructType(struct);
+    CelType structType = resolveStructType(struct);
 
     ImmutableList<Entry> entries = struct.entries();
     String[] keys = new String[entries.size()];
@@ -414,7 +414,7 @@ public final class ProgramPlanner {
     return ResolvedFunction.newBuilder().setFunctionName(functionName).setTarget(target).build();
   }
 
-  private StructType resolveStructType(CelStruct struct) {
+  private CelType resolveStructType(CelStruct struct) {
     String messageName = struct.messageName();
     for (String typeName : container.resolveCandidateNames(messageName)) {
       CelType structType = typeProvider.findType(typeName).orElse(null);
@@ -422,13 +422,15 @@ public final class ProgramPlanner {
         continue;
       }
 
-      if (!structType.kind().equals(CelKind.STRUCT)) {
+      if (structType.kind() != CelKind.STRUCT
+          && structType.kind() != CelKind.TIMESTAMP
+          && structType.kind() != CelKind.DURATION) {
         throw new IllegalArgumentException(
             String.format(
                 "Expected struct type for %s, got %s", structType.name(), structType.kind()));
       }
 
-      return (StructType) structType;
+      return structType;
     }
 
     throw new IllegalArgumentException("Undefined type name: " + messageName);
