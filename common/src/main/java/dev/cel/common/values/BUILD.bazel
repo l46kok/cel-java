@@ -191,6 +191,7 @@ java_library(
         ":values",
         "//:auto_value",
         "//common/annotations",
+        "//common:options",
         "//common/internal:cel_descriptor_pools",
         "//common/internal:dynamic_proto",
         "//common/internal:well_known_proto",

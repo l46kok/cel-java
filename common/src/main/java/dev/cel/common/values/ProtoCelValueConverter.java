@@ -26,6 +26,7 @@ import com.google.protobuf.MapEntry;
 import com.google.protobuf.Message;
 import com.google.protobuf.MessageLiteOrBuilder;
 import com.google.protobuf.MessageOrBuilder;
+import dev.cel.common.CelOptions;
 import dev.cel.common.annotations.Internal;
 import dev.cel.common.internal.CelDescriptorPool;
 import dev.cel.common.internal.DynamicProto;
@@ -49,12 +50,15 @@ import java.util.Map;
 public final class ProtoCelValueConverter extends BaseProtoCelValueConverter {
   private final CelDescriptorPool celDescriptorPool;
   private final DynamicProto dynamicProto;
+  private final CelOptions celOptions;
 
   /** Constructs a new instance of ProtoCelValueConverter. */
   public static ProtoCelValueConverter newInstance(
-      CelDescriptorPool celDescriptorPool, DynamicProto dynamicProto) {
-    return new ProtoCelValueConverter(celDescriptorPool, dynamicProto);
+      CelDescriptorPool celDescriptorPool, DynamicProto dynamicProto, CelOptions celOptions) {
+    return new ProtoCelValueConverter(celDescriptorPool, dynamicProto, celOptions);
   }
+
+
 
   @Override
   protected Object fromWellKnownProto(MessageLiteOrBuilder msg, WellKnownProto wellKnownProto) {
@@ -97,7 +101,8 @@ public final class ProtoCelValueConverter extends BaseProtoCelValueConverter {
       WellKnownProto wellKnownProto =
           WellKnownProto.getByTypeName(message.getDescriptorForType().getFullName()).orElse(null);
       if (wellKnownProto == null) {
-        return ProtoMessageValue.create((Message) message, celDescriptorPool, this);
+        return ProtoMessageValue.create(
+            (Message) message, celDescriptorPool, this, celOptions.enableJsonFieldNames());
       }
 
       return fromWellKnownProto(message, wellKnownProto);
@@ -167,10 +172,13 @@ public final class ProtoCelValueConverter extends BaseProtoCelValueConverter {
     return toRuntimeValue(result);
   }
 
-  private ProtoCelValueConverter(CelDescriptorPool celDescriptorPool, DynamicProto dynamicProto) {
+  private ProtoCelValueConverter(
+      CelDescriptorPool celDescriptorPool, DynamicProto dynamicProto, CelOptions celOptions) {
     Preconditions.checkNotNull(celDescriptorPool);
     Preconditions.checkNotNull(dynamicProto);
+    Preconditions.checkNotNull(celOptions);
     this.celDescriptorPool = celDescriptorPool;
     this.dynamicProto = dynamicProto;
+    this.celOptions = celOptions;
   }
 }
