@@ -34,10 +34,16 @@ final class RelativeAttribute implements Attribute {
   @Override
   public Object resolve(GlobalResolver ctx, ExecutionFrame frame) {
     Object obj = EvalHelpers.evalStrictly(operand, ctx, frame);
+    if (obj instanceof dev.cel.runtime.CelUnknownSet) {
+      return obj;
+    }
     obj = celValueConverter.toRuntimeValue(obj);
 
     for (Qualifier qualifier : qualifiers) {
       obj = qualifier.qualify(obj);
+      if (obj instanceof dev.cel.runtime.CelUnknownSet) {
+        return obj;
+      }
     }
 
     // TODO: Handle unknowns

@@ -18,7 +18,7 @@ import com.google.errorprone.annotations.Immutable;
 import dev.cel.runtime.GlobalResolver;
 
 @Immutable
-final class EvalConstant extends PlannedInterpretable {
+final class EvalConstant extends PlannedInterpretable implements Qualifier {
 
   @SuppressWarnings("Immutable") // Known CEL constants that aren't mutated are stored
   private final Object constant;
@@ -30,6 +30,16 @@ final class EvalConstant extends PlannedInterpretable {
 
   static EvalConstant create(long exprId, Object value) {
     return new EvalConstant(exprId, value);
+  }
+
+  @Override
+  public Object value() {
+    return constant;
+  }
+
+  @Override
+  public Object qualify(Object value) {
+    throw new UnsupportedOperationException("EvalConstant used as qualifier cannot qualify value");
   }
 
   private EvalConstant(long exprId, Object constant) {

@@ -6,6 +6,7 @@ package(
     default_visibility = [
         "//publish:__pkg__",
         "//runtime:__pkg__",
+        "//runtime/src/test/java/dev/cel/runtime/planner:__pkg__",
     ],
 )
 
@@ -59,6 +60,7 @@ FUNCTION_BINDING_SOURCES = [
 INTERPRABLE_SOURCES = [
     "GlobalResolver.java",
     "Interpretable.java",
+    "PartialActivation.java",
 ]
 
 # keep sorted
@@ -595,8 +597,10 @@ java_library(
         ":evaluation_exception",
         ":evaluation_listener",
         ":function_resolver",
+        ":unknown_attributes",
         "//common/annotations",
         "@maven//:com_google_errorprone_error_prone_annotations",
+        "@maven//:com_google_guava_guava",
         "@maven//:org_jspecify_jspecify",
     ],
 )
@@ -610,9 +614,11 @@ cel_android_library(
         ":evaluation_exception",
         ":evaluation_listener_android",
         ":function_resolver_android",
+        ":unknown_attributes_android",
         "//common/annotations",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:org_jspecify_jspecify",
+        "@maven_android//:com_google_guava_guava",
     ],
 )
 
@@ -1313,6 +1319,7 @@ java_library(
     deps = [
         ":evaluation_exception",
         ":function_resolver",
+        ":interpretable",
         ":variable_resolver",
         "@maven//:com_google_errorprone_error_prone_annotations",
     ],

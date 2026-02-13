@@ -570,6 +570,7 @@ public final class ProgramPlanner {
     this.options = options;
     this.lateBoundFunctionNames = lateBoundFunctionNames;
     this.attributeFactory =
-        AttributeFactory.newAttributeFactory(container, typeProvider, celValueConverter);
+        AttributeFactory.newAttributeFactory(
+            container, typeProvider, celValueConverter, options.enableUnknownTracking());
   }
 }

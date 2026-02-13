@@ -43,4 +43,12 @@ public interface Program {
    */
   Object eval(CelVariableResolver resolver, CelFunctionResolver lateBoundFunctionResolver)
       throws CelEvaluationException;
+
+  /**
+   * Evaluate a compiled program with a custom {@code GlobalResolver}.
+   *
+   * <p>This method is intended for advanced use cases where the caller needs to provide a custom
+   * {@link GlobalResolver} implementation, such as {@link PartialActivation} for partial evaluation.
+   */
+  Object eval(GlobalResolver resolver) throws CelEvaluationException;
 }

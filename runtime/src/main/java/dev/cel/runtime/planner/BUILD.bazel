@@ -87,6 +87,7 @@ java_library(
     deps = [
         ":execution_frame",
         ":planned_interpretable",
+        ":qualifier",
         "//runtime:interpretable",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
@@ -115,10 +116,12 @@ java_library(
     ],
     deps = [
         ":activation_wrapper",
+        ":eval_const",
         ":eval_helpers",
         ":execution_frame",
         ":planned_interpretable",
         ":qualifier",
+        ":string_qualifier",
         "//common:container",
         "//common/exceptions:attribute_not_found",
         "//common/types",
@@ -126,6 +129,7 @@ java_library(
         "//common/values",
         "//common/values:cel_value",
         "//runtime:interpretable",
+        "//runtime:unknown_attributes",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
     ],
@@ -379,6 +383,7 @@ java_library(
         "//runtime:evaluation_exception",
         "//runtime:interpretable",
         "//runtime:resolved_overload",
+        "//runtime:unknown_attributes",
         "@maven//:com_google_guava_guava",
     ],
 )

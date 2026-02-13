@@ -22,6 +22,7 @@ import dev.cel.common.values.CelValueConverter;
 import dev.cel.common.values.ErrorValue;
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelResolvedOverload;
+import dev.cel.runtime.CelUnknownSet;
 import dev.cel.runtime.GlobalResolver;
 
 final class EvalHelpers {
@@ -57,6 +58,21 @@ final class EvalHelpers {
   }
 
   static Object dispatch(CelResolvedOverload overload, CelValueConverter valueConverter, Object[] args) throws CelEvaluationException {
+    CelUnknownSet unknownSet = null;
+    for (Object arg : args) {
+      if (arg instanceof CelUnknownSet) {
+        if (unknownSet == null) {
+          unknownSet = (CelUnknownSet) arg;
+        } else {
+          unknownSet = unknownSet.merge((CelUnknownSet) arg);
+        }
+      }
+    }
+
+    if (unknownSet != null) {
+      return unknownSet;
+    }
+
     try {
       Object result = overload.getDefinition().apply(args);
       Object runtimeValue = valueConverter.toRuntimeValue(result);

@@ -67,7 +67,7 @@ final class MaybeAttribute implements Attribute {
     ImmutableList.Builder<NamespacedAttribute> namespacedAttributeBuilder = ImmutableList.builder();
     if (!augmentedNames.isEmpty()) {
       namespacedAttributeBuilder.add(
-          attrFactory.newAbsoluteAttribute(augmentedNames.toArray(new String[0])));
+          attrFactory.newNamespacedAttribute(augmentedNames.toArray(new String[0])));
     }
 
     namespacedAttributeBuilder.addAll(attributesBuilder.build());

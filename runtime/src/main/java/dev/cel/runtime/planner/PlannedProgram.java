@@ -85,6 +85,11 @@ abstract class PlannedProgram implements Program {
         interpretable(), (name) -> resolver.find(name).orElse(null), lateBoundFunctionResolver);
   }
 
+  @Override
+  public Object eval(GlobalResolver resolver) throws CelEvaluationException {
+    return evalOrThrow(interpretable(), resolver, EMPTY_FUNCTION_RESOLVER);
+  }
+
   private Object evalOrThrow(
       PlannedInterpretable interpretable,
       GlobalResolver resolver,

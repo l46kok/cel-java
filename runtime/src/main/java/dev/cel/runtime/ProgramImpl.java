@@ -44,6 +44,11 @@ abstract class ProgramImpl implements CelRuntime.Program {
   }
 
   @Override
+  public Object eval(GlobalResolver resolver) throws CelEvaluationException {
+    return evalInternal(resolver);
+  }
+
+  @Override
   public Object eval(CelVariableResolver resolver) throws CelEvaluationException {
     return evalInternal((name) -> resolver.find(name).orElse(null));
   }

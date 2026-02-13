@@ -15,6 +15,7 @@
 package dev.cel.runtime.planner;
 
 import static com.google.common.truth.Truth.assertThat;
+
 import static dev.cel.common.CelFunctionDecl.newFunctionDeclaration;
 import static dev.cel.common.CelOverloadDecl.newGlobalOverload;
 import static dev.cel.common.CelOverloadDecl.newMemberOverload;
@@ -65,17 +66,25 @@ import dev.cel.expr.conformance.proto3.TestAllTypes;
 import dev.cel.expr.conformance.proto3.TestAllTypes.NestedMessage;
 import dev.cel.extensions.CelExtensions;
 import dev.cel.parser.CelStandardMacro;
+import dev.cel.runtime.Activation;
+import dev.cel.runtime.CelAttribute;
+import dev.cel.runtime.CelAttributePattern;
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelFunctionBinding;
 import dev.cel.runtime.CelLateFunctionBindings;
 import dev.cel.runtime.CelStandardFunctions;
 import dev.cel.runtime.CelStandardFunctions.StandardFunction;
+import dev.cel.runtime.CelUnknownSet;
 import dev.cel.runtime.DefaultDispatcher;
 import dev.cel.runtime.DescriptorTypeResolver;
+import dev.cel.runtime.GlobalResolver;
+import dev.cel.runtime.PartialActivation;
 import dev.cel.runtime.Program;
 import dev.cel.runtime.RuntimeEquality;
 import dev.cel.runtime.RuntimeHelpers;
 import dev.cel.runtime.standard.TypeFunction;
+import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -115,6 +124,16 @@ public final class ProgramPlannerTest {
           CEL_OPTIONS,
           ImmutableSet.of("late_bound_func"));
 
+  private static final ProgramPlanner PLANNER_unknowns =
+      ProgramPlanner.newPlanner(
+          TYPE_PROVIDER,
+          VALUE_PROVIDER,
+          newDispatcher(),
+          CEL_VALUE_CONVERTER,
+          CEL_CONTAINER,
+          CEL_OPTIONS.toBuilder().enableUnknownTracking(true).build(),
+          ImmutableSet.of("late_bound_func"));
+
   private static final CelCompiler CEL_COMPILER =
       CelCompilerFactory.standardCelCompilerBuilder()
           .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
@@ -128,6 +147,9 @@ public final class ProgramPlannerTest {
           .addVar("int_var", SimpleType.INT)
           .addVar("dyn_var", SimpleType.DYN)
           .addVar("really.long.abbr.ident", SimpleType.DYN)
+          .addVar("x", SimpleType.DYN)
+          .addVar("a", SimpleType.DYN)
+          .addVar("s", SimpleType.STRING)
           .addFunctionDeclarations(
               newFunctionDeclaration("zero", newGlobalOverload("zero_overload", SimpleType.INT)),
               newFunctionDeclaration("error", newGlobalOverload("error_overload", SimpleType.INT)),
@@ -170,7 +192,8 @@ public final class ProgramPlannerTest {
                 StandardFunction.DIVIDE,
                 StandardFunction.EQUALS,
                 StandardFunction.NOT_STRICTLY_FALSE,
-                StandardFunction.DYN)
+                StandardFunction.DYN,
+                StandardFunction.SIZE)
             .build();
     addBindingsToDispatcher(
         builder, stdFunctions.newFunctionBindings(RUNTIME_EQUALITY, CEL_OPTIONS));
@@ -980,6 +1003,97 @@ public final class ProgramPlannerTest {
     }
 
     return bytes1.concat(bytes2);
+  }
+
+  @Test
+  public void evaluate_unknowns_success(@TestParameter UnknownsTestCase testCase) throws Exception {
+    CelAbstractSyntaxTree ast = CEL_COMPILER.compile(testCase.expression).getAst();
+    Program program = PLANNER_unknowns.plan(ast);
+
+    Object result =
+        program.eval(
+            new PartialActivation() {
+              @Override
+              public @Nullable Object resolve(String name) {
+                return testCase.activation.get(name);
+              }
+
+              @Override
+              public ImmutableSet<CelAttributePattern> unknownAttributePatterns() {
+                return testCase.unknownPatterns;
+              }
+            });
+
+    if (testCase.expectedUnknown) {
+      assertThat(result).isInstanceOf(CelUnknownSet.class);
+    } else {
+      assertThat(result).isEqualTo(testCase.expectedResult);
+    }
+  }
+
+  @SuppressWarnings("ImmutableEnumChecker") // Test only
+  private enum UnknownsTestCase {
+    SIMPLE_UNKNOWN(
+        "x",
+        ImmutableMap.of(),
+        ImmutableSet.of(CelAttributePattern.create("x")),
+        true,
+        null),
+    WILDCARD_UNKNOWN(
+        "x.y",
+        ImmutableMap.of("x", ImmutableMap.of()),
+        ImmutableSet.of(CelAttributePattern.create("x").qualify(CelAttribute.Qualifier.ofWildCard())),
+        true,
+        null),
+    BINARY_UNKNOWN(
+        "x + 1",
+        ImmutableMap.of(),
+        ImmutableSet.of(CelAttributePattern.create("x")),
+        true,
+        null),
+    FUNCTION_UNKNOWN(
+        "size(s)",
+        ImmutableMap.of(),
+        ImmutableSet.of(CelAttributePattern.create("s")),
+        true,
+        null),
+    NESTED_UNKNOWN(
+        "a.b.c",
+        ImmutableMap.of("a", ImmutableMap.of("b", ImmutableMap.of())),
+        ImmutableSet.of(CelAttributePattern.create("a").qualify(CelAttribute.Qualifier.ofString("b")).qualify(CelAttribute.Qualifier.ofString("c"))),
+        true,
+        null),
+    Sub_UNKNOWN(
+        "a.b",
+         ImmutableMap.of("a", ImmutableMap.of("b", ImmutableMap.of())),
+         ImmutableSet.of(CelAttributePattern.create("a").qualify(CelAttribute.Qualifier.ofString("b")).qualify(CelAttribute.Qualifier.ofString("c"))),
+         false,
+         ImmutableMap.of()),
+    NO_UNKNOWN(
+        "x",
+        ImmutableMap.of("x", 10L),
+        ImmutableSet.of(),
+        false,
+        10L);
+
+    private final String expression;
+    private final ImmutableMap<String, Object> activation;
+    private final ImmutableSet<CelAttributePattern> unknownPatterns;
+    private final boolean expectedUnknown;
+    private final Object expectedResult;
+
+    UnknownsTestCase(
+        String expression,
+        ImmutableMap<String, Object> activation,
+        ImmutableSet<CelAttributePattern> unknownPatterns,
+        boolean expectedUnknown,
+        Object expectedResult) {
+      this.expression = expression;
+      this.activation = activation;
+      this.unknownPatterns = unknownPatterns;
+      this.expectedUnknown = expectedUnknown;
+      this.expectedResult = expectedResult;
+    }
   }
 
   @SuppressWarnings("ImmutableEnumChecker") // Test only
