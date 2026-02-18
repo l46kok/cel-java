@@ -28,12 +28,13 @@ COMMON_TARGETS = [
 # keep sorted
 RUNTIME_TARGETS = [
     "//runtime/src/main/java/dev/cel/runtime",
-    "//runtime/src/main/java/dev/cel/runtime:late_function_binding",
     "//runtime/src/main/java/dev/cel/runtime:base",
     "//runtime/src/main/java/dev/cel/runtime:interpreter",
+    "//runtime/src/main/java/dev/cel/runtime:late_function_binding",
     "//runtime/src/main/java/dev/cel/runtime:runtime_factory",
     "//runtime/src/main/java/dev/cel/runtime:runtime_helpers",
     "//runtime/src/main/java/dev/cel/runtime:runtime_legacy_impl",
+    "//runtime/src/main/java/dev/cel/runtime:standard_functions",
     "//runtime/src/main/java/dev/cel/runtime:unknown_attributes",
 ]
 
@@ -45,6 +46,7 @@ LITE_RUNTIME_TARGETS = [
     "//runtime/src/main/java/dev/cel/runtime:lite_runtime_android",
     "//runtime/src/main/java/dev/cel/runtime:lite_runtime_factory_android",
     "//runtime/src/main/java/dev/cel/runtime:lite_runtime_library_android",
+    "//runtime/src/main/java/dev/cel/runtime:standard_functions_android",
 ]
 
 # keep sorted
@@ -78,6 +80,7 @@ OPTIMIZER_TARGETS = [
     "//optimizer/src/main/java/dev/cel/optimizer",
     "//optimizer/src/main/java/dev/cel/optimizer/optimizers:common_subexpression_elimination",
     "//optimizer/src/main/java/dev/cel/optimizer/optimizers:constant_folding",
+    "//optimizer/src/main/java/dev/cel/optimizer/optimizers:inlining",
     "//optimizer/src/main/java/dev/cel/optimizer:ast_optimizer",
     "//optimizer/src/main/java/dev/cel/optimizer:mutable_ast",
     "//optimizer/src/main/java/dev/cel/optimizer:optimization_exception",
@@ -124,7 +127,7 @@ BUNDLE_TARGETS = [
     "//bundle/src/main/java/dev/cel/bundle:environment_yaml_parser",
 ]
 
-ALL_TARGETS = BUNDLE_TARGETS + RUNTIME_TARGETS + COMPILER_TARGETS + EXTENSION_TARGETS + V1ALPHA1_AST_TARGETS + CANONICAL_AST_TARGETS + OPTIMIZER_TARGETS + VALIDATOR_TARGETS + POLICY_COMPILER_TARGETS
+CEL_MISC_TARGETS = BUNDLE_TARGETS + EXTENSION_TARGETS + OPTIMIZER_TARGETS + VALIDATOR_TARGETS + POLICY_COMPILER_TARGETS
 
 # Excluded from the JAR as their source of truth is elsewhere
 EXCLUDED_TARGETS = [
@@ -166,9 +169,12 @@ pom_file(
         "PACKAGE_DESC": "Common Expression Language for Java. This include both the compilation and runtime packages.",
     },
     targets = [
+        ":cel_common",
+        ":cel_protobuf",
         ":cel_compiler",
         ":cel_runtime",
-    ] + BUNDLE_TARGETS,
+        ":cel_v1alpha1",
+    ] + CEL_MISC_TARGETS,
     template_file = "pom_template.xml",
 )
 
@@ -183,7 +189,8 @@ java_export(
         ":cel_protobuf",
         ":cel_compiler",
         ":cel_runtime",
-    ] + BUNDLE_TARGETS
+        ":cel_v1alpha1",
+    ] + CEL_MISC_TARGETS
 )
 
 pom_file(
