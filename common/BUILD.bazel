@@ -80,6 +80,11 @@ cel_android_library(
 )
 
 java_library(
+    name = "cel_source_helper",
+    exports = ["//common/src/main/java/dev/cel/common:cel_source_helper"],
+)
+
+java_library(
     name = "cel_ast",
     exports = ["//common/src/main/java/dev/cel/common:cel_ast"],
 )

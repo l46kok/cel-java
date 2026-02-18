@@ -40,6 +40,10 @@ checkUnwantedDeps '//publish:cel' 'protobuf_java_util'
 checkUnwantedDeps '//publish:cel_runtime' '@maven_android//:com_google_protobuf_protobuf_javalite'
 checkUnwantedDeps '//publish:cel' '@maven_android//:com_google_protobuf_protobuf_javalite'
 
-# cel_runtime_android shouldn't depend on the full protobuf runtime
+# cel_runtime shouldn't depend on antlr
+checkUnwantedDeps '//publish:cel_runtime' '@maven//:org_antlr_antlr4_runtime'
+
+# cel_runtime_android shouldn't depend on the full protobuf runtime or antlr
 checkUnwantedDeps '//publish:cel_runtime_android' '@maven//:com_google_protobuf_protobuf_java'
+checkUnwantedDeps '//publish:cel_runtime_android' '@maven//:org_antlr_antlr4_runtime'
 exit 0
