@@ -25,6 +25,7 @@ import dev.cel.common.values.CelValue;
 import dev.cel.common.values.CelValueConverter;
 import dev.cel.runtime.GlobalResolver;
 import java.util.NoSuchElementException;
+import org.jspecify.annotations.Nullable;
 
 @Immutable
 final class NamespacedAttribute implements Attribute {
@@ -33,6 +34,14 @@ final class NamespacedAttribute implements Attribute {
   private final ImmutableList<Qualifier> qualifiers;
   private final CelValueConverter celValueConverter;
   private final CelTypeProvider typeProvider;
+
+  ImmutableList<Qualifier> qualifiers() {
+    return qualifiers;
+  }
+
+  ImmutableSet<String> candidateVariableNames() {
+    return namespacedNames;
+  }
 
   @Override
   public Object resolve(GlobalResolver ctx, ExecutionFrame frame) {
@@ -59,42 +68,64 @@ final class NamespacedAttribute implements Attribute {
         }
       }
 
-      CelType type = typeProvider.findType(name).orElse(null);
-      if (type != null) {
-        if (qualifiers.isEmpty()) {
-          // Resolution of a fully qualified type name: foo.bar.baz
-          return TypeType.create(type);
-        } else {
-          // This is potentially a fully qualified reference to an enum value
-          if (type instanceof EnumType && qualifiers.size() == 1) {
-            EnumType enumType = (EnumType) type;
-            String strQualifier = (String) qualifiers.get(0).value();
-            return enumType
-                .findNumberByName(strQualifier)
-                .map(Integer::longValue)
-                .orElseThrow(
-                    () ->
-                        new NoSuchElementException(
-                            String.format(
-                                "Field %s was not found on enum %s",
-                                enumType.name(), strQualifier)));
-          }
-        }
-
-        throw new IllegalStateException(
-            "Unexpected type resolution when there were remaining qualifiers: " + type.name());
+      // Attempt to resolve the qualify type name if the name is not a variable identifier
+      value = findIdent(name);
+      if (value != null) {
+        return value;
       }
     }
 
     return MissingAttribute.newMissingAttribute(namespacedNames);
   }
 
-  ImmutableList<Qualifier> qualifiers() {
-    return qualifiers;
+  private @Nullable Object findIdent(String name) {
+    CelType type = typeProvider.findType(name).orElse(null);
+    // If the name resolves directly, this is either a fully qualified type name
+    // (ex: 'int' or 'google.protobuf.Timestamp')
+    // or an enum with a string qualifier
+    // (ex: my.enum_type, qualifier: .BAR)
+    if (type != null) {
+      if (qualifiers.isEmpty()) {
+        // Resolution of a fully qualified type name: foo.bar.baz
+        return TypeType.create(type);
+      }
+
+      // If it's an EnumType, the first qualifier should be the enum field access.
+      if (type instanceof EnumType && qualifiers.size() == 1) {
+        return getEnumValue((EnumType) type, (String) qualifiers.get(0).value());
+      }
+
+      throw new IllegalStateException(
+          "Unexpected type resolution when there were remaining qualifiers: " + type.name());
+    }
+
+    // The name itself could be a fully qualified reference to an enum value
+    // (e.g: my.enum_type.BAR)
+    int lastDotIndex = name.lastIndexOf('.');
+    if (lastDotIndex > 0) {
+      String enumTypeName = name.substring(0, lastDotIndex);
+      String enumValueQualifier = name.substring(lastDotIndex + 1);
+
+      return typeProvider.findType(enumTypeName)
+          .filter(EnumType.class::isInstance)
+          .map(EnumType.class::cast)
+          .map(enumType -> getEnumValue(enumType, enumValueQualifier))
+          .orElse(null);
+    }
+
+    return null;
   }
 
-  ImmutableSet<String> candidateVariableNames() {
-    return namespacedNames;
+  private static Long getEnumValue(EnumType enumType, String field) {
+    return enumType
+        .findNumberByName(field)
+        .map(Integer::longValue)
+        .orElseThrow(
+            () ->
+                new NoSuchElementException(
+                    String.format(
+                        "Field %s was not found on enum %s",
+                        enumType.name(), field)));
   }
 
   private GlobalResolver unwrapToNonLocal(GlobalResolver resolver) {

@@ -84,24 +84,6 @@ public class PlannerInterpreterTest extends BaseInterpreterTest {
   }
 
   @Override
-  public void dynamicMessage_dynamicDescriptor() throws Exception {
-    if (isParseOnly) {
-      skipBaselineVerification();
-    } else {
-      super.dynamicMessage_dynamicDescriptor();
-    }
-  }
-
-  @Override
-  public void containers() {
-    if (isParseOnly) {
-      skipBaselineVerification();
-    } else {
-      super.containers();
-    }
-  }
-
-  @Override
   public void optional_errors() {
     if (isParseOnly) {
       skipBaselineVerification();
