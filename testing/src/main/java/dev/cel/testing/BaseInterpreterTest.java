@@ -58,6 +58,7 @@ import dev.cel.common.CelAbstractSyntaxTree;
 import dev.cel.common.CelContainer;
 import dev.cel.common.CelOptions;
 import dev.cel.common.CelProtoAbstractSyntaxTree;
+import dev.cel.runtime.CelFunctionBinding;
 import dev.cel.common.internal.DefaultDescriptorPool;
 import dev.cel.common.internal.FileDescriptorSetConverter;
 import dev.cel.common.internal.ProtoTimeUtils;
@@ -88,6 +89,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -947,8 +949,11 @@ public abstract class BaseInterpreterTest extends CelBaselineTestCase {
             ImmutableList.of(SimpleType.INT, SimpleType.INT),
             SimpleType.INT));
     addFunctionBinding(
-        CelFunctionBinding.from("ns_func_overload", String.class, s -> (long) s.length()),
-        CelFunctionBinding.from("ns_member_overload", Long.class, Long.class, Long::sum));
+        CelFunctionBinding.fromOverloads("ns.func",
+            CelFunctionBinding.from("ns_func_overload", String.class, s -> (long) s.length())));
+    addFunctionBinding(
+        CelFunctionBinding.fromOverloads("member",
+            CelFunctionBinding.from("ns_member_overload", Long.class, Long.class, Long::sum)));
     source = "ns.func('hello')";
     runTest();
 
@@ -2368,8 +2373,10 @@ public abstract class BaseInterpreterTest extends CelBaselineTestCase {
                 StructTypeReference.create(TEST_ALL_TYPE_DYNAMIC_DESCRIPTOR.getFullName())),
             SimpleType.BOOL));
     addFunctionBinding(
-        CelFunctionBinding.from("f_msg_generated", TestAllTypes.class, unused -> true),
-        CelFunctionBinding.from("f_msg_dynamic", DynamicMessage.class, unused -> true));
+        CelFunctionBinding.fromOverloads(
+            "f_msg",
+            CelFunctionBinding.from("f_msg_generated", TestAllTypes.class, unused -> true),
+            CelFunctionBinding.from("f_msg_dynamic", DynamicMessage.class, unused -> true)));
     input =
         ImmutableMap.of(
             "dynamic_msg", dynamicMessageBuilder.build(),
@@ -2534,6 +2541,10 @@ public abstract class BaseInterpreterTest extends CelBaselineTestCase {
   }
 
   private void addFunctionBinding(CelFunctionBinding... functionBindings) {
+    addFunctionBinding(Arrays.asList(functionBindings));
+  }
+
+  private void addFunctionBinding(Collection<CelFunctionBinding> functionBindings) {
     celRuntime = celRuntime.toRuntimeBuilder().addFunctionBindings(functionBindings).build();
   }
 

@@ -295,22 +295,44 @@ public final class CelOptionalLibrary
   public void setRuntimeOptions(
       CelRuntimeBuilder runtimeBuilder, RuntimeEquality runtimeEquality, CelOptions celOptions) {
     runtimeBuilder.addFunctionBindings(
-        CelFunctionBinding.from("optional_of", Object.class, Optional::of),
-        CelFunctionBinding.from(
-            "optional_ofNonZeroValue",
-            Object.class,
-            val -> {
-              if (isZeroValue(val)) {
-                return Optional.empty();
-              }
-              return Optional.of(val);
-            }),
-        CelFunctionBinding.from(
-            "optional_unwrap_list", Collection.class, CelOptionalLibrary::elideOptionalCollection),
-        CelFunctionBinding.from("optional_none", ImmutableList.of(), val -> Optional.empty()),
-        CelFunctionBinding.from("optional_value", Object.class, val -> ((Optional<?>) val).get()),
-        CelFunctionBinding.from(
-            "optional_hasValue", Object.class, val -> ((Optional<?>) val).isPresent()),
+        CelFunctionBinding.fromOverloads(
+            Function.OPTIONAL_OF.getFunction(),
+            CelFunctionBinding.from("optional_of", Object.class, Optional::of)));
+    runtimeBuilder.addFunctionBindings(
+        CelFunctionBinding.fromOverloads(
+            Function.OPTIONAL_OF_NON_ZERO_VALUE.getFunction(),
+            CelFunctionBinding.from(
+                "optional_ofNonZeroValue",
+                Object.class,
+                val -> {
+                  if (isZeroValue(val)) {
+                    return Optional.empty();
+                  }
+                  return Optional.of(val);
+                })));
+    runtimeBuilder.addFunctionBindings(
+        CelFunctionBinding.fromOverloads(
+            Function.OPTIONAL_UNWRAP.getFunction(),
+            CelFunctionBinding.from(
+                "optional_unwrap_list",
+                Collection.class,
+                CelOptionalLibrary::elideOptionalCollection)));
+    runtimeBuilder.addFunctionBindings(
+        CelFunctionBinding.fromOverloads(
+            Function.OPTIONAL_NONE.getFunction(),
+            CelFunctionBinding.from("optional_none", ImmutableList.of(), val -> Optional.empty())));
+    runtimeBuilder.addFunctionBindings(
+        CelFunctionBinding.fromOverloads(
+            Function.VALUE.getFunction(),
+            CelFunctionBinding.from(
+                "optional_value", Object.class, val -> ((Optional<?>) val).get())));
+    runtimeBuilder.addFunctionBindings(
+        CelFunctionBinding.fromOverloads(
+            Function.HAS_VALUE.getFunction(),
+            CelFunctionBinding.from(
+                "optional_hasValue", Object.class, val -> ((Optional<?>) val).isPresent())));
+
+    runtimeBuilder.addFunctionBindings(
         CelFunctionBinding.from(
             "select_optional_field", // This only handles map selection. Proto selection is
             // special cased inside the interpreter.
@@ -355,10 +377,15 @@ public final class CelOptionalLibrary
 
     if (version >= 2) {
       runtimeBuilder.addFunctionBindings(
-          CelFunctionBinding.from(
-              "optional_list_first", Collection.class, CelOptionalLibrary::listOptionalFirst),
-          CelFunctionBinding.from(
-              "optional_list_last", Collection.class, CelOptionalLibrary::listOptionalLast));
+          CelFunctionBinding.fromOverloads(
+              Function.FIRST.getFunction(),
+              CelFunctionBinding.from(
+                  "optional_list_first", Collection.class, CelOptionalLibrary::listOptionalFirst)));
+      runtimeBuilder.addFunctionBindings(
+          CelFunctionBinding.fromOverloads(
+              Function.LAST.getFunction(),
+              CelFunctionBinding.from(
+                  "optional_list_last", Collection.class, CelOptionalLibrary::listOptionalLast)));
     }
   }
 

@@ -111,15 +111,6 @@ public class PlannerInterpreterTest extends BaseInterpreterTest {
   }
 
   @Override
-  public void optional() {
-    if (isParseOnly) {
-      skipBaselineVerification();
-    } else {
-      super.optional();
-    }
-  }
-
-  @Override
   public void optional_errors() {
     if (isParseOnly) {
       skipBaselineVerification();
@@ -134,15 +125,6 @@ public class PlannerInterpreterTest extends BaseInterpreterTest {
       skipBaselineVerification();
     } else {
       super.typeComparisons();
-    }
-  }
-
-  @Override
-  public void namespacedFunctions() {
-    if (isParseOnly) {
-      skipBaselineVerification();
-    } else {
-      super.namespacedFunctions();
     }
   }
 }
