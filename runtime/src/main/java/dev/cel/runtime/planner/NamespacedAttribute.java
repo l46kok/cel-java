@@ -71,6 +71,7 @@ final class NamespacedAttribute implements Attribute {
             String strQualifier = (String) qualifiers.get(0).value();
             return enumType
                 .findNumberByName(strQualifier)
+                .map(Integer::longValue)
                 .orElseThrow(
                     () ->
                         new NoSuchElementException(

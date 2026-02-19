@@ -84,15 +84,6 @@ public class PlannerInterpreterTest extends BaseInterpreterTest {
   }
 
   @Override
-  public void nestedEnums() {
-    if (isParseOnly) {
-      skipBaselineVerification();
-    } else {
-      super.nestedEnums();
-    }
-  }
-
-  @Override
   public void dynamicMessage_dynamicDescriptor() throws Exception {
     if (isParseOnly) {
       skipBaselineVerification();
