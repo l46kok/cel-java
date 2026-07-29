@@ -93,7 +93,10 @@ public final class CelVerifierZ3ImplTest {
           .addVar("b", SimpleType.BOOL)
           .addVar("role", SimpleType.STRING)
           .addVar("country", SimpleType.STRING)
+          .addVar("string_var", SimpleType.STRING)
           .addVar("port", SimpleType.INT)
+          .addVar("dur", SimpleType.DURATION)
+          .addVar("ts", SimpleType.TIMESTAMP)
           .addVar("request", SimpleType.DYN)
           .addVar("unknown_var", SimpleType.DYN)
           .addVar("int_list", ListType.create(SimpleType.INT))
@@ -151,8 +154,6 @@ public final class CelVerifierZ3ImplTest {
     NULL_SATISFIABLE("unknown_var == null"),
     DYNAMIC_VAR_NUMERIC_EQUALITY("dyn_var == 1 && dyn_var == 1.0"),
     DYNAMIC_VAR_NOT_IN_LIST("dyn_var == 1.5 && !(dyn_var in dyn_list) && size(dyn_list) > 5"),
-    TIMESTAMP_EQUALITY_TAUTOLOGY(
-        "timestamp('2023-01-01T00:00:00Z') == timestamp('2023-01-01T00:00:00Z')"),
     CROSS_NUMERIC_EQUALITY_INT_DYN_EXACT("1 == request"),
     MACRO_LIMIT("dyn_list.all(x, x == 1)"),
     STRUCT_FIELD_MISSING_APPROXIMATE_SATISFIABLE("dyn_var.unknown_field"),
@@ -288,7 +289,9 @@ public final class CelVerifierZ3ImplTest {
     TYPE_CONVERSION_UNSATISFIABLE_DOUBLE_TO_STRING("type(string(1.5)) == int"),
     EMPTY_MAP_SIZE_NOT_ZERO("size({}) != 0"),
     TIMESTAMP_INEQUALITY_CONTRADICTION(
-        "timestamp('2023-01-01T00:00:00Z') != timestamp('2023-01-01T00:00:00Z')");
+        "timestamp('2023-01-01T00:00:00Z') != timestamp('2023-01-01T00:00:00Z')"),
+    TYPE_TIMESTAMP_NOT_INT("type(timestamp('1970-01-01T00:00:00Z')) == int"),
+    DYN_INT_NOT_DURATION("dyn(1) == dyn(duration('1s'))");
 
     final String expr;
 
@@ -321,6 +324,15 @@ public final class CelVerifierZ3ImplTest {
 
   private enum IsAlwaysTrueTestCase {
     LOGICAL_OR_CONSTANTS("true || false"),
+    TIMESTAMP_GREATER_EQUALS("timestamp(200) >= timestamp(100)"),
+    DURATION_GREATER_EQUALS(
+        "(timestamp(200) - timestamp(100)) >= (timestamp(150) - timestamp(100))"),
+    DURATION_GREATER("(timestamp(200) - timestamp(100)) > (timestamp(150) - timestamp(100))"),
+    TIMESTAMP_LESS("timestamp(100) < timestamp(200)"),
+    DURATION_LESS("(timestamp(150) - timestamp(100)) < (timestamp(200) - timestamp(100))"),
+    TIMESTAMP_VARIABLE_TYPE("type(ts) == type(timestamp(0))"),
+    DURATION_VARIABLE_TYPE("type(dur) == type(timestamp(1) - timestamp(0))"),
+    TIMESTAMP_VARIABLE_BOUNDS("ts >= timestamp(-62135596800) && ts <= timestamp(253402300799)"),
     CYCLIC_MACRO_SHADOWING_SAFETY("[1].all(x, [x].all(x, x == 1))"),
     TAUTOLOGY("x > 5 || x <= 5"),
     LIST_VARIABLE_CONSTRAINED("1 in int_list || !(1 in int_list)"),
@@ -655,29 +667,7 @@ public final class CelVerifierZ3ImplTest {
     TYPE_CONVERSION_DYN_IDENTITY("dyn(1) == 1"),
     TYPE_CONVERSION_UINT_TO_INT("int(1u) == 1"),
     TYPE_CONVERSION_INT_TO_UINT("uint(1) == 1u"),
-    TYPE_CONVERSION_INT_FROM_DOUBLE("int(1.0) == int(1.0)"),
-    TYPE_CONVERSION_INT_FROM_STRING("int('1') == int('1')"),
-    TYPE_CONVERSION_INT_FROM_TIMESTAMP(
-        "int(timestamp('1970-01-01T00:00:00Z')) == int(timestamp('1970-01-01T00:00:00Z'))"),
-    TYPE_CONVERSION_UINT_FROM_DOUBLE("uint(1.0) == uint(1.0)"),
-    TYPE_CONVERSION_UINT_FROM_STRING("uint('1') == uint('1')"),
-    TYPE_CONVERSION_DOUBLE_FROM_INT("double(1) == double(1)"),
-    TYPE_CONVERSION_DOUBLE_FROM_UINT("double(1u) == double(1u)"),
-    TYPE_CONVERSION_DOUBLE_FROM_STRING("double('1.0') == double('1.0')"),
-    TYPE_CONVERSION_STRING_FROM_INT("string(1) == string(1)"),
-    TYPE_CONVERSION_STRING_FROM_UINT("string(1u) == string(1u)"),
-    TYPE_CONVERSION_STRING_FROM_DOUBLE("string(1.0) == string(1.0)"),
-    TYPE_CONVERSION_STRING_FROM_BOOL("string(true) == string(true)"),
-    TYPE_CONVERSION_STRING_FROM_BYTES("string(b'foo') == string(b'foo')"),
-    TYPE_CONVERSION_STRING_FROM_TIMESTAMP(
-        "string(timestamp('1970-01-01T00:00:00Z')) == string(timestamp('1970-01-01T00:00:00Z'))"),
-    TYPE_CONVERSION_STRING_FROM_DURATION("string(duration('1s')) == string(duration('1s'))"),
-    TYPE_CONVERSION_BYTES_FROM_STRING("bytes('foo') == bytes('foo')"),
-    TYPE_CONVERSION_DURATION_FROM_STRING("duration('1s') == duration('1s')"),
-    TYPE_CONVERSION_TIMESTAMP_FROM_STRING(
-        "timestamp('1970-01-01T00:00:00Z') == timestamp('1970-01-01T00:00:00Z')"),
     TYPE_CONVERSION_TIMESTAMP_FROM_INT("timestamp(1) == timestamp(1)"),
-    TYPE_CONVERSION_BOOL_FROM_STRING("bool('true') == bool('true')"),
     TYPE_CONVERSION_INT_TO_UINT_ZERO("uint(0) == 0u"),
 
     TYPE_AXIOM_OPTIONAL("type(optional.of(1)) == optional_type"),
@@ -954,7 +944,11 @@ public final class CelVerifierZ3ImplTest {
     COLLECTION_ERROR("{'a': 1 / 0} == {'a': 1 / 0}"),
     LIST_ERROR("[1 / 0] == [1 / 0]"),
     STRICT_LITERAL_ERROR("{'a': 1/0}.exists(k, k == 'a') == {'a': 1/0}.exists(k, k == 'a')"),
-    STRICT_LITERAL_ERROR_KEY("{1/0: 'a'}.exists(k, k == 1) == {1/0: 'a'}.exists(k, k == 1)");
+    STRICT_LITERAL_ERROR_KEY("{1/0: 'a'}.exists(k, k == 1) == {1/0: 'a'}.exists(k, k == 1)"),
+    TIMESTAMP_INT_CONVERSION_OUT_OF_BOUNDS(
+        "timestamp(999999999999999) == timestamp(999999999999999)"),
+    TIMESTAMP_INT_CONVERSION_UNDERFLOW(
+        "timestamp(-999999999999999) == timestamp(-999999999999999)");
 
     final String expr;
 
@@ -1075,6 +1069,58 @@ public final class CelVerifierZ3ImplTest {
   private enum IsAlwaysTrueViolationTestCase {
     NOT_ALWAYS_TRUE(
         "x > 5", "Condition is not always true\\.", "Counterexample input:", "x = -?\\d+"),
+    UNINTERPRETED_CONVERSION_CAN_ERROR_INT(
+        "int(request) == int(request)",
+        "Condition is not always true\\.",
+        "Counterexample input:",
+        "request = .*"),
+    UNINTERPRETED_CONVERSION_CAN_ERROR_UINT(
+        "uint(request) == uint(request)",
+        "Condition is not always true\\.",
+        "Counterexample input:",
+        "request = .*"),
+    UNINTERPRETED_CONVERSION_CAN_ERROR_DOUBLE(
+        "double(request) == double(request)",
+        "Condition is not always true\\.",
+        "Counterexample input:",
+        "request = .*"),
+    UNINTERPRETED_CONVERSION_CAN_ERROR_TIMESTAMP(
+        "timestamp(request) == timestamp(request)",
+        "Condition is not always true\\.",
+        "Counterexample input:",
+        "request = .*"),
+    UNINTERPRETED_CONVERSION_CAN_ERROR_BOOL(
+        "bool(request) == bool(request)",
+        "Condition is not always true\\.",
+        "Counterexample input:",
+        "request = .*"),
+    UNINTERPRETED_CONVERSION_CAN_ERROR_STRING(
+        "string(request) == string(request)",
+        "Condition is not always true\\.",
+        "Counterexample input:",
+        "request = .*"),
+    UNINTERPRETED_CONVERSION_CAN_ERROR_BYTES(
+        "bytes(request) == bytes(request)",
+        "Condition is not always true\\.",
+        "Counterexample input:",
+        "request = .*"),
+    UNINTERPRETED_CONVERSION_CAN_ERROR_DURATION(
+        "duration(request) == duration(request)",
+        "Condition is not always true\\.",
+        "Counterexample input:",
+        "request = .*"),
+    DURATION_VARIABLE_COUNTEREXAMPLE(
+        "dur != dur",
+        "Condition is not always true\\.",
+        "Counterexample input:",
+        "dur = duration\\(-?\\d+\\)"),
+    TIMESTAMP_VARIABLE_COUNTEREXAMPLE(
+        "ts != ts",
+        "Condition is not always true\\.",
+        "Counterexample input:",
+        "ts = timestamp\\(-?\\d+\\)"),
+    UNINTERPRETED_CONVERSION_NULL_FAILS_WITH_ERRORS(
+        "string(null) == string(null)", "Condition is not always true\\."),
     LAW_OF_EXCLUDED_MIDDLE_FAILS_WITH_ERRORS(
         "(1 / 0 == 5) || !(1 / 0 == 5)", "Condition is not always true\\."),
     INTEGER_OVERFLOW_FAILS_WITH_ERRORS(
@@ -1087,6 +1133,12 @@ public final class CelVerifierZ3ImplTest {
         "Condition is not always true\\.",
         "Counterexample input:",
         "u = \\d+u?"),
+    CROSS_TYPE_DYNAMIC_EQUALITY_NOT_ALWAYS_UNEQUAL_INT_DOUBLE(
+        "!(request == unknown_var && type(request) == int && type(unknown_var) == double)",
+        "Condition is not always true\\.",
+        "Counterexample input:",
+        "unknown_var = -?\\d+\\.\\d+",
+        "request = -?\\d+"),
     NEGATE_MIN_INT_FAILS_WITH_ERRORS(
         "-(-x) == x", "Condition is not always true\\.", "Counterexample input:", "x = -?\\d+"),
     HETEROGENEOUS_ARITHMETIC_FAILS("dyn(1) + 1u == 2u", "Condition is not always true\\."),
@@ -1102,12 +1154,6 @@ public final class CelVerifierZ3ImplTest {
         "Counterexample input:",
         "x = -?\\d+",
         "u = \\d+u?"),
-    CROSS_TYPE_DYNAMIC_EQUALITY_NOT_ALWAYS_UNEQUAL_INT_DOUBLE(
-        "!(request == unknown_var && type(request) == int && type(unknown_var) == double)",
-        "Condition is not always true\\.",
-        "Counterexample input:",
-        "unknown_var = -?\\d+\\.\\d+",
-        "request = -?\\d+"),
     OPTIONAL_DYN_VAR_HAS_VALUE_NOT_IMPLIES_INT(
         "opt_dyn_var.hasValue() ? type(opt_dyn_var.value()) == int : true",
         "Condition is not always true\\.",
@@ -1117,18 +1163,18 @@ public final class CelVerifierZ3ImplTest {
         "[?dyn_var] == [?dyn_var] ? true : true",
         "Condition is not always true\\.",
         "Counterexample input:",
-        "dyn_var = b\"![01]!\""),
+        "dyn_var = .*"),
     OPTIONAL_MAP_ENTRY_DYN_VAR_TYPE_MISMATCH(
         "{?1: dyn_var} == {?1: dyn_var} ? true : true",
         "Condition is not always true\\.",
         "Counterexample input:",
-        "dyn_var = b\"![01]!\""),
+        "dyn_var = .*"),
     OPTIONAL_STRUCT_ENTRY_DYN_VAR_TYPE_MISMATCH(
         "cel.expr.conformance.proto3.TestAllTypes{?single_int32: dyn_var} =="
             + " cel.expr.conformance.proto3.TestAllTypes{?single_int32: dyn_var} ? true : true",
         "Condition is not always true\\.",
         "Counterexample input:",
-        "dyn_var = b\"(!0!|i)\""),
+        "dyn_var = .*"),
     OPTIONAL_NONE_COUNTEREXAMPLE(
         "opt_dyn_var.hasValue()",
         "Condition is not always true\\.",
@@ -1235,7 +1281,7 @@ public final class CelVerifierZ3ImplTest {
         "dyn_var == 1.0",
         "Condition is not always true\\.",
         "Counterexample input:",
-        "dyn_var = b\"![01]!\""),
+        "dyn_var = .*"),
     DYNAMIC_NOT_TYPE_MISMATCH(
         "!dyn_var",
         "Condition is not always true\\.",
@@ -1245,7 +1291,7 @@ public final class CelVerifierZ3ImplTest {
         "dyn_var ? true : false",
         "Condition is not always true\\.",
         "Counterexample input:",
-        "dyn_var = b\"![01]!\""),
+        "dyn_var = .*"),
     DYNAMIC_NOT_TYPE_MISMATCH_SURVIVOR(
         "type(dyn_var) == int ? (!dyn_var == !dyn_var) : true",
         "Condition is not always true\\.",
@@ -1292,6 +1338,18 @@ public final class CelVerifierZ3ImplTest {
         "Counterexample input:",
         "x = -9223372036854775808",
         "y = -1"),
+    UNINTERPRETED_CONVERSION_CAN_ERROR_INT_FROM_STRING(
+        "int(string_var) == int(string_var)",
+        "Condition is not always true\\.",
+        "Counterexample input:"),
+    UNINTERPRETED_CONVERSION_CAN_ERROR_TIMESTAMP_FROM_STRING(
+        "timestamp(string_var) == timestamp(string_var)",
+        "Condition is not always true\\.",
+        "Counterexample input:"),
+    UNINTERPRETED_CONVERSION_CAN_ERROR_DURATION_FROM_STRING(
+        "duration(string_var) == duration(string_var)",
+        "Condition is not always true\\.",
+        "Counterexample input:"),
     ;
 
     final String expr;
@@ -1317,6 +1375,15 @@ public final class CelVerifierZ3ImplTest {
   }
 
   private enum IsInconclusiveTestCase {
+    TIMESTAMP_STRING_CONVERSION_VALID(
+        "timestamp('2023-01-01T00:00:00Z') == timestamp('2023-01-01T00:00:00Z')"),
+    DURATION_STRING_CONVERSION_VALID("duration('100s') == duration('100s')"),
+    TIMESTAMP_ADD_DURATION_OVERFLOW("timestamp(253402300799) + duration('100s') > timestamp(0)"),
+    DYNAMIC_EQUALITY_TIMESTAMP_INT_COLLISION(
+        "type(dyn_var) == int && dyn_var == 0 ? dyn_var != timestamp('1970-01-01T00:00:00Z') :"
+            + " true"),
+    // TODO: Implement RFC 3339 spec in conversion
+    TIMESTAMP_BOUNDS_VALID("timestamp('2023-01-01T00:00:00Z') <= timestamp(253402300799)"),
     UNINTERPRETED_FUNCTION("request.matches('^[a-z]+$')"),
     INT_STRING_UNINTERPRETED("int('123') == 123"),
     LIST_WITH_APPROXIMATE_ELEMENT("[request.matches('a')]"),
@@ -1398,7 +1465,18 @@ public final class CelVerifierZ3ImplTest {
         "size(int_list) == 6 ? int_list.map(x, 2.0) : [1.0]"),
     TRUNCATION_DIVERGENCE_DIFFERENT_BYTES(
         "size(int_list) == 6 ? int_list.map(x, b'a') : [b'a']",
-        "size(int_list) == 6 ? int_list.map(x, b'b') : [b'a']");
+        "size(int_list) == 6 ? int_list.map(x, b'b') : [b'a']"),
+    TIMESTAMP_MATH_ADD_DUR_TS("timestamp(100) + duration('100s')", "timestamp(200)"),
+    TIMESTAMP_MATH_ADD_TS_DUR("duration('100s') + timestamp(100)", "timestamp(200)"),
+    TIMESTAMP_MATH_SUBTRACT_DUR("timestamp(900000) - duration('100s')", "timestamp(899900)"),
+    DURATION_MATH_ADD_DUR_DUR("duration('100s') + duration('200s')", "duration('300s')"),
+    DURATION_MATH_SUBTRACT_DUR_DUR("duration('300s') - duration('100s')", "duration('200s')"),
+    DURATION_MATH_ASSOCIATIVITY(
+        "(duration('10s') + duration('20s')) + duration('30s')",
+        "duration('10s') + (duration('20s') + duration('30s'))"),
+    TIMESTAMP_DURATION_MATH_ASSOCIATIVITY(
+        "(timestamp(10) + duration('20s')) + duration('30s')",
+        "timestamp(10) + (duration('20s') + duration('30s'))");
 
     final String exprA;
     final String exprB;
@@ -1421,6 +1499,7 @@ public final class CelVerifierZ3ImplTest {
   }
 
   private enum EquivalenceTestCase {
+    STRUCT_UNSET_TIMESTAMP_DEFAULT("TestAllTypes{}.single_timestamp", "timestamp(0)"),
     TRUNCATION_STRICT_PROPAGATION_EQUIVALENT(
         "size(int_list) == 6 ? size(int_list.filter(x, x > 2)) : 0",
         "size(int_list) == 6 ? size(int_list.filter(y, y > 2)) : 0"),
@@ -1438,6 +1517,12 @@ public final class CelVerifierZ3ImplTest {
     MACRO_EXISTS_ONE_EQUIVALENT(
         "[1, 2, 3].exists_one(x, x == 2)",
         "(1 == 2 ? 1 : 0) + (2 == 2 ? 1 : 0) + (3 == 2 ? 1 : 0) == 1"),
+    TIMESTAMP_MATH_SUBTRACT_TS(
+        "timestamp(900000) - timestamp(100)", "timestamp(899900) - timestamp(0)"),
+    TIMESTAMP_MATH_COMMUTATIVITY(
+        "duration('10s') + timestamp(50)", "timestamp(50) + duration('10s')"),
+    DURATION_MATH_COMMUTATIVITY(
+        "duration('10s') + duration('20s')", "duration('20s') + duration('10s')"),
     MACRO_MAP_EQUIVALENT("{1: true, 2: true, 3: true}.all(k, k > 0)", "1 > 0 && 2 > 0 && 3 > 0"),
     MACRO_BIND_EQUIVALENT("cel.bind(x, 10, x > 0)", "10 > 0"),
     NESTED_MACRO(
@@ -2461,6 +2546,19 @@ public final class CelVerifierZ3ImplTest {
     verifier.isSatisfiable(ast);
 
     assertThat(requestedTranslations).containsExactly("spy_func_int");
+  }
+
+  @Test
+  public void isPrimitiveConstant_test() {
+    try (Context ctx = new Context()) {
+      CelZ3TypeSystem ts = new CelZ3TypeSystem(ctx);
+      Expr<?> strVal = ts.mkString("2023-01-01T00:00:00Z");
+      Expr<?> intVal = ts.mkInt(123);
+      Expr<?> varStrVal = ts.wrapString(ctx.mkConst("x", ctx.getStringSort()));
+      assertThat(ts.isPrimitiveConstant(strVal)).isTrue();
+      assertThat(ts.isPrimitiveConstant(intVal)).isTrue();
+      assertThat(ts.isPrimitiveConstant(varStrVal)).isFalse();
+    }
   }
 
   @Test

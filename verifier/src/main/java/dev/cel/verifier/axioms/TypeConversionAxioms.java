@@ -25,6 +25,7 @@ import com.microsoft.z3.IntExpr;
 import com.microsoft.z3.Sort;
 import dev.cel.checker.CelStandardDeclarations.StandardFunction;
 import dev.cel.checker.CelStandardDeclarations.StandardFunction.Overload.Conversions;
+import dev.cel.common.types.SimpleType;
 import java.util.Optional;
 
 /** Axiomatization for CEL's type conversion functions. */
@@ -43,18 +44,16 @@ final class TypeConversionAxioms {
                 return Optional.of(
                     typeSystem.withRuntimeError(typeSystem.wrapInt(uintVal), outOfBounds));
               })
-          .addUnaryOverloadTranslator(
+          .addOverloadTranslator(
               Conversions.DOUBLE_TO_INT64.celOverloadDecl(),
-              createUninterpretedConversion(Conversions.DOUBLE_TO_INT64),
-              true)
-          .addUnaryOverloadTranslator(
+              createUninterpretedConversion(Conversions.DOUBLE_TO_INT64))
+          .addOverloadTranslator(
               Conversions.STRING_TO_INT64.celOverloadDecl(),
-              createUninterpretedConversion(Conversions.STRING_TO_INT64),
-              true)
+              createUninterpretedConversion(Conversions.STRING_TO_INT64))
           .addUnaryOverloadTranslator(
               Conversions.TIMESTAMP_TO_INT64.celOverloadDecl(),
-              createUninterpretedConversion(Conversions.TIMESTAMP_TO_INT64),
-              true)
+              (ctx, typeSystem, sink, arg) ->
+                  Optional.of(typeSystem.wrapInt(typeSystem.getTimestamp(arg))))
           .build();
 
   private static final CelZ3FunctionAxiom UINT_AXIOM =
@@ -70,14 +69,12 @@ final class TypeConversionAxioms {
                 return Optional.of(
                     typeSystem.withRuntimeError(typeSystem.wrapUint(intVal), outOfBounds));
               })
-          .addUnaryOverloadTranslator(
+          .addOverloadTranslator(
               Conversions.DOUBLE_TO_UINT64.celOverloadDecl(),
-              createUninterpretedConversion(Conversions.DOUBLE_TO_UINT64),
-              true)
-          .addUnaryOverloadTranslator(
+              createUninterpretedConversion(Conversions.DOUBLE_TO_UINT64))
+          .addOverloadTranslator(
               Conversions.STRING_TO_UINT64.celOverloadDecl(),
-              createUninterpretedConversion(Conversions.STRING_TO_UINT64),
-              true)
+              createUninterpretedConversion(Conversions.STRING_TO_UINT64))
           .build();
 
   private static final CelZ3FunctionAxiom DOUBLE_AXIOM =
@@ -85,15 +82,13 @@ final class TypeConversionAxioms {
           .addUnaryOverloadTranslator(
               Conversions.DOUBLE_TO_DOUBLE.celOverloadDecl(),
               (ctx, typeSystem, sink, arg) -> Optional.of(arg))
-          .addUnaryOverloadTranslator(
+          .addOverloadTranslator(
               Conversions.INT64_TO_DOUBLE.celOverloadDecl(),
-              createUninterpretedConversion(Conversions.INT64_TO_DOUBLE),
-              true)
-          .addUnaryOverloadTranslator(
+              createUninterpretedConversion(Conversions.INT64_TO_DOUBLE))
+          .addOverloadTranslator(
               Conversions.UINT64_TO_DOUBLE.celOverloadDecl(),
-              createUninterpretedConversion(Conversions.UINT64_TO_DOUBLE),
-              true)
-          .addUnaryOverloadTranslator(
+              createUninterpretedConversion(Conversions.UINT64_TO_DOUBLE))
+          .addOverloadTranslator(
               Conversions.STRING_TO_DOUBLE.celOverloadDecl(),
               createUninterpretedConversion(Conversions.STRING_TO_DOUBLE))
           .build();
@@ -103,34 +98,27 @@ final class TypeConversionAxioms {
           .addUnaryOverloadTranslator(
               Conversions.STRING_TO_STRING.celOverloadDecl(),
               (ctx, typeSystem, sink, arg) -> Optional.of(arg))
-          .addUnaryOverloadTranslator(
+          .addOverloadTranslator(
               Conversions.INT64_TO_STRING.celOverloadDecl(),
-              createUninterpretedConversion(Conversions.INT64_TO_STRING),
-              true)
-          .addUnaryOverloadTranslator(
+              createUninterpretedConversion(Conversions.INT64_TO_STRING))
+          .addOverloadTranslator(
               Conversions.UINT64_TO_STRING.celOverloadDecl(),
-              createUninterpretedConversion(Conversions.UINT64_TO_STRING),
-              true)
-          .addUnaryOverloadTranslator(
+              createUninterpretedConversion(Conversions.UINT64_TO_STRING))
+          .addOverloadTranslator(
               Conversions.DOUBLE_TO_STRING.celOverloadDecl(),
-              createUninterpretedConversion(Conversions.DOUBLE_TO_STRING),
-              true)
-          .addUnaryOverloadTranslator(
+              createUninterpretedConversion(Conversions.DOUBLE_TO_STRING))
+          .addOverloadTranslator(
               Conversions.BOOL_TO_STRING.celOverloadDecl(),
-              createUninterpretedConversion(Conversions.BOOL_TO_STRING),
-              true)
-          .addUnaryOverloadTranslator(
+              createUninterpretedConversion(Conversions.BOOL_TO_STRING))
+          .addOverloadTranslator(
               Conversions.BYTES_TO_STRING.celOverloadDecl(),
-              createUninterpretedConversion(Conversions.BYTES_TO_STRING),
-              true)
-          .addUnaryOverloadTranslator(
+              createUninterpretedConversion(Conversions.BYTES_TO_STRING))
+          .addOverloadTranslator(
               Conversions.TIMESTAMP_TO_STRING.celOverloadDecl(),
-              createUninterpretedConversion(Conversions.TIMESTAMP_TO_STRING),
-              true)
-          .addUnaryOverloadTranslator(
+              createUninterpretedConversion(Conversions.TIMESTAMP_TO_STRING))
+          .addOverloadTranslator(
               Conversions.DURATION_TO_STRING.celOverloadDecl(),
-              createUninterpretedConversion(Conversions.DURATION_TO_STRING),
-              true)
+              createUninterpretedConversion(Conversions.DURATION_TO_STRING))
           .build();
 
   private static final CelZ3FunctionAxiom BYTES_AXIOM =
@@ -138,10 +126,9 @@ final class TypeConversionAxioms {
           .addUnaryOverloadTranslator(
               Conversions.BYTES_TO_BYTES.celOverloadDecl(),
               (ctx, typeSystem, sink, arg) -> Optional.of(arg))
-          .addUnaryOverloadTranslator(
+          .addOverloadTranslator(
               Conversions.STRING_TO_BYTES.celOverloadDecl(),
-              createUninterpretedConversion(Conversions.STRING_TO_BYTES),
-              true)
+              createUninterpretedConversion(Conversions.STRING_TO_BYTES))
           .build();
 
   private static final CelZ3FunctionAxiom DYN_AXIOM =
@@ -156,10 +143,9 @@ final class TypeConversionAxioms {
           .addUnaryOverloadTranslator(
               Conversions.DURATION_TO_DURATION.celOverloadDecl(),
               (ctx, typeSystem, sink, arg) -> Optional.of(arg))
-          .addUnaryOverloadTranslator(
+          .addOverloadTranslator(
               Conversions.STRING_TO_DURATION.celOverloadDecl(),
-              createUninterpretedConversion(Conversions.STRING_TO_DURATION),
-              true)
+              createUninterpretedConversion(Conversions.STRING_TO_DURATION))
           .build();
 
   private static final CelZ3FunctionAxiom TIMESTAMP_AXIOM =
@@ -167,14 +153,17 @@ final class TypeConversionAxioms {
           .addUnaryOverloadTranslator(
               Conversions.TIMESTAMP_TO_TIMESTAMP.celOverloadDecl(),
               (ctx, typeSystem, sink, arg) -> Optional.of(arg))
-          .addUnaryOverloadTranslator(
+          .addOverloadTranslator(
               Conversions.STRING_TO_TIMESTAMP.celOverloadDecl(),
-              createUninterpretedConversion(Conversions.STRING_TO_TIMESTAMP),
-              true)
+              createUninterpretedConversion(Conversions.STRING_TO_TIMESTAMP))
           .addUnaryOverloadTranslator(
               Conversions.INT64_TO_TIMESTAMP.celOverloadDecl(),
-              createUninterpretedConversion(Conversions.INT64_TO_TIMESTAMP),
-              true)
+              (ctx, typeSystem, sink, arg) -> {
+                IntExpr intVal = typeSystem.getInt(arg);
+                BoolExpr overflow = typeSystem.checkTimestampOverflow(intVal);
+                return Optional.of(
+                    typeSystem.withRuntimeError(typeSystem.wrapTimestamp(intVal), overflow));
+              })
           .build();
 
   private static final CelZ3FunctionAxiom BOOL_AXIOM =
@@ -182,10 +171,9 @@ final class TypeConversionAxioms {
           .addUnaryOverloadTranslator(
               Conversions.BOOL_TO_BOOL.celOverloadDecl(),
               (ctx, typeSystem, sink, arg) -> Optional.of(arg))
-          .addUnaryOverloadTranslator(
+          .addOverloadTranslator(
               Conversions.STRING_TO_BOOL.celOverloadDecl(),
-              createUninterpretedConversion(Conversions.STRING_TO_BOOL),
-              true)
+              createUninterpretedConversion(Conversions.STRING_TO_BOOL))
           .build();
 
   static final ImmutableList<CelZ3FunctionAxiom> ALL_AXIOMS =
@@ -200,9 +188,11 @@ final class TypeConversionAxioms {
           TIMESTAMP_AXIOM,
           BOOL_AXIOM);
 
-  private static CelZ3FunctionAxiom.UnaryTranslator createUninterpretedConversion(
-      Conversions conversion) {
-    return (ctx, typeSystem, sink, arg) -> {
+  private static CelZ3OverloadTranslator createUninterpretedConversion(Conversions conversion) {
+    return (ctx, typeSystem, sink, unwrappedArgs, argApproximations) -> {
+      Expr<?> arg = unwrappedArgs.get(0);
+      BoolExpr baseApprox = argApproximations.get(0);
+
       FuncDecl<?> funcDecl =
           typeSystem.internFuncDecl(
               conversion.celOverloadDecl().overloadId(),
@@ -212,32 +202,63 @@ final class TypeConversionAxioms {
 
       switch (conversion.celOverloadDecl().resultType().kind()) {
         case INT:
+          sink.accept(ctx.mkOr(typeSystem.isInt(res), typeSystem.isError(res)));
+          sink.accept(
+              ctx.mkImplies(
+                  typeSystem.isInt(res),
+                  ctx.mkNot(typeSystem.checkIntOverflow(typeSystem.getInt(res)))));
+          break;
         case TIMESTAMP:
+          sink.accept(ctx.mkOr(typeSystem.isTimestamp(res), typeSystem.isError(res)));
+          sink.accept(
+              ctx.mkImplies(
+                  typeSystem.isTimestamp(res),
+                  ctx.mkNot(typeSystem.checkTimestampOverflow(typeSystem.getTimestamp(res)))));
+          break;
         case DURATION:
-          sink.accept(typeSystem.isInt(res));
-          sink.accept(ctx.mkNot(typeSystem.checkIntOverflow(typeSystem.getInt(res))));
+          sink.accept(ctx.mkOr(typeSystem.isDuration(res), typeSystem.isError(res)));
+          sink.accept(
+              ctx.mkImplies(
+                  typeSystem.isDuration(res),
+                  ctx.mkNot(typeSystem.checkDurationOverflow(typeSystem.getDuration(res)))));
           break;
         case UINT:
-          sink.accept(typeSystem.isUint(res));
-          sink.accept(ctx.mkNot(typeSystem.checkUintOverflow(typeSystem.getUint(res))));
+          sink.accept(ctx.mkOr(typeSystem.isUint(res), typeSystem.isError(res)));
+          sink.accept(
+              ctx.mkImplies(
+                  typeSystem.isUint(res),
+                  ctx.mkNot(typeSystem.checkUintOverflow(typeSystem.getUint(res)))));
           break;
         case DOUBLE:
-          sink.accept(typeSystem.isDouble(res));
-          sink.accept(ctx.mkNot(ctx.mkFPIsNaN((FPExpr) typeSystem.getDouble(res))));
+          sink.accept(ctx.mkOr(typeSystem.isDouble(res), typeSystem.isError(res)));
+          sink.accept(
+              ctx.mkImplies(
+                  typeSystem.isDouble(res),
+                  ctx.mkNot(ctx.mkFPIsNaN((FPExpr) typeSystem.getDouble(res)))));
           break;
         case STRING:
-          sink.accept(typeSystem.isString(res));
+          sink.accept(ctx.mkOr(typeSystem.isString(res), typeSystem.isError(res)));
           break;
         case BYTES:
-          sink.accept(typeSystem.isBytes(res));
+          sink.accept(ctx.mkOr(typeSystem.isBytes(res), typeSystem.isError(res)));
           break;
         case BOOL:
-          sink.accept(typeSystem.isBool(res));
+          sink.accept(ctx.mkOr(typeSystem.isBool(res), typeSystem.isError(res)));
           break;
         default:
-          break;
+          throw new IllegalArgumentException(
+              "Unsupported uninterpreted conversion result type: "
+                  + conversion.celOverloadDecl().resultType());
       }
-      return Optional.of(res);
+
+      boolean isArgConstant = typeSystem.isPrimitiveConstant(arg);
+      boolean isStringParseConversion =
+          conversion.celOverloadDecl().parameterTypes().get(0).equals(SimpleType.STRING);
+
+      BoolExpr finalApprox =
+          (!isArgConstant && isStringParseConversion) ? baseApprox : ctx.mkTrue();
+
+      return Optional.of(CelZ3OverloadResult.create(res, finalApprox));
     };
   }
 
