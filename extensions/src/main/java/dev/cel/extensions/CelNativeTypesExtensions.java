@@ -17,14 +17,18 @@ package dev.cel.extensions;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static java.util.Arrays.stream;
 
+import com.google.auto.value.AutoValue;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableBiMap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.primitives.Primitives;
 import com.google.common.primitives.UnsignedLong;
 import com.google.common.reflect.TypeToken;
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
+import com.google.errorprone.annotations.CheckReturnValue;
 import com.google.errorprone.annotations.Immutable;
 import dev.cel.checker.CelCheckerBuilder;
 import dev.cel.common.exceptions.CelAttributeNotFoundException;
@@ -32,6 +36,7 @@ import dev.cel.common.exceptions.CelInvalidArgumentException;
 import dev.cel.common.internal.ReflectionUtil;
 import dev.cel.common.types.CelType;
 import dev.cel.common.types.CelTypeProvider;
+import dev.cel.common.types.EnumType;
 import dev.cel.common.types.ListType;
 import dev.cel.common.types.MapType;
 import dev.cel.common.types.OptionalType;
@@ -67,6 +72,7 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
+import java.util.function.ToIntFunction;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -78,15 +84,117 @@ import org.jspecify.annotations.Nullable;
 @Immutable
 public final class CelNativeTypesExtensions implements CelCompilerLibrary, CelRuntimeLibrary {
 
+  /** Options for configuring {@link CelNativeTypesExtensions}. */
+  @AutoValue
+  @CheckReturnValue
+  @Immutable
+  @SuppressWarnings("Immutable") // Enum<?> constants are singletons
+  public abstract static class CelNativeTypesOptions {
+
+    /** Java classes to scan and register as CEL struct types. */
+    public abstract ImmutableSet<Class<?>> classes();
+
+    /** Registered Java enum classes mapped to their constant-to-integer bidirectional mappings. */
+    abstract ImmutableMap<Class<? extends Enum<?>>, ImmutableBiMap<Enum<?>, Integer>>
+        enumAdapters();
+
+    public abstract Builder toBuilder();
+
+    /** Returns a new {@link Builder} for {@link CelNativeTypesOptions}. */
+    public static Builder newBuilder() {
+      return new AutoValue_CelNativeTypesExtensions_CelNativeTypesOptions.Builder();
+    }
+
+    /** Builder for {@link CelNativeTypesOptions}. */
+    @AutoValue.Builder
+    public abstract static class Builder {
+
+      abstract ImmutableSet.Builder<Class<?>> classesBuilder();
+
+      abstract ImmutableMap.Builder<Class<? extends Enum<?>>, ImmutableBiMap<Enum<?>, Integer>>
+          enumAdaptersBuilder();
+
+      /** Adds one or more Java classes to be scanned and registered as CEL struct types. */
+      @CanIgnoreReturnValue
+      public final Builder addClasses(Class<?>... classes) {
+        return addClasses(Arrays.asList(classes));
+      }
+
+      /** Adds Java classes to be scanned and registered as CEL struct types. */
+      @CanIgnoreReturnValue
+      public final Builder addClasses(Iterable<Class<?>> classes) {
+        Preconditions.checkNotNull(classes);
+        classesBuilder().addAll(classes);
+        return this;
+      }
+
+      /**
+       * Registers a Java enum class with an adapter function that maps each enum constant to its
+       * CEL integer value.
+       *
+       * @param enumClass the enum class to register
+       * @param adapter function mapping each enum constant to a unique integer value
+       * @throws IllegalArgumentException if {@code enumClass} is not an enum or if the adapter
+       *     produces duplicate integer values
+       */
+      @CanIgnoreReturnValue
+      public final <E extends Enum<E>> Builder addEnum(
+          Class<E> enumClass, ToIntFunction<E> adapter) {
+        Preconditions.checkNotNull(enumClass);
+        Preconditions.checkNotNull(adapter);
+        Preconditions.checkArgument(
+            enumClass.isEnum(), "Class must be an enum: %s", enumClass.getName());
+        ImmutableMap.Builder<E, Integer> mapBuilder = ImmutableMap.builder();
+        for (E constant : enumClass.getEnumConstants()) {
+          mapBuilder.put(constant, adapter.applyAsInt(constant));
+        }
+        return addEnum(enumClass, mapBuilder.buildOrThrow());
+      }
+
+      /**
+       * Registers a Java enum class with an explicit mapping from every enum constant to its CEL
+       * integer value.
+       *
+       * @param enumClass the enum class to register
+       * @param enumValueMap map containing an entry for every constant in {@code enumClass} to a
+       *     unique integer value
+       * @throws IllegalArgumentException if {@code enumClass} is not an enum, if any enum constant
+       *     is missing from {@code enumValueMap}, or if multiple constants map to the same integer
+       *     value
+       */
+      @CanIgnoreReturnValue
+      public final <E extends Enum<E>> Builder addEnum(
+          Class<E> enumClass, Map<E, Integer> enumValueMap) {
+        Preconditions.checkNotNull(enumClass);
+        Preconditions.checkNotNull(enumValueMap);
+        Preconditions.checkArgument(
+            enumClass.isEnum(), "Class must be an enum: %s", enumClass.getName());
+        ImmutableBiMap.Builder<Enum<?>, Integer> biMapBuilder = ImmutableBiMap.builder();
+        for (E constant : enumClass.getEnumConstants()) {
+          Integer value = enumValueMap.get(constant);
+          if (value == null) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Missing mapping for enum constant %s.%s",
+                    enumClass.getName(), constant.name()));
+          }
+          biMapBuilder.put(constant, value);
+        }
+        enumAdaptersBuilder().put(enumClass, biMapBuilder.buildOrThrow());
+        return this;
+      }
+
+      public abstract CelNativeTypesOptions build();
+    }
+
+    CelNativeTypesOptions() {}
+  }
+
   private final NativeTypeRegistry registry;
 
   // Set of all standard java.lang.Object method names.
   private static final ImmutableSet<String> OBJECT_METHOD_NAMES =
       stream(Object.class.getDeclaredMethods()).map(Method::getName).collect(toImmutableSet());
-
-  // Set of all standard java.lang.Enum method names.
-  private static final ImmutableSet<String> ENUM_METHOD_NAMES =
-      stream(Enum.class.getDeclaredMethods()).map(Method::getName).collect(toImmutableSet());
 
   private static final ImmutableMap<Class<?>, CelType> JAVA_TO_CEL_TYPE_MAP =
       ImmutableMap.<Class<?>, CelType>builder()
@@ -132,7 +240,13 @@ public final class CelNativeTypesExtensions implements CelCompilerLibrary, CelRu
 
   /** Creates a new instance of {@link CelNativeTypesExtensions} for the given classes. */
   static CelNativeTypesExtensions nativeTypes(Class<?>... classes) {
-    return new CelNativeTypesExtensions(new NativeTypeRegistry(NativeTypeScanner.scan(classes)));
+    return nativeTypes(CelNativeTypesOptions.newBuilder().addClasses(classes).build());
+  }
+
+  /** Creates a new instance of {@link CelNativeTypesExtensions} with the given options. */
+  static CelNativeTypesExtensions nativeTypes(CelNativeTypesOptions options) {
+    Preconditions.checkNotNull(options);
+    return new CelNativeTypesExtensions(new NativeTypeRegistry(NativeTypeScanner.scan(options)));
   }
 
   @VisibleForTesting
@@ -162,31 +276,68 @@ public final class CelNativeTypesExtensions implements CelCompilerLibrary, CelRu
 
     private static final class ScanResult {
       private final ImmutableMap<String, Class<?>> classMap;
-      private final ImmutableMap<String, StructType> typeMap;
+      private final ImmutableMap<String, CelType> typeMap;
       private final ImmutableMap<Class<?>, StructType> classToTypeMap;
       private final ImmutableMap<Class<?>, ImmutableMap<String, PropertyAccessor>> accessorMap;
+      private final ImmutableMap<Enum<?>, Long> enumValueToIntMap;
+      private final ImmutableMap<Class<?>, ImmutableMap<Long, Enum<?>>> intToEnumValueMap;
 
       ScanResult(
           ImmutableMap<String, Class<?>> classMap,
-          ImmutableMap<String, StructType> typeMap,
+          ImmutableMap<String, CelType> typeMap,
           ImmutableMap<Class<?>, StructType> classToTypeMap,
-          ImmutableMap<Class<?>, ImmutableMap<String, PropertyAccessor>> accessorMap) {
+          ImmutableMap<Class<?>, ImmutableMap<String, PropertyAccessor>> accessorMap,
+          ImmutableMap<Enum<?>, Long> enumValueToIntMap,
+          ImmutableMap<Class<?>, ImmutableMap<Long, Enum<?>>> intToEnumValueMap) {
         this.classMap = classMap;
         this.typeMap = typeMap;
         this.classToTypeMap = classToTypeMap;
         this.accessorMap = accessorMap;
+        this.enumValueToIntMap = enumValueToIntMap;
+        this.intToEnumValueMap = intToEnumValueMap;
       }
     }
 
-    private static ScanResult scan(Class<?>... classes) {
+    private static ScanResult scan(CelNativeTypesOptions options) {
       ImmutableMap.Builder<String, Class<?>> classMapBuilder = ImmutableMap.builder();
-      ImmutableMap.Builder<String, StructType> typeMapBuilder = ImmutableMap.builder();
+      ImmutableMap.Builder<String, CelType> typeMapBuilder = ImmutableMap.builder();
       ImmutableMap.Builder<Class<?>, StructType> classToTypeMapBuilder = ImmutableMap.builder();
       ImmutableMap.Builder<Class<?>, ImmutableMap<String, PropertyAccessor>> accessorMapBuilder =
           ImmutableMap.builder();
+      ImmutableMap.Builder<Class<?>, EnumType> enumTypeMapBuilder = ImmutableMap.builder();
+      ImmutableMap.Builder<Enum<?>, Long> enumValueToIntMapBuilder = ImmutableMap.builder();
+      ImmutableMap.Builder<Class<?>, ImmutableMap<Long, Enum<?>>> intToEnumValueMapBuilder =
+          ImmutableMap.builder();
+
+      for (Map.Entry<Class<? extends Enum<?>>, ImmutableBiMap<Enum<?>, Integer>> entry :
+          options.enumAdapters().entrySet()) {
+        Class<? extends Enum<?>> enumClass = entry.getKey();
+        ImmutableBiMap<Enum<?>, Integer> biMap = entry.getValue();
+        String typeName = getCelTypeName(enumClass);
+
+        ImmutableMap.Builder<String, Integer> nameToNumberBuilder =
+            ImmutableMap.builderWithExpectedSize(biMap.size());
+        ImmutableMap.Builder<Long, Enum<?>> intToEnumBuilder =
+            ImmutableMap.builderWithExpectedSize(biMap.size());
+        for (Map.Entry<Enum<?>, Integer> constantEntry : biMap.entrySet()) {
+          Enum<?> constant = constantEntry.getKey();
+          Integer number = constantEntry.getValue();
+          long longNumber = number.longValue();
+          nameToNumberBuilder.put(constant.name(), number);
+          enumValueToIntMapBuilder.put(constant, longNumber);
+          intToEnumBuilder.put(longNumber, constant);
+        }
+
+        EnumType enumType = EnumType.create(typeName, nameToNumberBuilder.buildOrThrow());
+        typeMapBuilder.put(typeName, enumType);
+        enumTypeMapBuilder.put(enumClass, enumType);
+        intToEnumValueMapBuilder.put(enumClass, intToEnumBuilder.buildOrThrow());
+      }
+
+      ImmutableMap<Class<?>, EnumType> enumTypeMap = enumTypeMapBuilder.buildOrThrow();
 
       Set<Class<?>> visited = new HashSet<>();
-      Queue<Class<?>> queue = new ArrayDeque<>(Arrays.asList(classes));
+      Queue<Class<?>> queue = new ArrayDeque<>(options.classes());
 
       while (!queue.isEmpty()) {
         Class<?> clazz = queue.poll();
@@ -198,7 +349,8 @@ public final class CelNativeTypesExtensions implements CelCompilerLibrary, CelRu
         String typeName = getCelTypeName(clazz);
         classMapBuilder.put(typeName, clazz);
 
-        ImmutableMap<String, PropertyAccessor> accessors = scanProperties(clazz, queue);
+        ImmutableMap<String, PropertyAccessor> accessors =
+            scanProperties(clazz, queue, enumTypeMap.keySet());
         accessorMapBuilder.put(clazz, accessors);
       }
 
@@ -210,7 +362,7 @@ public final class CelNativeTypesExtensions implements CelCompilerLibrary, CelRu
         String typeName = entry.getKey();
         Class<?> clazz = entry.getValue();
 
-        StructType structType = createStructType(clazz, classMap, accessorMap);
+        StructType structType = createStructType(clazz, classMap, accessorMap, enumTypeMap);
         typeMapBuilder.put(typeName, structType);
         classToTypeMapBuilder.put(clazz, structType);
       }
@@ -220,9 +372,12 @@ public final class CelNativeTypesExtensions implements CelCompilerLibrary, CelRu
               classMap,
               typeMapBuilder.buildOrThrow(),
               classToTypeMapBuilder.buildOrThrow(),
-              accessorMap);
+              accessorMap,
+              enumValueToIntMapBuilder.buildOrThrow(),
+              intToEnumValueMapBuilder.buildOrThrow());
 
-      validateRegisteredClasses(result.classToTypeMap, result.classMap, result.accessorMap);
+      validateRegisteredClasses(
+          result.classToTypeMap, result.classMap, result.accessorMap, enumTypeMap);
 
       return result;
     }
@@ -230,11 +385,14 @@ public final class CelNativeTypesExtensions implements CelCompilerLibrary, CelRu
     private static void validateRegisteredClasses(
         ImmutableMap<Class<?>, StructType> classToTypeMap,
         ImmutableMap<String, Class<?>> classMap,
-        ImmutableMap<Class<?>, ImmutableMap<String, PropertyAccessor>> accessorMap) {
+        ImmutableMap<Class<?>, ImmutableMap<String, PropertyAccessor>> accessorMap,
+        ImmutableMap<Class<?>, EnumType> enumTypeMap) {
       for (Class<?> clazz : classToTypeMap.keySet()) {
-        for (String prop : getProperties(clazz)) {
+        ImmutableMap<String, PropertyAccessor> accessors =
+            Preconditions.checkNotNull(accessorMap.get(clazz));
+        for (String prop : accessors.keySet()) {
           try {
-            getPropertyType(clazz, prop, classMap, accessorMap);
+            getPropertyType(clazz, prop, classMap, accessorMap, enumTypeMap);
           } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException(
                 "Unsupported type for property '" + prop + "' in class " + clazz.getName(), e);
@@ -247,6 +405,7 @@ public final class CelNativeTypesExtensions implements CelCompilerLibrary, CelRu
       return clazz == null
           || visited.contains(clazz)
           || clazz.isInterface()
+          || Enum.class.isAssignableFrom(clazz)
           || isSupportedType(clazz);
     }
 
@@ -261,34 +420,48 @@ public final class CelNativeTypesExtensions implements CelCompilerLibrary, CelRu
     private static StructType createStructType(
         Class<?> clazz,
         ImmutableMap<String, Class<?>> classMap,
-        ImmutableMap<Class<?>, ImmutableMap<String, PropertyAccessor>> accessorMap) {
+        ImmutableMap<Class<?>, ImmutableMap<String, PropertyAccessor>> accessorMap,
+        ImmutableMap<Class<?>, EnumType> enumTypeMap) {
+      ImmutableMap<String, PropertyAccessor> accessors =
+          Preconditions.checkNotNull(accessorMap.get(clazz));
       return StructType.create(
           getCelTypeName(clazz),
-          getProperties(clazz),
-          fieldName -> Optional.of(getPropertyType(clazz, fieldName, classMap, accessorMap)));
+          accessors.keySet(),
+          fieldName ->
+              Optional.of(getPropertyType(clazz, fieldName, classMap, accessorMap, enumTypeMap)));
     }
 
     private static CelType getPropertyType(
         Class<?> clazz,
         String propertyName,
         ImmutableMap<String, Class<?>> classMap,
-        ImmutableMap<Class<?>, ImmutableMap<String, PropertyAccessor>> accessorMap) {
+        ImmutableMap<Class<?>, ImmutableMap<String, PropertyAccessor>> accessorMap,
+        ImmutableMap<Class<?>, EnumType> enumTypeMap) {
       ImmutableMap<String, PropertyAccessor> accessors = accessorMap.get(clazz);
       if (accessors != null) {
         PropertyAccessor accessor = accessors.get(propertyName);
         if (accessor != null) {
-          return mapJavaTypeToCelType(accessor.targetType, accessor.genericTargetType, classMap);
+          return mapJavaTypeToCelType(
+              accessor.targetType, accessor.genericTargetType, classMap, enumTypeMap);
         }
       }
       throw new IllegalArgumentException("No public field or getter for " + propertyName);
     }
 
     private static CelType mapJavaTypeToCelType(
-        Class<?> type, Type genericType, ImmutableMap<String, Class<?>> classMap) {
+        Class<?> type,
+        Type genericType,
+        ImmutableMap<String, Class<?>> classMap,
+        ImmutableMap<Class<?>, EnumType> enumTypeMap) {
 
       CelType celType = JAVA_TO_CEL_TYPE_MAP.get(type);
       if (celType != null) {
         return celType;
+      }
+
+      EnumType enumType = enumTypeMap.get(type);
+      if (enumType != null) {
+        return enumType;
       }
 
       if (type.isArray()) {
@@ -297,7 +470,8 @@ public final class CelNativeTypesExtensions implements CelCompilerLibrary, CelRu
             Preconditions.checkNotNull(
                 token.getComponentType(), "Array component type cannot be null");
         return ListType.create(
-            mapJavaTypeToCelType(componentToken.getRawType(), componentToken.getType(), classMap));
+            mapJavaTypeToCelType(
+                componentToken.getRawType(), componentToken.getType(), classMap, enumTypeMap));
       }
 
       if (type.isInterface()
@@ -311,7 +485,8 @@ public final class CelNativeTypesExtensions implements CelCompilerLibrary, CelRu
       if (List.class.isAssignableFrom(type)) {
         Type elementType = ReflectionUtil.resolveGenericParameter(token, List.class, 0);
         return ListType.create(
-            mapJavaTypeToCelType(ReflectionUtil.getRawType(elementType), elementType, classMap));
+            mapJavaTypeToCelType(
+                ReflectionUtil.getRawType(elementType), elementType, classMap, enumTypeMap));
       }
 
       if (Map.class.isAssignableFrom(type)) {
@@ -319,14 +494,16 @@ public final class CelNativeTypesExtensions implements CelCompilerLibrary, CelRu
         Type valueType = ReflectionUtil.resolveGenericParameter(token, Map.class, 1);
 
         CelType celKeyType =
-            mapJavaTypeToCelType(ReflectionUtil.getRawType(keyType), keyType, classMap);
+            mapJavaTypeToCelType(
+                ReflectionUtil.getRawType(keyType), keyType, classMap, enumTypeMap);
         if (celKeyType == SimpleType.DOUBLE) {
           throw new IllegalArgumentException("Decimals are not allowed as map keys in CEL.");
         }
 
         return MapType.create(
             celKeyType,
-            mapJavaTypeToCelType(ReflectionUtil.getRawType(valueType), valueType, classMap));
+            mapJavaTypeToCelType(
+                ReflectionUtil.getRawType(valueType), valueType, classMap, enumTypeMap));
       }
 
       // Optional is a final class, so reference equality is equivalent to isAssignableFrom
@@ -334,7 +511,12 @@ public final class CelNativeTypesExtensions implements CelCompilerLibrary, CelRu
       if (type == Optional.class) {
         Type optionalType = ReflectionUtil.resolveGenericParameter(token, Optional.class, 0);
         return OptionalType.create(
-            mapJavaTypeToCelType(ReflectionUtil.getRawType(optionalType), optionalType, classMap));
+            normalizeEnumTypeForOptional(
+                mapJavaTypeToCelType(
+                    ReflectionUtil.getRawType(optionalType),
+                    optionalType,
+                    classMap,
+                    enumTypeMap)));
       }
 
       String typeName = getCelTypeName(type);
@@ -346,12 +528,37 @@ public final class CelNativeTypesExtensions implements CelCompilerLibrary, CelRu
           "Unsupported Java type for CEL mapping: " + type.getName());
     }
 
+    private static CelType normalizeEnumTypeForOptional(CelType celType) {
+      if (celType instanceof EnumType) {
+        return SimpleType.INT;
+      }
+      if (celType instanceof ListType) {
+        ListType listType = (ListType) celType;
+        if (listType.hasElemType()) {
+          CelType normalizedElem = normalizeEnumTypeForOptional(listType.elemType());
+          if (!normalizedElem.equals(listType.elemType())) {
+            return ListType.create(normalizedElem);
+          }
+        }
+      }
+      if (celType instanceof MapType) {
+        MapType mapType = (MapType) celType;
+        CelType normalizedKey = normalizeEnumTypeForOptional(mapType.keyType());
+        CelType normalizedVal = normalizeEnumTypeForOptional(mapType.valueType());
+        if (!normalizedKey.equals(mapType.keyType())
+            || !normalizedVal.equals(mapType.valueType())) {
+          return MapType.create(normalizedKey, normalizedVal);
+        }
+      }
+      return celType;
+    }
+
     private static ImmutableMap<String, PropertyAccessor> scanProperties(
-        Class<?> clazz, Queue<Class<?>> queue) {
+        Class<?> clazz, Queue<Class<?>> queue, ImmutableSet<Class<?>> registeredEnums) {
       ImmutableMap.Builder<String, PropertyAccessor> builtAccessors = ImmutableMap.builder();
 
       for (String propName : getProperties(clazz)) {
-        buildPropertyAccessor(clazz, propName, queue)
+        buildPropertyAccessor(clazz, propName, queue, registeredEnums)
             .ifPresent(accessor -> builtAccessors.put(propName, accessor));
       }
 
@@ -359,7 +566,10 @@ public final class CelNativeTypesExtensions implements CelCompilerLibrary, CelRu
     }
 
     private static Optional<PropertyAccessor> buildPropertyAccessor(
-        Class<?> clazz, String propName, Queue<Class<?>> queue) {
+        Class<?> clazz,
+        String propName,
+        Queue<Class<?>> queue,
+        ImmutableSet<Class<?>> registeredEnums) {
       Method getter = findGetter(clazz, propName);
       Field field = findField(clazz, propName);
 
@@ -371,11 +581,17 @@ public final class CelNativeTypesExtensions implements CelCompilerLibrary, CelRu
       if (getter != null) {
         propType = getter.getReturnType();
         genericPropType = getter.getGenericReturnType();
+        if (containsUnregisteredEnum(genericPropType, registeredEnums)) {
+          return Optional.empty();
+        }
         queue.addAll(TypeReferenceCollector.collect(genericPropType));
         compiledGetter = compileGetter(getter);
       } else if (field != null) {
         propType = field.getType();
         genericPropType = field.getGenericType();
+        if (containsUnregisteredEnum(genericPropType, registeredEnums)) {
+          return Optional.empty();
+        }
         queue.addAll(TypeReferenceCollector.collect(genericPropType));
         compiledGetter = compileFieldGetter(field);
       }
@@ -397,6 +613,42 @@ public final class CelNativeTypesExtensions implements CelCompilerLibrary, CelRu
       }
 
       return Optional.empty();
+    }
+
+    private static boolean containsUnregisteredEnum(
+        Type type, ImmutableSet<Class<?>> registeredEnums) {
+      TypeToken<?> token = TypeToken.of(type);
+      Class<?> rawType = token.getRawType();
+
+      if (rawType.isEnum()) {
+        return !registeredEnums.contains(rawType);
+      }
+
+      if (rawType.isArray()) {
+        TypeToken<?> componentToken =
+            Preconditions.checkNotNull(
+                token.getComponentType(), "Array component type cannot be null");
+        return containsUnregisteredEnum(componentToken.getType(), registeredEnums);
+      }
+
+      if (List.class.isAssignableFrom(rawType)) {
+        return containsUnregisteredEnum(
+            ReflectionUtil.resolveGenericParameter(token, List.class, 0), registeredEnums);
+      }
+
+      if (Map.class.isAssignableFrom(rawType)) {
+        return containsUnregisteredEnum(
+                ReflectionUtil.resolveGenericParameter(token, Map.class, 0), registeredEnums)
+            || containsUnregisteredEnum(
+                ReflectionUtil.resolveGenericParameter(token, Map.class, 1), registeredEnums);
+      }
+
+      if (rawType == Optional.class) {
+        return containsUnregisteredEnum(
+            ReflectionUtil.resolveGenericParameter(token, Optional.class, 0), registeredEnums);
+      }
+
+      return false;
     }
 
     /**
@@ -451,8 +703,9 @@ public final class CelNativeTypesExtensions implements CelCompilerLibrary, CelRu
           return;
         }
 
-        // Custom types are non-builtin, public classes
+        // Custom types are non-builtin, non-enum, public classes
         if (!JAVA_TO_DEFAULT_VALUE_MAP.containsKey(rawType)
+            && !Enum.class.isAssignableFrom(rawType)
             && Modifier.isPublic(rawType.getModifiers())) {
           collectedTypes.add(rawType);
         }
@@ -629,10 +882,6 @@ public final class CelNativeTypesExtensions implements CelCompilerLibrary, CelRu
       if (OBJECT_METHOD_NAMES.contains(name)) {
         return false;
       }
-      if (Enum.class.isAssignableFrom(method.getDeclaringClass())
-          && ENUM_METHOD_NAMES.contains(name)) {
-        return false;
-      }
       if (name.startsWith("get")) {
         return name.length() > 3;
       }
@@ -683,12 +932,15 @@ public final class CelNativeTypesExtensions implements CelCompilerLibrary, CelRu
    */
   @VisibleForTesting
   @Immutable
+  @SuppressWarnings("Immutable") // Enum<?> constants are singletons
   static final class NativeTypeRegistry implements CelValueProvider, CelTypeProvider {
 
     private final ImmutableMap<String, Class<?>> classMap;
-    private final ImmutableMap<String, StructType> typeMap;
+    private final ImmutableMap<String, CelType> typeMap;
     private final ImmutableMap<Class<?>, StructType> classToTypeMap;
     private final ImmutableMap<Class<?>, ImmutableMap<String, PropertyAccessor>> accessorMap;
+    private final ImmutableMap<Enum<?>, Long> enumValueToIntMap;
+    private final ImmutableMap<Class<?>, ImmutableMap<Long, Enum<?>>> intToEnumValueMap;
     private final NativeValueConverter converter;
 
     private NativeTypeRegistry(NativeTypeScanner.ScanResult scanResult) {
@@ -696,6 +948,8 @@ public final class CelNativeTypesExtensions implements CelCompilerLibrary, CelRu
       this.typeMap = scanResult.typeMap;
       this.classToTypeMap = scanResult.classToTypeMap;
       this.accessorMap = scanResult.accessorMap;
+      this.enumValueToIntMap = scanResult.enumValueToIntMap;
+      this.intToEnumValueMap = scanResult.intToEnumValueMap;
       this.converter = new NativeValueConverter(this);
     }
 
@@ -733,7 +987,7 @@ public final class CelNativeTypesExtensions implements CelCompilerLibrary, CelRu
           accessor.setValue(instance, value);
         }
 
-        StructType structType = typeMap.get(typeName);
+        StructType structType = classToTypeMap.get(clazz);
         return Optional.of(new PojoStructValue(instance, accessors, structType));
       } catch (NoSuchMethodException e) {
         throw new IllegalStateException(
@@ -788,6 +1042,9 @@ public final class CelNativeTypesExtensions implements CelCompilerLibrary, CelRu
       if (defaultValue != null) {
         return defaultValue;
       }
+      if (targetType.isEnum()) {
+        return 0L;
+      }
       if (List.class.isAssignableFrom(targetType)) {
         return ImmutableList.of();
       }
@@ -837,6 +1094,13 @@ public final class CelNativeTypesExtensions implements CelCompilerLibrary, CelRu
         return super.toRuntimeValue(value);
       }
 
+      if (value instanceof Enum<?>) {
+        Long enumIntValue = registry.enumValueToIntMap.get(value);
+        if (enumIntValue != null) {
+          return enumIntValue;
+        }
+      }
+
       Class<?> clazz = value.getClass();
       ImmutableMap<String, PropertyAccessor> accessors = registry.accessorMap.get(clazz);
 
@@ -856,10 +1120,13 @@ public final class CelNativeTypesExtensions implements CelCompilerLibrary, CelRu
         value = super.maybeUnwrap(value);
       }
       if (targetType == Optional.class) {
+        TypeToken<?> token = TypeToken.of(genericType);
+        Type innerGenericType = ReflectionUtil.resolveGenericParameter(token, Optional.class, 0);
+        Class<?> innerRawType = ReflectionUtil.getRawType(innerGenericType);
         if (value instanceof Optional) {
-          return value;
+          return ((Optional<?>) value).map(v -> toNative(v, innerRawType, innerGenericType));
         }
-        return Optional.ofNullable(value);
+        return Optional.ofNullable(value).map(v -> toNative(v, innerRawType, innerGenericType));
       }
       if (targetType == UnsignedLong.class) {
         if (value instanceof UnsignedLong) {
@@ -868,6 +1135,24 @@ public final class CelNativeTypesExtensions implements CelCompilerLibrary, CelRu
       }
       if (targetType == byte[].class && value instanceof CelByteString) {
         return ((CelByteString) value).toByteArray();
+      }
+      if (targetType.isEnum()) {
+        if (targetType.isInstance(value)) {
+          return value;
+        }
+        if (value instanceof Number) {
+          ImmutableMap<Long, Enum<?>> intToEnum = registry.intToEnumValueMap.get(targetType);
+          if (intToEnum != null) {
+            long longVal = ((Number) value).longValue();
+            Enum<?> enumConstant = intToEnum.get(longVal);
+            if (enumConstant != null) {
+              return enumConstant;
+            }
+            throw new IllegalArgumentException(
+                String.format(
+                    "Invalid enum value %d for enum %s", longVal, targetType.getName()));
+          }
+        }
       }
 
       if (value instanceof List) {

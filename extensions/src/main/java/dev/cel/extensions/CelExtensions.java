@@ -364,6 +364,20 @@ public final class CelExtensions {
   }
 
   /**
+   * Extensions for supporting native Java types (POJOs) and enums in CEL configured with the
+   * provided {@link CelNativeTypesExtensions.CelNativeTypesOptions}.
+   *
+   * <p>Refer to README.md for details on property discovery, type mapping, and limitations.
+   *
+   * <p>Note: Passing classes with unsupported types or anonymous/local classes will result in an
+   * {@link IllegalArgumentException} when the runtime is built.
+   */
+  public static CelNativeTypesExtensions nativeTypes(
+      CelNativeTypesExtensions.CelNativeTypesOptions options) {
+    return CelNativeTypesExtensions.nativeTypes(options);
+  }
+
+  /**
    * Retrieves all function names used by every extension libraries.
    *
    * <p>Note: Certain extensions such as {@link CelProtoExtensions} and {@link

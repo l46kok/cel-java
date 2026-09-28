@@ -340,6 +340,7 @@ java_library(
     tags = [
     ],
     deps = [
+        "//:auto_value",
         "//checker:checker_builder",
         "//common/exceptions:attribute_not_found",
         "//common/exceptions:invalid_argument",

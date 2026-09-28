@@ -1167,12 +1167,42 @@ The type-mapping between Java and CEL is as follows:
 | `java.util.List`, `T[]` (except `byte[]`) | `list` |
 | `java.util.Map` | `map` |
 | `java.util.Optional` | `optional_type` |
+| `java.lang.Enum` (registered via `CelNativeTypesOptions`) | `int` (`EnumType`) |
+
+### Enum Support
+
+Java `enum` types can be registered with an explicit integer mapping via
+`CelNativeTypesOptions`:
+
+```java
+CelNativeTypesExtensions extensions =
+    CelExtensions.nativeTypes(
+        CelNativeTypesOptions.newBuilder()
+            .addClasses(MyPojo.class)
+            .addEnum(MyEnum.class, MyEnum::getNumber)
+            .build());
+```
+
+Or using an explicit constant-to-integer map:
+
+```java
+CelNativeTypesExtensions extensions =
+    CelExtensions.nativeTypes(
+        CelNativeTypesOptions.newBuilder()
+            .addClasses(MyPojo.class)
+            .addEnum(
+                MyEnum.class,
+                ImmutableMap.of(
+                    MyEnum.FOO, 1,
+                    MyEnum.BAR, 2))
+            .build());
+```
 
 ### Notes
 
 *   This is only supported for the planner runtime (e.g., `CelRuntimeFactory.plannerRuntimeBuilder()`).
 *   Native Java arrays are supported. `byte[]` maps to `bytes`, while other arrays map to `list`.
-*   Java `enum` properties are not currently supported and will be safely ignored during scanning.
+*   Java `enum` properties whose enum class is not registered via `CelNativeTypesOptions.Builder#addEnum` will be safely ignored during scanning.
 *   If there is a name collision with a Protobuf type, the protobuf type will take precedence.
 *   Instantiating new struct values (e.g., `Account{id: 1234}`) requires the class to have a no-argument constructor (public, protected, package-private, or private).
 *   Final fields are supported only in a **read-only** capacity; they cannot be populated when instantiating new struct values.

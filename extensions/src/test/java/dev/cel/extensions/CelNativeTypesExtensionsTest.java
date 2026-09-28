@@ -44,6 +44,7 @@ import dev.cel.common.values.StructValue;
 import dev.cel.compiler.CelCompiler;
 import dev.cel.compiler.CelCompilerFactory;
 import dev.cel.expr.conformance.proto3.TestAllTypes;
+import dev.cel.extensions.CelNativeTypesExtensions.CelNativeTypesOptions;
 import dev.cel.parser.CelStandardMacro;
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelRuntime;
@@ -1449,12 +1450,50 @@ public final class CelNativeTypesExtensionsTest {
   }
 
   public enum TestEnum {
-    FOO,
-    BAR;
+    FOO(10),
+    BAR(20);
+
+    private final int number;
+
+    TestEnum(int number) {
+      this.number = number;
+    }
+
+    public int getNumber() {
+      return number;
+    }
+  }
+
+  public enum TestComplexEnum {
+    PLUS(1) {
+      @Override
+      public int apply(int x, int y) {
+        return x + y;
+      }
+    },
+    MINUS(2) {
+      @Override
+      public int apply(int x, int y) {
+        return x - y;
+      }
+    };
+
+    private final int code;
+
+    TestComplexEnum(int code) {
+      this.code = code;
+    }
+
+    public int getCode() {
+      return code;
+    }
+
+    public abstract int apply(int x, int y);
   }
 
   public static class PojoWithEnum {
     private TestEnum enumVal = TestEnum.FOO;
+    private String name = "default";
 
     public TestEnum getEnumVal() {
       return enumVal;
@@ -1463,11 +1502,267 @@ public final class CelNativeTypesExtensionsTest {
     public void setEnumVal(TestEnum val) {
       this.enumVal = val;
     }
+
+    public String getName() {
+      return name;
+    }
+
+    public void setName(String name) {
+      this.name = name;
+    }
+  }
+
+  public static class PojoWithEnumContainers {
+    public List<TestEnum> enumList;
+    public TestEnum[] enumArray;
+    public Map<String, TestEnum> enumValueMap;
+    public Map<TestEnum, String> enumKeyMap;
+    public Optional<TestEnum> optionalEnum;
+    public TestComplexEnum complexEnum;
   }
 
   @Test
-  public void nativeTypes_enumSafelyIgnored() throws Exception {
-    assertThat(eval("PojoWithEnum{}.enumVal")).isNotNull();
+  public void nativeTypes_unregisteredEnum_safelyIgnored() throws Exception {
+    assertThat(eval("PojoWithEnum{name: 'test'}.name == 'test'")).isEqualTo(true);
+    assertThat(NATIVE_TYPE_EXTENSIONS.getRegistry().findType(TestEnum.class.getCanonicalName()))
+        .isEmpty();
+
+    if (isParseOnly) {
+      CelEvaluationException e =
+          assertThrows(CelEvaluationException.class, () -> eval("PojoWithEnum{}.enumVal"));
+      assertThat(e).hasCauseThat().isInstanceOf(CelAttributeNotFoundException.class);
+    } else {
+      CelValidationException e =
+          assertThrows(CelValidationException.class, () -> eval("PojoWithEnum{}.enumVal"));
+      assertThat(e).hasMessageThat().contains("undefined field 'enumVal'");
+    }
   }
 
+  @Test
+  public void nativeTypes_enumWithFunctionAdapter_selectAndCompare() throws Exception {
+    CelNativeTypesExtensions extensions =
+        CelExtensions.nativeTypes(
+            CelNativeTypesOptions.newBuilder()
+                .addClasses(PojoWithEnum.class)
+                .addEnum(TestEnum.class, TestEnum::getNumber)
+                .build());
+    Cel cel =
+        CelFactory.plannerCelBuilder()
+            .setContainer(CelContainer.ofName("dev.cel.extensions.CelNativeTypesExtensionsTest"))
+            .addCompilerLibraries(extensions)
+            .addRuntimeLibraries(extensions)
+            .build();
+
+    String expr =
+        "PojoWithEnum{}.enumVal == TestEnum.FOO"
+            + " && PojoWithEnum{}.enumVal == 10"
+            + " && PojoWithEnum{}.enumVal != TestEnum.BAR";
+    CelAbstractSyntaxTree ast = isParseOnly ? cel.parse(expr).getAst() : cel.compile(expr).getAst();
+
+    assertThat(cel.createProgram(ast).eval()).isEqualTo(true);
+  }
+
+  @Test
+  public void nativeTypes_enumWithMapAdapter_selectAndCompare() throws Exception {
+    CelNativeTypesExtensions extensions =
+        CelExtensions.nativeTypes(
+            CelNativeTypesOptions.newBuilder()
+                .addClasses(PojoWithEnum.class)
+                .addEnum(
+                    TestEnum.class,
+                    ImmutableMap.of(
+                        TestEnum.FOO, 100,
+                        TestEnum.BAR, 200))
+                .build());
+    Cel cel =
+        CelFactory.plannerCelBuilder()
+            .setContainer(CelContainer.ofName("dev.cel.extensions.CelNativeTypesExtensionsTest"))
+            .addCompilerLibraries(extensions)
+            .addRuntimeLibraries(extensions)
+            .build();
+
+    String expr = "PojoWithEnum{}.enumVal == TestEnum.FOO && PojoWithEnum{}.enumVal == 100";
+    CelAbstractSyntaxTree ast = isParseOnly ? cel.parse(expr).getAst() : cel.compile(expr).getAst();
+
+    assertThat(cel.createProgram(ast).eval()).isEqualTo(true);
+  }
+
+  @Test
+  public void nativeTypes_enum_createStruct() throws Exception {
+    CelNativeTypesExtensions extensions =
+        CelExtensions.nativeTypes(
+            CelNativeTypesOptions.newBuilder()
+                .addClasses(PojoWithEnum.class)
+                .addEnum(TestEnum.class, TestEnum::getNumber)
+                .build());
+    Cel cel =
+        CelFactory.plannerCelBuilder()
+            .setContainer(CelContainer.ofName("dev.cel.extensions.CelNativeTypesExtensionsTest"))
+            .addCompilerLibraries(extensions)
+            .addRuntimeLibraries(extensions)
+            .build();
+
+    String expr = "PojoWithEnum{enumVal: TestEnum.BAR, name: 'created'}";
+    CelAbstractSyntaxTree ast = isParseOnly ? cel.parse(expr).getAst() : cel.compile(expr).getAst();
+    PojoWithEnum result = (PojoWithEnum) cel.createProgram(ast).eval();
+
+    assertThat(result.getEnumVal()).isEqualTo(TestEnum.BAR);
+    assertThat(result.getName()).isEqualTo("created");
+
+    String invalidExpr = "PojoWithEnum{enumVal: 999}";
+    CelAbstractSyntaxTree invalidAst =
+        isParseOnly ? cel.parse(invalidExpr).getAst() : cel.compile(invalidExpr).getAst();
+    CelEvaluationException e =
+        assertThrows(CelEvaluationException.class, () -> cel.createProgram(invalidAst).eval());
+    assertThat(e).hasCauseThat().isInstanceOf(IllegalArgumentException.class);
+    assertThat(e).hasCauseThat().hasMessageThat().contains("Invalid enum value 999");
+  }
+
+  @Test
+  public void nativeTypes_enum_containersAndOptional() throws Exception {
+    CelNativeTypesExtensions extensions =
+        CelExtensions.nativeTypes(
+            CelNativeTypesOptions.newBuilder()
+                .addClasses(PojoWithEnumContainers.class)
+                .addEnum(TestEnum.class, TestEnum::getNumber)
+                .addEnum(TestComplexEnum.class, TestComplexEnum::getCode)
+                .build());
+    Cel cel =
+        CelFactory.plannerCelBuilder()
+            .setContainer(CelContainer.ofName("dev.cel.extensions.CelNativeTypesExtensionsTest"))
+            .addCompilerLibraries(extensions, CelExtensions.optional())
+            .addRuntimeLibraries(extensions, CelExtensions.optional())
+            .addVar(
+                "pojo",
+                StructTypeReference.create(PojoWithEnumContainers.class.getCanonicalName()))
+            .build();
+
+    String createExpr =
+        "PojoWithEnumContainers{"
+            + "  enumList: [TestEnum.FOO, TestEnum.BAR],"
+            + "  enumArray: [TestEnum.BAR],"
+            + "  enumValueMap: {'k': TestEnum.BAR},"
+            + "  enumKeyMap: {TestEnum.FOO: 'val'},"
+            + "  optionalEnum: optional.of(TestEnum.BAR),"
+            + "  complexEnum: TestComplexEnum.MINUS"
+            + "}";
+    CelAbstractSyntaxTree createAst =
+        isParseOnly ? cel.parse(createExpr).getAst() : cel.compile(createExpr).getAst();
+    PojoWithEnumContainers constructed =
+        (PojoWithEnumContainers) cel.createProgram(createAst).eval();
+
+    assertThat(constructed.enumList).containsExactly(TestEnum.FOO, TestEnum.BAR).inOrder();
+    assertThat(constructed.enumArray).asList().containsExactly(TestEnum.BAR);
+    assertThat(constructed.enumValueMap).containsExactly("k", TestEnum.BAR);
+    assertThat(constructed.enumKeyMap).containsExactly(TestEnum.FOO, "val");
+    assertThat(constructed.optionalEnum).hasValue(TestEnum.BAR);
+    assertThat(constructed.complexEnum).isEqualTo(TestComplexEnum.MINUS);
+
+    String selectExpr =
+        "pojo.enumList[1] == TestEnum.BAR"
+            + " && pojo.enumArray[0] == TestEnum.BAR"
+            + " && pojo.enumValueMap['k'] == TestEnum.BAR"
+            + " && pojo.enumKeyMap[TestEnum.FOO] == 'val'"
+            + " && pojo.optionalEnum.orValue(TestEnum.FOO) == TestEnum.BAR"
+            + " && pojo.complexEnum == TestComplexEnum.MINUS";
+    CelAbstractSyntaxTree selectAst =
+        isParseOnly ? cel.parse(selectExpr).getAst() : cel.compile(selectExpr).getAst();
+
+    assertThat(cel.createProgram(selectAst).eval(ImmutableMap.of("pojo", constructed)))
+        .isEqualTo(true);
+  }
+
+  @Test
+  public void nativeTypes_enum_nullSafeTraversalAndPresence() throws Exception {
+    CelNativeTypesExtensions extensions =
+        CelExtensions.nativeTypes(
+            CelNativeTypesOptions.newBuilder()
+                .addClasses(PojoWithEnum.class)
+                .addEnum(TestEnum.class, TestEnum::getNumber)
+                .build());
+    Cel cel =
+        CelFactory.plannerCelBuilder()
+            .setContainer(CelContainer.ofName("dev.cel.extensions.CelNativeTypesExtensionsTest"))
+            .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
+            .addCompilerLibraries(extensions)
+            .addRuntimeLibraries(extensions)
+            .addVar("pojo", StructTypeReference.create(PojoWithEnum.class.getCanonicalName()))
+            .build();
+
+    PojoWithEnum nullEnumPojo = new PojoWithEnum();
+    nullEnumPojo.setEnumVal(null);
+    PojoWithEnum nonNullEnumPojo = new PojoWithEnum();
+    nonNullEnumPojo.setEnumVal(TestEnum.BAR);
+
+    CelAbstractSyntaxTree defaultValAst =
+        isParseOnly
+            ? cel.parse("pojo.enumVal == 0").getAst()
+            : cel.compile("pojo.enumVal == 0").getAst();
+    CelAbstractSyntaxTree hasAst =
+        isParseOnly
+            ? cel.parse("has(pojo.enumVal)").getAst()
+            : cel.compile("has(pojo.enumVal)").getAst();
+
+    assertThat(cel.createProgram(defaultValAst).eval(ImmutableMap.of("pojo", nullEnumPojo)))
+        .isEqualTo(true);
+    assertThat(cel.createProgram(hasAst).eval(ImmutableMap.of("pojo", nullEnumPojo)))
+        .isEqualTo(false);
+    assertThat(cel.createProgram(hasAst).eval(ImmutableMap.of("pojo", nonNullEnumPojo)))
+        .isEqualTo(true);
+  }
+
+  @Test
+  public void nativeTypes_enum_protoInterop() throws Exception {
+    CelNativeTypesExtensions extensions =
+        CelExtensions.nativeTypes(
+            CelNativeTypesOptions.newBuilder()
+                .addClasses(PojoWithEnum.class)
+                .addEnum(
+                    TestEnum.class,
+                    ImmutableMap.of(
+                        TestEnum.FOO, TestAllTypes.NestedEnum.FOO_VALUE,
+                        TestEnum.BAR, TestAllTypes.NestedEnum.BAR_VALUE))
+                .build());
+    Cel cel =
+        CelFactory.plannerCelBuilder()
+            .setContainer(CelContainer.ofName("dev.cel.extensions.CelNativeTypesExtensionsTest"))
+            .addMessageTypes(TestAllTypes.getDescriptor())
+            .addCompilerLibraries(extensions)
+            .addRuntimeLibraries(extensions)
+            .addVar("pojo", StructTypeReference.create(PojoWithEnum.class.getCanonicalName()))
+            .addVar(
+                "proto",
+                StructTypeReference.create(TestAllTypes.getDescriptor().getFullName()))
+            .build();
+
+    PojoWithEnum pojo = new PojoWithEnum();
+    pojo.setEnumVal(TestEnum.BAR);
+    TestAllTypes proto =
+        TestAllTypes.newBuilder().setSingleNestedEnum(TestAllTypes.NestedEnum.BAR).build();
+
+    String expr =
+        "pojo.enumVal == proto.single_nested_enum"
+            + " && pojo.enumVal == cel.expr.conformance.proto3.TestAllTypes.NestedEnum.BAR";
+    CelAbstractSyntaxTree ast = isParseOnly ? cel.parse(expr).getAst() : cel.compile(expr).getAst();
+
+    assertThat(cel.createProgram(ast).eval(ImmutableMap.of("pojo", pojo, "proto", proto)))
+        .isEqualTo(true);
+  }
+
+  @Test
+  public void nativeTypes_optionsValidation_errors() {
+    IllegalArgumentException missingConstant =
+        assertThrows(
+            IllegalArgumentException.class,
+            () ->
+                CelNativeTypesOptions.newBuilder()
+                    .addEnum(TestEnum.class, ImmutableMap.of(TestEnum.FOO, 1)));
+    assertThat(missingConstant).hasMessageThat().contains("Missing mapping for enum constant");
+
+    IllegalArgumentException duplicateValues =
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> CelNativeTypesOptions.newBuilder().addEnum(TestEnum.class, e -> 1));
+    assertThat(duplicateValues).hasMessageThat().contains("Multiple entries with same value");
+  }
 }
