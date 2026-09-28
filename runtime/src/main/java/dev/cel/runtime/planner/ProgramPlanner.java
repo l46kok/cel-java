@@ -75,6 +75,7 @@ public final class ProgramPlanner {
   private final CelOptions options;
   private final CelValueConverter celValueConverter;
   private final ImmutableSet<String> lateBoundFunctionNames;
+  private final OptimizedSelectPlanner optimizedSelectPlanner;
 
   // CelAsyncEvaluationOptions is an immutable value object.
   @SuppressWarnings("Immutable")
@@ -137,7 +138,9 @@ public final class ProgramPlanner {
     CelSelect select = celExpr.select();
     PlannedInterpretable operand = plan(select.operand(), ctx);
 
-    InterpretableAttribute attribute = EvalAttribute.create(celExpr, resolveBaseAttribute(operand));
+    InterpretableAttribute attribute =
+        EvalAttribute.create(
+            celExpr, PlannerHelpers.resolveBaseAttribute(operand, this.attributeFactory));
 
     if (select.testOnly()) {
       attribute = EvalTestOnly.create(celExpr, attribute);
@@ -148,36 +151,8 @@ public final class ProgramPlanner {
     return attribute.addQualifier(celExpr, qualifier);
   }
 
-  private Attribute resolveBaseAttribute(PlannedInterpretable operand) {
-    if (operand instanceof EvalAttribute) {
-      return ((EvalAttribute) operand).attribute();
-    }
-    return attributeFactory.newRelativeAttribute(operand);
-  }
-
   private PlannedInterpretable planConstant(CelExpr expr, CelConstant celConstant) {
-    return EvalConstant.create(expr, resolveConstant(celConstant));
-  }
-
-  private static Object resolveConstant(CelConstant celConstant) {
-    switch (celConstant.getKind()) {
-      case NULL_VALUE:
-        return celConstant.nullValue();
-      case BOOLEAN_VALUE:
-        return celConstant.booleanValue();
-      case INT64_VALUE:
-        return celConstant.int64Value();
-      case UINT64_VALUE:
-        return celConstant.uint64Value();
-      case DOUBLE_VALUE:
-        return celConstant.doubleValue();
-      case STRING_VALUE:
-        return celConstant.stringValue();
-      case BYTES_VALUE:
-        return celConstant.bytesValue();
-      default:
-        throw new IllegalStateException("Unsupported kind: " + celConstant.getKind());
-    }
+    return EvalConstant.create(expr, PlannerHelpers.resolveConstant(celConstant));
   }
 
   private PlannedInterpretable planIdent(CelExpr celExpr, PlannerContext ctx) {
@@ -254,6 +229,14 @@ public final class ProgramPlanner {
   private PlannedInterpretable planCall(CelExpr expr, PlannerContext ctx) {
     ResolvedFunction resolvedFunction = resolveFunction(expr, ctx.referenceMap());
     String functionName = resolvedFunction.functionName();
+
+    // Intercept optimizer-rewritten select chains (cel.@attribute and cel.@hasField) for direct
+    // traversal via OptimizedSelectPlanner (proto field number lookup on OptimizedSelectable,
+    // map key lookup on Map, and SelectableValue fallback).
+    if (functionName.equals(OptimizedSelectPlanner.CEL_ATTRIBUTE_FUNCTION_NAME)
+        || functionName.equals(OptimizedSelectPlanner.CEL_HAS_FIELD_FUNCTION_NAME)) {
+      return optimizedSelectPlanner.plan(expr, functionName, operandExpr -> plan(operandExpr, ctx));
+    }
 
     CelExpr target = resolvedFunction.target().orElse(null);
     int argCount = expr.call().args().size();
@@ -418,7 +401,8 @@ public final class ProgramPlanner {
     if (functionName.equals(Operator.OPTIONAL_SELECT.getFunction())) {
       String field = expr.call().args().get(1).constant().stringValue();
       InterpretableAttribute attribute =
-          EvalAttribute.create(expr, resolveBaseAttribute(evaluatedArgs[0]));
+          EvalAttribute.create(
+              expr, PlannerHelpers.resolveBaseAttribute(evaluatedArgs[0], this.attributeFactory));
       Qualifier qualifier = StringQualifier.create(field, celValueConverter);
       PlannedInterpretable selectAttribute = attribute.addQualifier(expr, qualifier);
       PlannedInterpretable presenceAttribute =
@@ -773,5 +757,7 @@ public final class ProgramPlanner {
     this.asyncExecutor = asyncExecutor;
     this.attributeFactory =
         AttributeFactory.newAttributeFactory(container, typeProvider, celValueConverter);
+    this.optimizedSelectPlanner =
+        OptimizedSelectPlanner.create(this.attributeFactory, celValueConverter);
   }
 }
