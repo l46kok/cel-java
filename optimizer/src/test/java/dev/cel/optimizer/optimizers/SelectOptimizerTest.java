@@ -38,6 +38,7 @@ import com.google.testing.junit.testparameterinjector.TestParameterInjector;
 import dev.cel.bundle.Cel;
 import dev.cel.bundle.CelBuilder;
 import dev.cel.common.CelAbstractSyntaxTree;
+import dev.cel.common.CelContainer;
 import dev.cel.common.CelFunctionDecl;
 import dev.cel.common.CelMutableAst;
 import dev.cel.common.CelOptions;
@@ -56,6 +57,7 @@ import dev.cel.expr.conformance.proto2.TestAllTypesProto;
 import dev.cel.expr.conformance.proto3.TestAllTypes;
 import dev.cel.extensions.CelExtensions;
 import dev.cel.optimizer.CelAstOptimizer;
+import dev.cel.optimizer.CelOptimizationException;
 import dev.cel.optimizer.CelOptimizer;
 import dev.cel.optimizer.CelOptimizerFactory;
 import dev.cel.optimizer.optimizers.SelectOptimizer.SelectOptimizerOptions;
@@ -94,15 +96,7 @@ public final class SelectOptimizerTest {
   @Before
   public void setUp() {
     cel = setupEnv(runtimeFlavor.builder());
-    celOptimizer =
-        CelOptimizerFactory.standardCelOptimizerBuilder(cel)
-            .addAstOptimizers(
-                SelectOptimizer.newInstance(
-                    SelectOptimizerOptions.newBuilder().build(),
-                    TestAllTypes.getDescriptor().getFile(),
-                    PROTO2_TEST_ALL_TYPES_DESCRIPTOR.getFile(),
-                    NestedTestAllTypes.getDescriptor().getFile()))
-            .build();
+    celOptimizer = newSelectOptimizer(cel);
   }
 
   private static Cel setupEnv(CelBuilder celBuilder) {
@@ -450,6 +444,124 @@ public final class SelectOptimizerTest {
 
     assertThat(CEL_UNPARSER.unparse(optimizedAst))
         .isEqualTo("cel.@attribute(msg, [[2, \"single_int64\", 3, 0]], int)");
+  }
+
+  @Test
+  public void optimize_typeIdentShadowedByComprehensionVar_throws(
+      @TestParameter({
+            "[\"a\"].map(int, msg.single_int64)",
+            "[true].map(string, msg.single_string)",
+            "[1].map(google, msg.single_duration)",
+            "[1].map(cel, msg.single_nested_message)",
+            "cel.bind(int, 1, msg.single_int64 + int)",
+            "[1].map(int, [2].map(x, msg.single_int64))",
+            "[1].map(int, [msg.single_int64].map(x, x + 1))"
+          })
+          String expression)
+      throws Exception {
+    Cel bindingsCel = cel.toCelBuilder().addCompilerLibraries(CelExtensions.bindings()).build();
+    CelAbstractSyntaxTree ast = bindingsCel.compile(expression).getAst();
+    CelOptimizer optimizer = newSelectOptimizer(bindingsCel);
+
+    CelOptimizationException e =
+        assertThrows(CelOptimizationException.class, () -> optimizer.optimize(ast));
+
+    assertThat(e).hasMessageThat().contains("is shadowed by an enclosing comprehension variable");
+  }
+
+  @Test
+  public void optimize_comprehensionVarNotShadowingTypeIdent_rewrites() throws Exception {
+    CelAbstractSyntaxTree ast = cel.compile("[1].map(x, msg.single_int64)").getAst();
+
+    CelAbstractSyntaxTree optimizedAst = celOptimizer.optimize(ast);
+
+    assertThat(CEL_UNPARSER.unparse(optimizedAst))
+        .isEqualTo("[1].map(x, cel.@attribute(msg, [[2, \"single_int64\", 3, 0]], int))");
+  }
+
+  @Test
+  public void optimize_hasFieldInsideComprehensionShadowingFieldType_rewritesToHasField()
+      throws Exception {
+    CelAbstractSyntaxTree ast = cel.compile("[1].map(int, has(msg.single_int64))").getAst();
+
+    CelAbstractSyntaxTree optimizedAst = celOptimizer.optimize(ast);
+
+    assertThat(CEL_UNPARSER.unparse(optimizedAst))
+        .isEqualTo("[1].map(int, cel.@hasField(msg, [[2, \"single_int64\"]]))");
+  }
+
+  @Test
+  public void optimize_typeIdentInComprehensionRange_rewrites() throws Exception {
+    CelAbstractSyntaxTree ast = cel.compile("[msg.single_int64].map(int, int + 1)").getAst();
+
+    CelAbstractSyntaxTree optimizedAst = celOptimizer.optimize(ast);
+
+    assertThat(CEL_UNPARSER.unparse(optimizedAst))
+        .isEqualTo("[cel.@attribute(msg, [[2, \"single_int64\", 3, 0]], int)].map(int, int + 1)");
+  }
+
+  @Test
+  public void optimize_typeIdentInBindInit_rewrites() throws Exception {
+    Cel bindingsCel = cel.toCelBuilder().addCompilerLibraries(CelExtensions.bindings()).build();
+    CelAbstractSyntaxTree ast =
+        bindingsCel.compile("cel.bind(int, msg.single_int64, int + 1)").getAst();
+
+    CelAbstractSyntaxTree optimizedAst = newSelectOptimizer(bindingsCel).optimize(ast);
+
+    assertThat(CEL_UNPARSER.unparse(optimizedAst))
+        .isEqualTo(
+            "cel.bind(int, cel.@attribute(msg, [[2, \"single_int64\", 3, 0]], int), int + 1)");
+  }
+
+  @Test
+  public void optimize_typeIdentShadowedByComprehensionIterVar2_throws() throws Exception {
+    Cel celWithComprehensions =
+        cel.toCelBuilder().addCompilerLibraries(CelExtensions.comprehensions()).build();
+    CelAbstractSyntaxTree ast =
+        celWithComprehensions.compile("[1].all(x, int, msg.single_int64 == 0)").getAst();
+    CelOptimizer optimizer = newSelectOptimizer(celWithComprehensions);
+
+    CelOptimizationException e =
+        assertThrows(CelOptimizationException.class, () -> optimizer.optimize(ast));
+
+    assertThat(e)
+        .hasMessageThat()
+        .contains(
+            "cel.@attribute type identifier 'int' is shadowed by an enclosing comprehension"
+                + " variable 'int'");
+  }
+
+  @Test
+  public void optimize_repeatedOrMapFieldShadowedByComprehensionVar_throws(
+      @TestParameter({
+            "[[1]].map(list, msg.repeated_int64)",
+            "[[1]].map(map, msg.map_int64_message)"
+          })
+          String expression)
+      throws Exception {
+    CelAbstractSyntaxTree ast = cel.compile(expression).getAst();
+
+    CelOptimizationException e =
+        assertThrows(CelOptimizationException.class, () -> celOptimizer.optimize(ast));
+
+    assertThat(e).hasMessageThat().contains("is shadowed by an enclosing comprehension variable");
+  }
+
+  @Test
+  public void optimize_messageTypeIdentUnderProtoPackageContainer_rewrites() throws Exception {
+    Cel containerCel =
+        setupEnv(
+            runtimeFlavor
+                .builder()
+                .setContainer(CelContainer.ofName("cel.expr.conformance.proto3")));
+    CelAbstractSyntaxTree ast = containerCel.compile("msg.single_nested_message").getAst();
+
+    CelAbstractSyntaxTree optimizedAst = newSelectOptimizer(containerCel).optimize(ast);
+
+    assertThat(CEL_UNPARSER.unparse(optimizedAst))
+        .isEqualTo(
+            "cel.@attribute(msg, [[21, \"single_nested_message\", 11]],"
+                + " cel.expr.conformance.proto3.TestAllTypes.NestedMessage)");
   }
 
   @Test
@@ -957,6 +1069,18 @@ public final class SelectOptimizerTest {
   }
 
   @Test
+  public void optimize_groupFieldLeaf_throwsUnsupportedOperationException() throws Exception {
+    CelAbstractSyntaxTree ast = cel.compile("proto2_msg.nestedgroup").getAst();
+    SelectOptimizer optimizer =
+        SelectOptimizer.newInstance(PROTO2_TEST_ALL_TYPES_DESCRIPTOR.getFile());
+
+    UnsupportedOperationException e =
+        assertThrows(UnsupportedOperationException.class, () -> optimizer.optimize(ast, cel));
+
+    assertThat(e).hasMessageThat().contains("Optimization of Group fields is unsupported");
+  }
+
+  @Test
   public void newInstance_fileDescriptorsVarargs_defaultOptions_success() throws Exception {
     FileDescriptor fd = PROTO2_TEST_ALL_TYPES_DESCRIPTOR.getFile();
     SelectOptimizer optimizer = SelectOptimizer.newInstance(fd);
@@ -1244,6 +1368,17 @@ public final class SelectOptimizerTest {
     CelAbstractSyntaxTree optimizedAst = optimizer.optimize(ast);
 
     assertThat(optimizedAst.getExpr()).isEqualTo(ast.getExpr());
+  }
+
+  private static CelOptimizer newSelectOptimizer(Cel cel) {
+    return CelOptimizerFactory.standardCelOptimizerBuilder(cel)
+        .addAstOptimizers(
+            SelectOptimizer.newInstance(
+                SelectOptimizerOptions.newBuilder().build(),
+                TestAllTypes.getDescriptor().getFile(),
+                PROTO2_TEST_ALL_TYPES_DESCRIPTOR.getFile(),
+                NestedTestAllTypes.getDescriptor().getFile()))
+        .build();
   }
 
   private static NestedTestAllTypes newNestedTestAllTypes(long singleInt64) {
