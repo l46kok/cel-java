@@ -535,6 +535,38 @@ public final class OptimizedSelectPlannerTest {
         .contains("Leaf MESSAGE type code (11) is incompatible with scalar typeIdent 'int'");
   }
 
+  @Test
+  public void plan_invalidAst_unsupportedWellKnownType_throwsEvaluationException() {
+    CelAbstractSyntaxTree ast =
+        CelAbstractSyntaxTree.newParsedAst(
+            CelExpr.ofCall(
+                1L,
+                OptimizedSelectPlanner.CEL_ATTRIBUTE_FUNCTION_NAME,
+                ImmutableList.of(
+                    CelExpr.ofIdent(2L, "msg"),
+                    CelExpr.ofList(
+                        3L,
+                        ImmutableList.of(
+                            CelExpr.ofList(
+                                4L,
+                                ImmutableList.of(
+                                    CelExpr.ofConstant(5L, CelConstant.ofValue(105L)),
+                                    CelExpr.ofConstant(
+                                        6L, CelConstant.ofValue("single_int64_wrapper")),
+                                    CelExpr.ofConstant(7L, CelConstant.ofValue(11L))),
+                                ImmutableList.of())),
+                        ImmutableList.of()),
+                    CelExpr.ofIdent(8L, "google.protobuf.Int64Value"))),
+            CelSource.newBuilder().build());
+
+    CelEvaluationException e = assertThrows(CelEvaluationException.class, () -> PLANNER.plan(ast));
+
+    assertThat(e).hasCauseThat().isInstanceOf(IllegalArgumentException.class);
+    assertThat(e)
+        .hasMessageThat()
+        .contains("Leaf well-known type 'google.protobuf.Int64Value' is not supported");
+  }
+
   private static CelAbstractSyntaxTree optimizeSelectAst(String expression) throws Exception {
     CelAbstractSyntaxTree ast = CEL.compile(expression).getAst();
     CelAbstractSyntaxTree optimizedAst = SELECT_OPTIMIZER.optimize(ast);

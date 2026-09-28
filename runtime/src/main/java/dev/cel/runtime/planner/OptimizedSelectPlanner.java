@@ -19,6 +19,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.primitives.UnsignedLong;
 import com.google.errorprone.annotations.Immutable;
 import dev.cel.common.ast.CelConstant;
@@ -26,6 +27,7 @@ import dev.cel.common.ast.CelExpr;
 import dev.cel.common.ast.CelExpr.CelCall;
 import dev.cel.common.ast.CelExpr.ExprKind.Kind;
 import dev.cel.common.types.CelType;
+import dev.cel.common.types.CelTypes;
 import dev.cel.common.types.SimpleType;
 import dev.cel.common.values.CelByteString;
 import dev.cel.common.values.CelValueConverter;
@@ -55,6 +57,18 @@ final class OptimizedSelectPlanner {
   private static final String LIST_TYPE_IDENT = "list";
   private static final String DURATION_TYPE_IDENT = SimpleType.DURATION.name();
   private static final String TIMESTAMP_TYPE_IDENT = SimpleType.TIMESTAMP.name();
+
+  /**
+   * Well-known message types whose CEL semantics (Any unpacking, JSON value conversion) are not
+   * implemented by the optimized traversal. Wrapper types are rejected via {@link
+   * CelTypes#isWrapperType}.
+   */
+  private static final ImmutableSet<String> UNSUPPORTED_WELL_KNOWN_TYPE_IDENTS =
+      ImmutableSet.of(
+          CelTypes.ANY_MESSAGE,
+          CelTypes.STRUCT_MESSAGE,
+          CelTypes.VALUE_MESSAGE,
+          CelTypes.LIST_VALUE_MESSAGE);
 
   private final AttributeFactory attributeFactory;
   private final CelValueConverter celValueConverter;
@@ -227,6 +241,11 @@ final class OptimizedSelectPlanner {
       checkArgument(
           !ScalarType.isScalarTypeIdent(typeIdent),
           "Leaf MESSAGE type code (11) is incompatible with scalar typeIdent '%s'",
+          typeIdent);
+      checkArgument(
+          !CelTypes.isWrapperType(typeIdent)
+              && !UNSUPPORTED_WELL_KNOWN_TYPE_IDENTS.contains(typeIdent),
+          "Leaf well-known type '%s' is not supported by the select-optimized runtime",
           typeIdent);
       if (typeIdent.equals(DURATION_TYPE_IDENT)) {
         checkArgument(

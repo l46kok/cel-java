@@ -26,9 +26,13 @@ import dev.cel.expr.ParsedExpr;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.primitives.UnsignedLong;
+import com.google.protobuf.Any;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FileDescriptor;
+import com.google.protobuf.Int64Value;
+import com.google.protobuf.Struct;
 import com.google.protobuf.TextFormat;
+import com.google.protobuf.Value;
 import com.google.testing.junit.testparameterinjector.TestParameter;
 import com.google.testing.junit.testparameterinjector.TestParameterInjector;
 import dev.cel.bundle.Cel;
@@ -592,6 +596,38 @@ public final class SelectOptimizerTest {
         "msg.single_timestamp",
         ImmutableMap.of("msg", TestAllTypes.getDefaultInstance()),
         Instant.EPOCH),
+    PROTO3_MAP_OF_ANY_UNPACKS_VALUE(
+        "msg.map_string_any['k']",
+        ImmutableMap.of(
+            "msg",
+            TestAllTypes.newBuilder().putMapStringAny("k", Any.pack(Int64Value.of(5))).build()),
+        5L),
+    PROTO3_MAP_OF_WRAPPER_UNWRAPS_MAP_VALUES(
+        "msg.map_string_int64_wrapper",
+        ImmutableMap.of(
+            "msg",
+            TestAllTypes.newBuilder().putMapStringInt64Wrapper("k", Int64Value.of(5)).build()),
+        ImmutableMap.of("k", 5L)),
+    PROTO3_MAP_OF_VALUE_CONVERTS_TO_JSON(
+        "msg.map_string_value['k']",
+        ImmutableMap.of(
+            "msg",
+            TestAllTypes.newBuilder()
+                .putMapStringValue("k", Value.newBuilder().setNumberValue(1.5).build())
+                .build()),
+        1.5),
+    PROTO3_MAP_OF_STRUCT_CONVERTS_TO_MAP(
+        "msg.map_string_struct['k'].a",
+        ImmutableMap.of(
+            "msg",
+            TestAllTypes.newBuilder()
+                .putMapStringStruct(
+                    "k",
+                    Struct.newBuilder()
+                        .putFields("a", Value.newBuilder().setNumberValue(1.5).build())
+                        .build())
+                .build()),
+        1.5),
     DEEPLY_NESTED_PROTO2_MESSAGE_POPULATED(
         "nested_msg.child.payload.single_int64",
         ImmutableMap.of("nested_msg", newNestedTestAllTypes(999L)),
