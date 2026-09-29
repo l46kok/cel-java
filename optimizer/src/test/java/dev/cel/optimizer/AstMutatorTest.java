@@ -869,6 +869,27 @@ public class AstMutatorTest {
   }
 
   @Test
+  public void mangleComprehensionVariable_nonIdentComprehensionResult() throws Exception {
+    // exists_one expands into a comprehension whose result is `@result == 1` (bool) rather than a
+    // bare accumulator identifier, while its accumulator is initialized to `0` (int).
+    CelAbstractSyntaxTree ast =
+        CEL.compile("[1, 2, 3].exists_one(i, i > 2) && [1, 2, 3].exists(j, j > 2)").getAst();
+
+    CelAbstractSyntaxTree mangledAst =
+        AST_MUTATOR
+            .mangleComprehensionIdentifierNames(CelMutableAst.fromCelAst(ast), "@it", "@it2", "@ac")
+            .mutableAst()
+            .toParsedAst();
+
+    assertThat(CEL_UNPARSER.unparse(mangledAst))
+        .isEqualTo(
+            "[1, 2, 3].exists_one(@it:0:0, @it:0:0 > 2) && [1, 2, 3].exists(@it:0:1, @it:0:1 >"
+                + " 2)");
+    assertThat(CEL.createProgram(CEL.check(mangledAst).getAst()).eval()).isEqualTo(true);
+    assertConsistentMacroCalls(mangledAst);
+  }
+
+  @Test
   public void mangleComprehensionVariable_macroSourceDisabled_macroCallMapIsEmpty()
       throws Exception {
     Cel cel =
@@ -1009,6 +1030,30 @@ public class AstMutatorTest {
     assertThat(CEL.createProgram(CEL.check(mangledAst).getAst()).eval(ImmutableMap.of("x", 1)))
         .isEqualTo(true);
     assertConsistentMacroCalls(ast);
+  }
+
+  @Test
+  public void mangleComprehensionVariable_nestedMacroWithShadowedVariables_differentTypes()
+      throws Exception {
+    CelAbstractSyntaxTree ast =
+        CEL.compile(
+                "['a', 'b'].exists(x, [1, 2].exists(x, x > 0) && x == 'a') && "
+                    + "[1, 2].exists(x, [1, 2].exists(x, x > 0) && x == 1)")
+            .getAst();
+
+    CelAbstractSyntaxTree mangledAst =
+        AST_MUTATOR
+            .mangleComprehensionIdentifierNames(CelMutableAst.fromCelAst(ast), "@it", "@it2", "@ac")
+            .mutableAst()
+            .toParsedAst();
+
+    assertThat(CEL_UNPARSER.unparse(mangledAst))
+        .isEqualTo(
+            "[\"a\", \"b\"].exists(@it:1:0, [1, 2].exists(@it:0:0, @it:0:0 > 0) && @it:1:0 =="
+                + " \"a\") && [1, 2].exists(@it:1:1, [1, 2].exists(@it:0:0, @it:0:0 > 0) &&"
+                + " @it:1:1 == 1)");
+    assertThat(CEL.createProgram(CEL.check(mangledAst).getAst()).eval()).isEqualTo(true);
+    assertConsistentMacroCalls(mangledAst);
   }
 
   @Test
