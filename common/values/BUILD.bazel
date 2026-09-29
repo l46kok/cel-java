@@ -45,7 +45,7 @@ java_library(
 
 cel_android_library(
     name = "combined_cel_value_converter_android",
-    visibility = ["//:internal"],
+    visibility = ["//visibility:private"],
     exports = ["//common/src/main/java/dev/cel/common/values:combined_cel_value_converter_android"],
 )
 
