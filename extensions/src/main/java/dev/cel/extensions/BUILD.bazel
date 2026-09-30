@@ -86,9 +86,41 @@ java_library(
     tags = [
     ],
     deps = [
+        ":extension_library",
+        ":strings_compiler_library",
+        ":strings_runtime_library",
+        "//checker:checker_builder",
+        "//common:cel_function_decl",
+        "//compiler:compiler_builder",
+        "//runtime",
+        "@maven//:com_google_errorprone_error_prone_annotations",
+        "@maven//:com_google_guava_guava",
+    ],
+)
+
+java_library(
+    name = "strings_compiler_library",
+    srcs = ["CelStringCompilerLibrary.java"],
+    tags = [
+    ],
+    deps = [
+        ":extension_library",
         "//checker:checker_builder",
         "//common:cel_function_decl",
         "//common:cel_overload_decl",
+        "//common/types",
+        "//compiler:compiler_builder",
+        "@maven//:com_google_errorprone_error_prone_annotations",
+        "@maven//:com_google_guava_guava",
+    ],
+)
+
+java_library(
+    name = "strings_runtime_library",
+    srcs = ["CelStringRuntimeLibrary.java"],
+    tags = [
+    ],
+    deps = [
         "//common/exceptions:bad_format",
         "//common/exceptions:invalid_argument",
         "//common/internal",
@@ -97,14 +129,37 @@ java_library(
         "//common/types:type_providers",
         "//common/values",
         "//common/values:cel_byte_string",
-        "//compiler:compiler_builder",
-        "//extensions:extension_library",
-        "//runtime",
+        "//runtime:evaluation_exception",
         "//runtime:evaluation_exception_builder",
         "//runtime:function_binding",
+        "//runtime:lite_runtime",
         "//runtime:type_resolver",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
+    ],
+)
+
+cel_android_library(
+    name = "strings_runtime_library_android",
+    srcs = ["CelStringRuntimeLibrary.java"],
+    tags = [
+    ],
+    deps = [
+        "//common/exceptions:bad_format",
+        "//common/exceptions:invalid_argument",
+        "//common/internal:date_time_helpers_android",
+        "//common/internal:internal_android",
+        "//common/types:type_providers_android",
+        "//common/types:types_android",
+        "//common/values:cel_byte_string",
+        "//common/values:values_android",
+        "//runtime:evaluation_exception",
+        "//runtime:evaluation_exception_builder",
+        "//runtime:function_binding_android",
+        "//runtime:lite_runtime_android",
+        "//runtime:type_resolver_android",
+        "@maven//:com_google_errorprone_error_prone_annotations",
+        "@maven_android//:com_google_guava_guava",
     ],
 )
 

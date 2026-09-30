@@ -34,8 +34,11 @@ import dev.cel.compiler.CelCompiler;
 import dev.cel.compiler.CelCompilerFactory;
 import dev.cel.extensions.CelStringExtensions.Function;
 import dev.cel.runtime.CelEvaluationException;
+import dev.cel.runtime.CelLiteRuntime;
+import dev.cel.runtime.CelLiteRuntimeFactory;
 import dev.cel.runtime.CelRuntime;
 import dev.cel.runtime.CelRuntime.Program;
+import dev.cel.runtime.CelRuntimeFactory;
 import dev.cel.testing.CelRuntimeFlavor;
 import java.util.List;
 import java.util.Locale;
@@ -1898,5 +1901,61 @@ public final class CelStringExtensionsTest extends CelExtensionTestBase {
     } finally {
       Locale.setDefault(originalLocale);
     }
+  }
+
+  @Test
+  public void separateLibraryAndRuntime_allFunctions_success() throws Exception {
+    CelCompiler celCompiler =
+        CelCompilerFactory.standardCelCompilerBuilder()
+            .addLibraries(CelStringCompilerLibrary.strings())
+            .build();
+    CelLiteRuntime celLiteRuntime =
+        CelLiteRuntimeFactory.newLiteRuntimeBuilder()
+            .addLibraries(CelStringRuntimeLibrary.strings())
+            .build();
+
+    CelAbstractSyntaxTree ast = celCompiler.compile("'HeLlO'.lowerAscii()").getAst();
+    Object result = celLiteRuntime.createProgram(ast).eval();
+
+    assertThat(result).isEqualTo("hello");
+  }
+
+  @Test
+  public void separateLibraryAndRuntime_versioned_success() throws Exception {
+    CelCompiler celCompiler =
+        CelCompilerFactory.standardCelCompilerBuilder()
+            .addLibraries(CelStringCompilerLibrary.strings(0))
+            .build();
+    CelRuntime celRuntime =
+        CelRuntimeFactory.standardCelRuntimeBuilder()
+            .addFunctionBindings(CelStringRuntimeLibrary.strings(0).newFunctionBindings())
+            .build();
+
+    CelAbstractSyntaxTree ast = celCompiler.compile("'HeLlO'.lowerAscii() == 'hello'").getAst();
+    boolean result = (boolean) celRuntime.createProgram(ast).eval();
+
+    assertThat(result).isTrue();
+  }
+
+  @Test
+  public void separateLibraryAndRuntime_subsetOfFunctions_success() throws Exception {
+    CelCompiler celCompiler =
+        CelCompilerFactory.standardCelCompilerBuilder()
+            .addLibraries(
+                CelStringCompilerLibrary.strings(CelStringCompilerLibrary.Function.LOWER_ASCII))
+            .build();
+    CelRuntime celRuntime =
+        CelRuntimeFactory.standardCelRuntimeBuilder()
+            .addFunctionBindings(
+                CelStringRuntimeLibrary.strings(CelStringRuntimeLibrary.Function.LOWER_ASCII)
+                    .newFunctionBindings())
+            .build();
+
+    CelAbstractSyntaxTree ast = celCompiler.compile("'HeLlO'.lowerAscii() == 'hello'").getAst();
+    boolean result = (boolean) celRuntime.createProgram(ast).eval();
+
+    assertThat(result).isTrue();
+    assertThrows(
+        CelValidationException.class, () -> celCompiler.compile("'HeLlO'.upperAscii()").getAst());
   }
 }

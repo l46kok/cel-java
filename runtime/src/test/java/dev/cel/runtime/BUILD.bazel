@@ -187,6 +187,7 @@ cel_android_local_test(
         "//extensions:lite_extensions_android",
         "//extensions:math_runtime_library_android",
         "//extensions:sets_function",
+        "//extensions:strings_runtime_library_android",
         "//runtime:evaluation_exception",
         "//runtime:function_binding_android",
         "//runtime:late_function_binding_android",

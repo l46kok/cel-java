@@ -47,6 +47,7 @@ import dev.cel.expr.conformance.proto3.TestAllTypes;
 import dev.cel.expr.conformance.proto3.TestAllTypesCelLiteDescriptor;
 import dev.cel.extensions.CelLiteExtensions;
 import dev.cel.extensions.CelMathRuntimeLibrary;
+import dev.cel.extensions.CelStringRuntimeLibrary;
 import dev.cel.extensions.SetsFunction;
 import dev.cel.runtime.standard.EqualsOperator;
 import dev.cel.runtime.standard.IntFunction;
@@ -739,6 +740,18 @@ public class CelLiteRuntimeAndroidTest {
     CelAbstractSyntaxTree ast = readCheckedExpr("compiled_math_greatest");
 
     assertThat(runtime.createProgram(ast).eval()).isEqualTo(2L);
+  }
+
+  @Test
+  public void eval_stringExtension() throws Exception {
+    CelLiteRuntime runtime =
+        CelLiteRuntimeFactory.newLiteRuntimeBuilder()
+            .addLibraries(CelStringRuntimeLibrary.strings())
+            .build();
+    // Expr: 'HeLlO'.lowerAscii()
+    CelAbstractSyntaxTree ast = readCheckedExpr("compiled_string_lower_ascii");
+
+    assertThat(runtime.createProgram(ast).eval()).isEqualTo("hello");
   }
 
   private enum CelOptionsTestCase {

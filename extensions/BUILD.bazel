@@ -33,6 +33,23 @@ java_library(
 )
 
 java_library(
+    name = "strings_compiler_library",
+    visibility = ["//:internal"],
+    exports = ["//extensions/src/main/java/dev/cel/extensions:strings_compiler_library"],
+)
+
+java_library(
+    name = "strings_runtime_library",
+    visibility = ["//:internal"],
+    exports = ["//extensions/src/main/java/dev/cel/extensions:strings_runtime_library"],
+)
+
+cel_android_library(
+    name = "strings_runtime_library_android",
+    exports = ["//extensions/src/main/java/dev/cel/extensions:strings_runtime_library_android"],
+)
+
+java_library(
     name = "math",
     exports = ["//extensions/src/main/java/dev/cel/extensions:math"],
 )

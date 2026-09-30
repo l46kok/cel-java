@@ -44,6 +44,8 @@ java_library(
         "//extensions:sets",
         "//extensions:sets_function",
         "//extensions:strings",
+        "//extensions:strings_compiler_library",
+        "//extensions:strings_runtime_library",
         "//parser:macro",
         "//parser:unparser",
         "//runtime",
