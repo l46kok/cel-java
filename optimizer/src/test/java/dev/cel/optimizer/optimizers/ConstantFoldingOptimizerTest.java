@@ -324,8 +324,6 @@ public class ConstantFoldingOptimizerTest {
   @TestParameters("{source: '[{\"a\": 1}].map(item, item.a) == [1]', expected: 'true'}")
   @TestParameters("{source: '[1].map(item, [1].exists(x, item == x))', expected: '[true]'}")
   @TestParameters("{source: '[{\"a\": 1}].map(x, x.a == 1)', expected: '[true]'}")
-  @TestParameters(
-      "{source: '[1, 2, x].map(item, item * 2)', expected: '[1, 2, x].map(item, item * 2)'}")
   @TestParameters("{source: 'false == false', expected: 'true'}")
   @TestParameters("{source: '10 == 42', expected: 'false'}")
   @TestParameters("{source: '42 == 42', expected: 'true'}")
@@ -376,7 +374,6 @@ public class ConstantFoldingOptimizerTest {
   @TestParameters(
       "{source: '[?optional.of(TestAllTypes{single_int32: 1})]', expected:"
           + " '[cel.expr.conformance.proto3.TestAllTypes{single_int32: 1}]'}")
-  @TestParameters("{source: '[?optional.of(x)]', expected: '[?optional.of(x)]'}")
   // TODO: Support folding lists with mixed types. This requires mutable lists.
   // @TestParameters("{source: 'dyn([1]) + [1.0]'}")
   public void constantFold_success(String source, String expected) throws Exception {

@@ -162,8 +162,6 @@ public class CelComprehensionsExtensionsTest extends CelExtensionTestBase {
             "[1, 2, 3].transformList(i, v, (i * v) + v) == [1, 4, 9]",
             "[1, 2, 3].transformList(i, v, i % 2 == 0, (i * v) + v) == [1, 9]",
             "[1, 2, 3].transformList(i, v, i > 0 && v < 3, (i * v) + v) == [4]",
-            "[1, 2, 3].transformList(i, v, i % 2 == 0, (i * v) + v) == [1, 9]",
-            "[1, 2, 3].transformList(i, v, (i * v) + v) == [1, 4, 9]",
             "[-1, -2, -3].transformList(i, v, [1, 2].transformList(i, v, i + v)) == [[1, 3], [1,"
                 + " 3], [1, 3]]",
             // map.transformList()

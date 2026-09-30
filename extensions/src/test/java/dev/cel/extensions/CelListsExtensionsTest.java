@@ -194,7 +194,6 @@ public class CelListsExtensionsTest extends CelExtensionTestBase {
 
   @Test
   @TestParameters("{expression: '[].distinct()', expected: '[]'}")
-  @TestParameters("{expression: '[].distinct()', expected: '[]'}")
   @TestParameters("{expression: '[1].distinct()', expected: '[1]'}")
   @TestParameters("{expression: '[-2, 5, -2, 1, 1, 5, -2, 1].distinct()', expected: '[-2, 5, 1]'}")
   @TestParameters(

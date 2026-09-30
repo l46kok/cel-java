@@ -249,7 +249,6 @@ public final class CelSetsExtensionsTest extends CelExtensionTestBase {
   @Test
   @TestParameters("{expression: 'sets.equivalent([1, 2, 3], [3u, 2.0, 1])', expected: true}")
   @TestParameters("{expression: 'sets.equivalent([1], [1u, 1.0])', expected: true}")
-  @TestParameters("{expression: 'sets.equivalent([1], [1u, 1.0])', expected: true}")
   @TestParameters(
       "{expression: 'sets.equivalent([[1.0], [2, 3]], [[1], [2, 3.0]])', expected: true}")
   @TestParameters("{expression: 'sets.equivalent([1, 2.0, 3], [1, 2])', expected: false}")

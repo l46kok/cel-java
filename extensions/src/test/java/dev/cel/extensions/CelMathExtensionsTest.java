@@ -382,7 +382,6 @@ public class CelMathExtensionsTest {
   @TestParameters("{expr: 'math.least(3, -3.0)', expectedResult: -3.0}")
   @TestParameters("{expr: 'math.least(9, -10.0)', expectedResult: -10.0}")
   @TestParameters("{expr: 'math.least(15, 14.0)', expectedResult: 14.0}")
-  @TestParameters("{expr: 'math.least(15, 14.0)', expectedResult: 14.0}")
   @TestParameters("{expr: 'math.least(13.0, 14u)', expectedResult: 13.0}")
   @TestParameters("{expr: 'math.least(14u, 13.0)', expectedResult: 13.0}")
   @TestParameters("{expr: 'math.least(1, -1.797693e308)', expectedResult: -1.797693e308}")
@@ -461,7 +460,6 @@ public class CelMathExtensionsTest {
   @TestParameters(
       "{expr: 'math.least(18446744073709551615u)', expectedResult: '18446744073709551615'}")
   @TestParameters("{expr: 'math.least(1u, 1.0)', expectedResult: '1'}")
-  @TestParameters("{expr: 'math.least(1u, 1u)', expectedResult: '1'}")
   @TestParameters("{expr: 'math.least(1u, 1u)', expectedResult: '1'}")
   @TestParameters("{expr: 'math.least(3u, 3.0)', expectedResult: '3'}")
   @TestParameters("{expr: 'math.least(9u, 10u)', expectedResult: '9'}")
@@ -784,7 +782,6 @@ public class CelMathExtensionsTest {
   @Test
   @TestParameters("{expr: 'math.trunc()'}")
   @TestParameters("{expr: 'math.trunc(1)'}")
-  @TestParameters("{expr: 'math.trunc()'}")
   @TestParameters("{expr: 'math.trunc(1u)'}")
   public void trunc_invalidArgs_throwsException(String expr) {
     CelValidationException e =
