@@ -46,6 +46,7 @@ import dev.cel.expr.conformance.proto3.NestedTestAllTypesCelLiteDescriptor;
 import dev.cel.expr.conformance.proto3.TestAllTypes;
 import dev.cel.expr.conformance.proto3.TestAllTypesCelLiteDescriptor;
 import dev.cel.extensions.CelLiteExtensions;
+import dev.cel.extensions.CelMathRuntimeLibrary;
 import dev.cel.extensions.SetsFunction;
 import dev.cel.runtime.standard.EqualsOperator;
 import dev.cel.runtime.standard.IntFunction;
@@ -726,6 +727,18 @@ public class CelLiteRuntimeAndroidTest {
             ImmutableMap.of(true, Duration.ofSeconds(15), false, Duration.ofSeconds(16)),
             ImmutableMap.of(true, Instant.ofEpochSecond(17), false, Instant.ofEpochSecond(18)))
         .inOrder();
+  }
+
+  @Test
+  public void eval_mathExtension() throws Exception {
+    CelLiteRuntime runtime =
+        CelLiteRuntimeFactory.newLiteRuntimeBuilder()
+            .addLibraries(CelMathRuntimeLibrary.math())
+            .build();
+    // Expr: math.greatest(1, 2)
+    CelAbstractSyntaxTree ast = readCheckedExpr("compiled_math_greatest");
+
+    assertThat(runtime.createProgram(ast).eval()).isEqualTo(2L);
   }
 
   private enum CelOptionsTestCase {

@@ -35,6 +35,8 @@ import dev.cel.compiler.CelCompiler;
 import dev.cel.compiler.CelCompilerFactory;
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelFunctionBinding;
+import dev.cel.runtime.CelLiteRuntime;
+import dev.cel.runtime.CelLiteRuntimeFactory;
 import dev.cel.runtime.CelRuntime;
 import dev.cel.runtime.CelRuntimeFactory;
 import dev.cel.testing.CelRuntimeFlavor;
@@ -1107,6 +1109,63 @@ public class CelMathExtensionsTest {
     Object result = eval(expr);
 
     assertThat(result).isEqualTo(expectedResult);
+  }
+
+  @Test
+  public void separateLibraryAndRuntime_allFunctions_success() throws Exception {
+    CelCompiler celCompiler =
+        CelCompilerFactory.standardCelCompilerBuilder()
+            .addLibraries(CelMathCompilerLibrary.math())
+            .build();
+    CelLiteRuntime celLiteRuntime =
+        CelLiteRuntimeFactory.newLiteRuntimeBuilder()
+            .addLibraries(CelMathRuntimeLibrary.math())
+            .build();
+
+    CelAbstractSyntaxTree ast = celCompiler.compile("math.greatest(1, 2.0)").getAst();
+    Object result = celLiteRuntime.createProgram(ast).eval();
+
+    assertThat(result).isEqualTo(2.0);
+  }
+
+  @Test
+  public void separateLibraryAndRuntime_versioned_success() throws Exception {
+    CelCompiler celCompiler =
+        CelCompilerFactory.standardCelCompilerBuilder()
+            .addLibraries(CelMathCompilerLibrary.math(0))
+            .build();
+    CelRuntime celRuntime =
+        CelRuntimeFactory.standardCelRuntimeBuilder()
+            .addFunctionBindings(CelMathRuntimeLibrary.math(0).newFunctionBindings())
+            .build();
+
+    CelAbstractSyntaxTree ast = celCompiler.compile("math.greatest(1, 2) == 2").getAst();
+    boolean result = (boolean) celRuntime.createProgram(ast).eval();
+
+    assertThat(result).isTrue();
+    assertThrows(
+        CelValidationException.class, () -> celCompiler.compile("math.ceil(1.5)").getAst());
+  }
+
+  @Test
+  public void separateLibraryAndRuntime_subsetOfFunctions_success() throws Exception {
+    CelCompiler celCompiler =
+        CelCompilerFactory.standardCelCompilerBuilder()
+            .addLibraries(CelMathCompilerLibrary.math(CelMathCompilerLibrary.Function.MAX))
+            .build();
+    CelRuntime celRuntime =
+        CelRuntimeFactory.standardCelRuntimeBuilder()
+            .addFunctionBindings(
+                CelMathRuntimeLibrary.math(CelMathRuntimeLibrary.Function.MAX)
+                    .newFunctionBindings())
+            .build();
+
+    CelAbstractSyntaxTree ast = celCompiler.compile("math.greatest(1, 2) == 2").getAst();
+    boolean result = (boolean) celRuntime.createProgram(ast).eval();
+
+    assertThat(result).isTrue();
+    assertThrows(
+        CelValidationException.class, () -> celCompiler.compile("math.least(1, 2)").getAst());
   }
 
   private Object eval(Cel cel, String expression, Map<String, ?> variables) throws Exception {

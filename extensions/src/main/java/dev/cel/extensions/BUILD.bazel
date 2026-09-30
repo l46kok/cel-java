@@ -131,19 +131,67 @@ java_library(
     ],
     deps = [
         ":extension_library",
+        ":math_compiler_library",
+        ":math_runtime_library",
         "//checker:checker_builder",
-        "//common:compiler_common",
-        "//common/ast",
-        "//common/exceptions:numeric_overflow",
-        "//common/internal:comparison_functions",
-        "//common/types",
+        "//common:cel_function_decl",
         "//compiler:compiler_builder",
         "//parser:macro",
         "//parser:parser_builder",
         "//runtime",
-        "//runtime:function_binding",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
+    ],
+)
+
+java_library(
+    name = "math_compiler_library",
+    srcs = ["CelMathCompilerLibrary.java"],
+    tags = [
+    ],
+    deps = [
+        ":extension_library",
+        "//checker:checker_builder",
+        "//common:cel_function_decl",
+        "//common:cel_issue",
+        "//common:cel_overload_decl",
+        "//common/ast",
+        "//common/types",
+        "//compiler:compiler_builder",
+        "//parser:macro",
+        "//parser:parser_builder",
+        "@maven//:com_google_errorprone_error_prone_annotations",
+        "@maven//:com_google_guava_guava",
+    ],
+)
+
+java_library(
+    name = "math_runtime_library",
+    srcs = ["CelMathRuntimeLibrary.java"],
+    tags = [
+    ],
+    deps = [
+        "//common/exceptions:numeric_overflow",
+        "//common/internal:comparison_functions",
+        "//runtime:function_binding",
+        "//runtime:lite_runtime",
+        "@maven//:com_google_errorprone_error_prone_annotations",
+        "@maven//:com_google_guava_guava",
+    ],
+)
+
+cel_android_library(
+    name = "math_runtime_library_android",
+    srcs = ["CelMathRuntimeLibrary.java"],
+    tags = [
+    ],
+    deps = [
+        "//common/exceptions:numeric_overflow",
+        "//common/internal:comparison_functions_android",
+        "//runtime:function_binding_android",
+        "//runtime:lite_runtime_android",
+        "@maven//:com_google_errorprone_error_prone_annotations",
+        "@maven_android//:com_google_guava_guava",
     ],
 )
 
