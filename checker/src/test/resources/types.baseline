@@ -46,3 +46,24 @@ __comprehension__(
   )~list(list(dyn))^add_list,
   // Result
   @result~list(list(dyn))^@result)~list(list(dyn))
+
+Source: google.protobuf.Duration == type(duration('1h')) && google.protobuf.Timestamp == type(timestamp(0))
+=====>
+_&&_(
+  _==_(
+    google.protobuf.Duration~type(google.protobuf.Duration)^google.protobuf.Duration,
+    type(
+      duration(
+        "1h"~string
+      )~google.protobuf.Duration^string_to_duration
+    )~type(google.protobuf.Duration)^type
+  )~bool^equals,
+  _==_(
+    google.protobuf.Timestamp~type(google.protobuf.Timestamp)^google.protobuf.Timestamp,
+    type(
+      timestamp(
+        0~int
+      )~google.protobuf.Timestamp^int64_to_timestamp
+    )~type(google.protobuf.Timestamp)^type
+  )~bool^equals
+)~bool^logical_and

@@ -228,6 +228,12 @@ declare getSeconds {
   function timestamp_to_seconds_with_tz google.protobuf.Timestamp.(string) -> int
   function duration_to_seconds google.protobuf.Duration.() -> int
 }
+declare google.protobuf.Duration {
+  value type(google.protobuf.Duration)
+}
+declare google.protobuf.Timestamp {
+  value type(google.protobuf.Timestamp)
+}
 declare int {
   value type(int)
 }

@@ -21,6 +21,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.Duration;
 import com.google.protobuf.FieldMask;
+import com.google.protobuf.Timestamp;
 import com.google.testing.junit.testparameterinjector.TestParameter;
 import com.google.testing.junit.testparameterinjector.TestParameterInjector;
 import dev.cel.checker.CelStandardDeclarations.StandardFunction;
@@ -180,6 +181,20 @@ public class CelCheckerLegacyImplTest {
         celCompiler.compile("google.protobuf.Duration{seconds: 10, nanos: 20}").getAst();
 
     assertThat(ast.getResultType()).isEqualTo(SimpleType.DURATION);
+  }
+
+  @Test
+  public void check_wellKnownTypeTimestampStructCreation_withLegacyTypeProvider_success()
+      throws Exception {
+    TypeProvider legacyTypeProvider =
+        new DescriptorTypeProvider(ImmutableList.of(Timestamp.getDescriptor()));
+    CelCompiler celCompiler =
+        CelCompilerFactory.standardCelCompilerBuilder().setTypeProvider(legacyTypeProvider).build();
+
+    CelAbstractSyntaxTree ast =
+        celCompiler.compile("google.protobuf.Timestamp{seconds: 100, nanos: 200}").getAst();
+
+    assertThat(ast.getResultType()).isEqualTo(SimpleType.TIMESTAMP);
   }
 
   @Test

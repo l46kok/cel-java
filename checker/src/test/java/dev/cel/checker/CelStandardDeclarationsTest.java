@@ -210,6 +210,18 @@ public class CelStandardDeclarationsTest {
   }
 
   @Test
+  public void standardDeclarations_includeDurationAndTimestampIdentifiers() {
+    CelStandardDeclarations celStandardDeclaration =
+        CelStandardDeclarations.newBuilder()
+            .includeIdentifiers(StandardIdentifier.DURATION, StandardIdentifier.TIMESTAMP)
+            .build();
+
+    assertThat(celStandardDeclaration.identifierDecls())
+        .containsExactly(
+            StandardIdentifier.DURATION.identDecl(), StandardIdentifier.TIMESTAMP.identDecl());
+  }
+
+  @Test
   public void standardDeclarations_excludeIdentifiers() {
     CelStandardDeclarations celStandardDeclaration =
         CelStandardDeclarations.newBuilder()
@@ -220,6 +232,45 @@ public class CelStandardDeclarationsTest {
         .doesNotContain(StandardIdentifier.INT.identDecl());
     assertThat(celStandardDeclaration.identifierDecls())
         .doesNotContain(StandardIdentifier.UINT.identDecl());
+  }
+
+  @Test
+  public void standardEnvironment_excludeDurationIdentifier_compilationFails() {
+    CelCompiler celCompiler =
+        CelCompilerFactory.standardCelCompilerBuilder()
+            .setStandardDeclarations(
+                CelStandardDeclarations.newBuilder()
+                    .excludeIdentifiers(StandardIdentifier.DURATION)
+                    .build())
+            .build();
+
+    CelValidationException e =
+        assertThrows(
+            CelValidationException.class,
+            () -> celCompiler.compile("google.protobuf.Duration == type(duration('1h'))").getAst());
+
+    assertThat(e).hasMessageThat().contains("undeclared reference to 'google'");
+  }
+
+  @Test
+  public void standardEnvironment_excludeTimestampIdentifier_compilationFails() {
+    CelCompiler celCompiler =
+        CelCompilerFactory.standardCelCompilerBuilder()
+            .setStandardDeclarations(
+                CelStandardDeclarations.newBuilder()
+                    .excludeIdentifiers(StandardIdentifier.TIMESTAMP)
+                    .build())
+            .build();
+
+    CelValidationException e =
+        assertThrows(
+            CelValidationException.class,
+            () ->
+                celCompiler
+                    .compile("google.protobuf.Timestamp == type(timestamp('2023-01-01T00:00:00Z'))")
+                    .getAst());
+
+    assertThat(e).hasMessageThat().contains("undeclared reference to 'google'");
   }
 
   @Test

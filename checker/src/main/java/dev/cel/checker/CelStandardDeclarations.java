@@ -1553,6 +1553,8 @@ public final class CelStandardDeclarations {
     DOUBLE(newStandardIdentDecl(SimpleType.DOUBLE)),
     BYTES(newStandardIdentDecl(SimpleType.BYTES)),
     STRING(newStandardIdentDecl(SimpleType.STRING)),
+    DURATION(newStandardIdentDecl(SimpleType.DURATION)),
+    TIMESTAMP(newStandardIdentDecl(SimpleType.TIMESTAMP)),
     DYN(newStandardIdentDecl(SimpleType.DYN)),
     TYPE(newStandardIdentDecl("type", SimpleType.DYN)),
     NULL_TYPE(newStandardIdentDecl("null_type", SimpleType.NULL_TYPE)),

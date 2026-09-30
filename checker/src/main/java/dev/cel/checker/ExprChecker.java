@@ -379,7 +379,8 @@ public final class ExprChecker {
         env.reportError(expr.id(), getPosition(expr), "'%s' is not a type", CelTypes.format(type));
       } else {
         messageType = ((TypeType) type).type();
-        if (!messageType.kind().equals(CelKind.STRUCT)) {
+        if (!messageType.kind().equals(CelKind.STRUCT)
+            && !CelTypes.isWellKnownType(messageType.name())) {
           env.reportError(
               expr.id(),
               getPosition(expr),
@@ -816,7 +817,7 @@ public final class ExprChecker {
     // provided
     String errorMessage =
         String.format("Message type resolution failure while referencing field '%s'.", fieldName);
-    if (type.kind().equals(CelKind.STRUCT)) {
+    if (type.kind().equals(CelKind.STRUCT) || CelTypes.isWellKnownType(typeName)) {
       errorMessage +=
           String.format(
               " Ensure that the descriptor for type '%s' was added to the environment", typeName);
@@ -858,7 +859,9 @@ public final class ExprChecker {
   /** TODO: Remove after cl/984117942 is submitted. */
   private static Optional<CelType> lookupLegacyFieldType(
       TypeProvider legacyTypeProvider, CelType type, String fieldName) {
-    TypeProvider.FieldType legacyFieldType = legacyTypeProvider.lookupFieldType(type, fieldName);
+    Type messageType = CelProtoTypes.createMessage(type.name());
+    TypeProvider.FieldType legacyFieldType =
+        legacyTypeProvider.lookupFieldType(messageType, fieldName);
     if (legacyFieldType != null) {
       return Optional.of(legacyFieldType.celType());
     }

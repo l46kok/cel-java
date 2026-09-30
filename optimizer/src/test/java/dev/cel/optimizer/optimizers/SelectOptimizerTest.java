@@ -300,6 +300,14 @@ public final class SelectOptimizerTest {
         "msg.single_duration",
         "cel.@attribute(msg, [[101, \"single_duration\", 11, duration(\"0s\")]],"
             + " google.protobuf.Duration)"),
+    PROTO3_TIMESTAMP_COMPARISON(
+        "msg.single_timestamp > timestamp(0)",
+        "cel.@attribute(msg, [[102, \"single_timestamp\", 11, timestamp(0)]],"
+            + " google.protobuf.Timestamp) > timestamp(0)"),
+    PROTO3_DURATION_COMPARISON(
+        "msg.single_duration == duration(\"1h\")",
+        "cel.@attribute(msg, [[101, \"single_duration\", 11, duration(\"0s\")]],"
+            + " google.protobuf.Duration) == duration(\"1h\")"),
 
     // Map selects
     MAP_FIELD_INDEXING(

@@ -15,12 +15,19 @@
 package dev.cel.checker;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertThrows;
 
 import dev.cel.expr.Type;
 import dev.cel.expr.Type.PrimitiveType;
+import com.google.protobuf.Duration;
+import com.google.protobuf.Timestamp;
+import com.google.testing.junit.testparameterinjector.TestParameter;
+import com.google.testing.junit.testparameterinjector.TestParameterInjector;
 import dev.cel.common.CelAbstractSyntaxTree;
+import dev.cel.common.CelContainer;
 import dev.cel.common.CelFunctionDecl;
 import dev.cel.common.CelOverloadDecl;
+import dev.cel.common.CelValidationException;
 import dev.cel.common.types.CelKind;
 import dev.cel.common.types.CelProtoTypes;
 import dev.cel.common.types.CelType;
@@ -37,9 +44,8 @@ import java.util.HashMap;
 import java.util.Map;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
-@RunWith(JUnit4.class)
+@RunWith(TestParameterInjector.class)
 public class TypesTest {
 
   @Test
@@ -348,6 +354,215 @@ public class TypesTest {
     CelAbstractSyntaxTree ast = celCompiler.compile("cast(123, string)").getAst();
 
     assertThat(ast.getResultType()).isEqualTo(SimpleType.STRING);
+  }
+
+  private enum WellKnownTypeIdentTestCase {
+    DURATION_QUALIFIED("google.protobuf.Duration", TypeType.create(SimpleType.DURATION)),
+    DURATION_LEADING_DOT(".google.protobuf.Duration", TypeType.create(SimpleType.DURATION)),
+    DURATION_UNQUALIFIED("Duration", TypeType.create(SimpleType.DURATION)),
+    TIMESTAMP_QUALIFIED("google.protobuf.Timestamp", TypeType.create(SimpleType.TIMESTAMP)),
+    TIMESTAMP_LEADING_DOT(".google.protobuf.Timestamp", TypeType.create(SimpleType.TIMESTAMP)),
+    TIMESTAMP_UNQUALIFIED("Timestamp", TypeType.create(SimpleType.TIMESTAMP));
+
+    private final String expression;
+    private final CelType expectedType;
+
+    WellKnownTypeIdentTestCase(String expression, CelType expectedType) {
+      this.expression = expression;
+      this.expectedType = expectedType;
+    }
+  }
+
+  @Test
+  public void compiler_wellKnownProtoTypeIdent_resolvesToSimpleType(
+      @TestParameter WellKnownTypeIdentTestCase testCase) throws Exception {
+    CelCompiler celCompiler =
+        CelCompilerFactory.standardCelCompilerBuilder()
+            .addMessageTypes(Duration.getDescriptor(), Timestamp.getDescriptor())
+            .setContainer(CelContainer.ofName("google.protobuf"))
+            .build();
+
+    CelAbstractSyntaxTree ast = celCompiler.compile(testCase.expression).getAst();
+
+    assertThat(ast.getResultType()).isEqualTo(testCase.expectedType);
+  }
+
+  private enum WellKnownTypeParamTestCase {
+    DURATION_QUALIFIED_CAST("cast('1h', google.protobuf.Duration)", SimpleType.DURATION),
+    DURATION_QUALIFIED_EQUALITY(
+        "cast('1h', google.protobuf.Duration) == duration('1h')", SimpleType.BOOL),
+    DURATION_UNQUALIFIED_COMPARISON("cast('1h', Duration) > duration('0s')", SimpleType.BOOL),
+    TIMESTAMP_QUALIFIED_CAST("cast(0, google.protobuf.Timestamp)", SimpleType.TIMESTAMP),
+    TIMESTAMP_QUALIFIED_EQUALITY(
+        "cast(0, google.protobuf.Timestamp) == timestamp(0)", SimpleType.BOOL),
+    TIMESTAMP_UNQUALIFIED_COMPARISON("cast(0, Timestamp) > timestamp(0)", SimpleType.BOOL);
+
+    private final String expression;
+    private final CelType expectedType;
+
+    WellKnownTypeParamTestCase(String expression, CelType expectedType) {
+      this.expression = expression;
+      this.expectedType = expectedType;
+    }
+  }
+
+  @Test
+  public void compiler_typeParamInTypeType_withWellKnownProto_resolvesWellKnownOverloads(
+      @TestParameter WellKnownTypeParamTestCase testCase) throws Exception {
+    TypeParamType typeParamT = TypeParamType.create("T");
+    CelCompiler celCompiler =
+        CelCompilerFactory.standardCelCompilerBuilder()
+            .addMessageTypes(Duration.getDescriptor(), Timestamp.getDescriptor())
+            .setContainer(CelContainer.ofName("google.protobuf"))
+            .addFunctionDeclarations(
+                CelFunctionDecl.newFunctionDeclaration(
+                    "cast",
+                    CelOverloadDecl.newGlobalOverload(
+                        "cast_t", typeParamT, SimpleType.DYN, TypeType.create(typeParamT))))
+            .build();
+
+    CelAbstractSyntaxTree ast = celCompiler.compile(testCase.expression).getAst();
+
+    assertThat(ast.getResultType()).isEqualTo(testCase.expectedType);
+  }
+
+  @Test
+  public void compiler_durationIdent_withoutMessageTypes_resolvesToSimpleType() throws Exception {
+    CelCompiler celCompiler = CelCompilerFactory.standardCelCompilerBuilder().build();
+
+    CelAbstractSyntaxTree ast = celCompiler.compile("google.protobuf.Duration").getAst();
+
+    assertThat(ast.getResultType()).isEqualTo(TypeType.create(SimpleType.DURATION));
+  }
+
+  @Test
+  public void compiler_timestampIdent_withoutMessageTypes_resolvesToSimpleType() throws Exception {
+    CelCompiler celCompiler = CelCompilerFactory.standardCelCompilerBuilder().build();
+
+    CelAbstractSyntaxTree ast = celCompiler.compile("google.protobuf.Timestamp").getAst();
+
+    assertThat(ast.getResultType()).isEqualTo(TypeType.create(SimpleType.TIMESTAMP));
+  }
+
+  @Test
+  public void compiler_durationStructCreation_withDescriptor_success() throws Exception {
+    CelCompiler celCompiler =
+        CelCompilerFactory.standardCelCompilerBuilder()
+            .addMessageTypes(Duration.getDescriptor())
+            .build();
+
+    CelAbstractSyntaxTree ast =
+        celCompiler.compile("google.protobuf.Duration{seconds: 10, nanos: 20}").getAst();
+
+    assertThat(ast.getResultType()).isEqualTo(SimpleType.DURATION);
+  }
+
+  @Test
+  public void compiler_timestampStructCreation_withDescriptor_success() throws Exception {
+    CelCompiler celCompiler =
+        CelCompilerFactory.standardCelCompilerBuilder()
+            .addMessageTypes(Timestamp.getDescriptor())
+            .build();
+
+    CelAbstractSyntaxTree ast =
+        celCompiler.compile("google.protobuf.Timestamp{seconds: 100, nanos: 200}").getAst();
+
+    assertThat(ast.getResultType()).isEqualTo(SimpleType.TIMESTAMP);
+  }
+
+  @Test
+  public void compiler_durationStructCreation_emptyFields_success() throws Exception {
+    CelCompiler celCompiler = CelCompilerFactory.standardCelCompilerBuilder().build();
+
+    CelAbstractSyntaxTree ast = celCompiler.compile("google.protobuf.Duration{}").getAst();
+
+    assertThat(ast.getResultType()).isEqualTo(SimpleType.DURATION);
+  }
+
+  @Test
+  public void compiler_timestampStructCreation_emptyFields_success() throws Exception {
+    CelCompiler celCompiler = CelCompilerFactory.standardCelCompilerBuilder().build();
+
+    CelAbstractSyntaxTree ast = celCompiler.compile("google.protobuf.Timestamp{}").getAst();
+
+    assertThat(ast.getResultType()).isEqualTo(SimpleType.TIMESTAMP);
+  }
+
+  @Test
+  public void compiler_durationStructCreation_withoutDescriptor_throws() {
+    CelCompiler celCompiler = CelCompilerFactory.standardCelCompilerBuilder().build();
+
+    CelValidationException e =
+        assertThrows(
+            CelValidationException.class,
+            () -> celCompiler.compile("google.protobuf.Duration{seconds: 10}").getAst());
+
+    assertThat(e)
+        .hasMessageThat()
+        .contains(
+            "Message type resolution failure while referencing field 'seconds'."
+                + " Ensure that the descriptor for type 'google.protobuf.Duration' was added to the"
+                + " environment");
+  }
+
+  @Test
+  public void compiler_timestampStructCreation_withoutDescriptor_throws() {
+    CelCompiler celCompiler = CelCompilerFactory.standardCelCompilerBuilder().build();
+
+    CelValidationException e =
+        assertThrows(
+            CelValidationException.class,
+            () -> celCompiler.compile("google.protobuf.Timestamp{seconds: 10}").getAst());
+
+    assertThat(e)
+        .hasMessageThat()
+        .contains(
+            "Message type resolution failure while referencing field 'seconds'. Ensure that the"
+                + " descriptor for type 'google.protobuf.Timestamp' was added to the environment");
+  }
+
+  @Test
+  public void compiler_durationStructCreation_typeMismatch_throws() {
+    CelCompiler celCompiler =
+        CelCompilerFactory.standardCelCompilerBuilder()
+            .addMessageTypes(Duration.getDescriptor())
+            .build();
+
+    CelValidationException e =
+        assertThrows(
+            CelValidationException.class,
+            () -> celCompiler.compile("google.protobuf.Duration{seconds: 'bad'}").getAst());
+
+    assertThat(e)
+        .hasMessageThat()
+        .contains("expected type of field 'seconds' is 'int' but provided type is 'string'");
+  }
+
+  @Test
+  public void compiler_timestampStructCreation_typeMismatch_throws() {
+    CelCompiler celCompiler =
+        CelCompilerFactory.standardCelCompilerBuilder()
+            .addMessageTypes(Timestamp.getDescriptor())
+            .build();
+
+    CelValidationException e =
+        assertThrows(
+            CelValidationException.class,
+            () -> celCompiler.compile("google.protobuf.Timestamp{seconds: 'bad'}").getAst());
+
+    assertThat(e)
+        .hasMessageThat()
+        .contains("expected type of field 'seconds' is 'int' but provided type is 'string'");
+  }
+
+  @Test
+  public void compiler_structCreation_primitiveType_throws() {
+    CelCompiler celCompiler = CelCompilerFactory.standardCelCompilerBuilder().build();
+
+    CelValidationException e =
+        assertThrows(CelValidationException.class, () -> celCompiler.compile("int{}").getAst());
+
+    assertThat(e).hasMessageThat().contains("'int' is not a message type");
   }
 
   @Test

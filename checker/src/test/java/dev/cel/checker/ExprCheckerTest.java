@@ -812,6 +812,10 @@ public class ExprCheckerTest extends CelBaselineTestCase {
     runTest();
     source = "{}.map(c,[c,type(c)])";
     runTest();
+    source =
+        "google.protobuf.Duration == type(duration('1h')) "
+            + "&& google.protobuf.Timestamp == type(timestamp(0))";
+    runTest();
   }
 
   // Enum Values
