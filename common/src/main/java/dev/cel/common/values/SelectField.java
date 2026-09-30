@@ -70,6 +70,12 @@ public abstract class SelectField {
   public abstract @Nullable Object defaultValue();
 
   /**
+   * Protobuf message type name of this hop (e.g. {@code "google.protobuf.Duration"}, {@code
+   * "com.example.User"}), or empty string if unknown or not a message field.
+   */
+  public abstract String protoTypeName();
+
+  /**
    * Creates a presence-test qualifier hop.
    *
    * @param fieldNumber Protobuf field number. Takes {@code long} for compatibility with CEL's int64
@@ -83,7 +89,11 @@ public abstract class SelectField {
         fieldNumber);
     checkNotNull(fieldName);
     return new AutoValue_SelectField(
-        (int) fieldNumber, fieldName, NO_TYPE_CODE, /* defaultValue= */ null);
+        (int) fieldNumber,
+        fieldName,
+        NO_TYPE_CODE,
+        /* defaultValue= */ null,
+        /* protoTypeName= */ "");
   }
 
   /**
@@ -98,13 +108,36 @@ public abstract class SelectField {
    */
   public static SelectField create(
       long fieldNumber, String fieldName, long typeCode, @Nullable Object defaultValue) {
+    return create(fieldNumber, fieldName, typeCode, defaultValue, /* protoTypeName= */ "");
+  }
+
+  /**
+   * Creates a fully-specified field selection hop with type code, optional default value, and
+   * protobuf type name.
+   *
+   * @param fieldNumber Protobuf field number. Takes {@code long} for compatibility with CEL's int64
+   *     constant representations.
+   * @param fieldName Protobuf field name.
+   * @param typeCode Protobuf wire type code or {@link #CEL_MAP_TYPE_CODE}. Takes {@code long} for
+   *     compatibility with CEL's int64 constant representations.
+   * @param defaultValue Default value for the field, or null if unspecified.
+   * @param protoTypeName Protobuf message type name, or empty string if unspecified.
+   */
+  public static SelectField create(
+      long fieldNumber,
+      String fieldName,
+      long typeCode,
+      @Nullable Object defaultValue,
+      String protoTypeName) {
     checkArgument(
         fieldNumber >= 1 && fieldNumber <= MAX_FIELD_NUMBER,
         "Field number out of protobuf range: %s",
         fieldNumber);
     checkNotNull(fieldName);
     checkArgument(isSupportedTypeCode(typeCode), "Invalid protobuf type code: %s", typeCode);
-    return new AutoValue_SelectField((int) fieldNumber, fieldName, (int) typeCode, defaultValue);
+    checkNotNull(protoTypeName);
+    return new AutoValue_SelectField(
+        (int) fieldNumber, fieldName, (int) typeCode, defaultValue, protoTypeName);
   }
 
   /**

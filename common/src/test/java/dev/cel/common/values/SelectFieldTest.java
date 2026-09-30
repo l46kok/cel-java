@@ -33,6 +33,7 @@ public final class SelectFieldTest {
     assertThat(field.fieldName()).isEqualTo("foo");
     assertThat(field.typeCode()).isEqualTo(SelectField.NO_TYPE_CODE);
     assertThat(field.defaultValue()).isNull();
+    assertThat(field.protoTypeName()).isEmpty();
   }
 
   @Test
@@ -43,6 +44,23 @@ public final class SelectFieldTest {
     assertThat(field.fieldName()).isEqualTo("bar");
     assertThat(field.typeCode()).isEqualTo(9);
     assertThat(field.defaultValue()).isEqualTo("default_str");
+    assertThat(field.protoTypeName()).isEmpty();
+  }
+
+  @Test
+  public void create_fiveArguments_success() {
+    SelectField field = SelectField.create(2L, "bar", 11, null, "google.protobuf.Duration");
+
+    assertThat(field.fieldNumber()).isEqualTo(2);
+    assertThat(field.fieldName()).isEqualTo("bar");
+    assertThat(field.typeCode()).isEqualTo(11);
+    assertThat(field.defaultValue()).isNull();
+    assertThat(field.protoTypeName()).isEqualTo("google.protobuf.Duration");
+  }
+
+  @Test
+  public void create_fiveArgNullProtoTypeName_throwsNullPointerException() {
+    assertThrows(NullPointerException.class, () -> SelectField.create(1L, "foo", 11, null, null));
   }
 
   @Test
@@ -128,6 +146,10 @@ public final class SelectFieldTest {
             SelectField.create(1L, "foo", 9, "default"),
             SelectField.create(1L, "foo", 9, "default"))
         .addEqualityGroup(SelectField.create(1L, "foo", 9, "other_default"))
+        .addEqualityGroup(
+            SelectField.create(1L, "foo", 11, null, "google.protobuf.Duration"),
+            SelectField.create(1L, "foo", 11, null, "google.protobuf.Duration"))
+        .addEqualityGroup(SelectField.create(1L, "foo", 11, null, "google.protobuf.Timestamp"))
         .testEquals();
   }
 }

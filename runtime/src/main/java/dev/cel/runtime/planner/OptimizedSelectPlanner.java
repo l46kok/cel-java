@@ -143,10 +143,23 @@ final class OptimizedSelectPlanner {
           rawTypeCode);
       Object defaultValue =
           (hopElements.size() == 4) ? resolveDefaultValue(hopElements.get(3)) : null;
+      String protoTypeName = "";
       if (isLeaf) {
         validateLeafTypeIdent((int) rawTypeCode, defaultValue, typeIdent);
+        // Preserve the full protobuf message name from typeIdent so descriptorless runtime
+        // evaluation (version skew) can identify well-known types (e.g. Duration, Timestamp) and
+        // populate RawProtoMessageLiteValue's type.
+        // Repeated message fields also use MESSAGE_TYPE_CODE (11) for their element wire type, but
+        // their typeIdent is "list" rather than the proto message name (map fields use
+        // CEL_MAP_TYPE_CODE (100) instead of 11, so they are already excluded).
+        boolean isSingularMessage =
+            rawTypeCode == SelectField.MESSAGE_TYPE_CODE && !typeIdent.equals(LIST_TYPE_IDENT);
+        if (isSingularMessage) {
+          protoTypeName = typeIdent;
+        }
       }
-      fieldsBuilder.add(SelectField.create(fieldNumber, fieldName, rawTypeCode, defaultValue));
+      fieldsBuilder.add(
+          SelectField.create(fieldNumber, fieldName, rawTypeCode, defaultValue, protoTypeName));
     }
     return fieldsBuilder.build();
   }

@@ -40,6 +40,7 @@ import dev.cel.protobuf.CelLiteDescriptor.FieldLiteDescriptor;
 import dev.cel.protobuf.CelLiteDescriptor.MessageLiteDescriptor;
 import java.io.ByteArrayOutputStream;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import org.junit.Test;
@@ -1259,5 +1260,333 @@ public final class RawProtoMessageLiteValueTest {
     assertThat(e)
         .hasMessageThat()
         .contains("Decoding unknown map field from wire bytes is unsupported");
+  }
+
+  @SuppressWarnings("ImmutableEnumChecker") // Test only
+  private enum WellKnownFieldWithoutDescriptorTestCase {
+    DURATION(
+        TestAllTypes.newBuilder()
+            .setSingleDuration(ProtoTimeUtils.toProtoDuration(Duration.ofSeconds(120L, 500L)))
+            .build(),
+        SelectField.create(
+            TestAllTypes.SINGLE_DURATION_FIELD_NUMBER,
+            "single_duration",
+            FieldLiteDescriptor.Type.MESSAGE.getNumber(),
+            Duration.ZERO,
+            "google.protobuf.Duration"),
+        Duration.ofSeconds(120L, 500L),
+        Duration.ZERO),
+    TIMESTAMP(
+        TestAllTypes.newBuilder()
+            .setSingleTimestamp(
+                ProtoTimeUtils.toProtoTimestamp(Instant.ofEpochSecond(1700000000L, 123456789L)))
+            .build(),
+        SelectField.create(
+            TestAllTypes.SINGLE_TIMESTAMP_FIELD_NUMBER,
+            "single_timestamp",
+            FieldLiteDescriptor.Type.MESSAGE.getNumber(),
+            Instant.EPOCH,
+            "google.protobuf.Timestamp"),
+        Instant.ofEpochSecond(1700000000L, 123456789L),
+        Instant.EPOCH);
+
+    private final TestAllTypes populatedProto;
+    private final SelectField selectField;
+    private final Object expectedPopulatedValue;
+    private final Object expectedDefaultValue;
+
+    WellKnownFieldWithoutDescriptorTestCase(
+        TestAllTypes populatedProto,
+        SelectField selectField,
+        Object expectedPopulatedValue,
+        Object expectedDefaultValue) {
+      this.populatedProto = populatedProto;
+      this.selectField = selectField;
+      this.expectedPopulatedValue = expectedPopulatedValue;
+      this.expectedDefaultValue = expectedDefaultValue;
+    }
+  }
+
+  @Test
+  public void selectByFieldNumber_wellKnownFieldWithoutDescriptor_decodesOrReturnsDefault(
+      @TestParameter WellKnownFieldWithoutDescriptorTestCase testCase) {
+    RawProtoMessageLiteValue populatedRaw =
+        RawProtoMessageLiteValue.create(
+            testCase.populatedProto.toByteString(),
+            "cel.expr.conformance.proto3.TestAllTypes",
+            EMPTY_CONVERTER);
+    RawProtoMessageLiteValue emptyRaw =
+        RawProtoMessageLiteValue.create(
+            TestAllTypes.getDefaultInstance().toByteString(),
+            "cel.expr.conformance.proto3.TestAllTypes",
+            EMPTY_CONVERTER);
+
+    Object populatedSelected = populatedRaw.selectByFieldNumber(testCase.selectField);
+    Object emptySelected = emptyRaw.selectByFieldNumber(testCase.selectField);
+
+    assertThat(populatedSelected).isEqualTo(testCase.expectedPopulatedValue);
+    assertThat(emptySelected).isEqualTo(testCase.expectedDefaultValue);
+  }
+
+  @Test
+  public void findByFieldNumber_wellKnownFieldWithoutDescriptor_returnsOptionalValue(
+      @TestParameter WellKnownFieldWithoutDescriptorTestCase testCase) {
+    RawProtoMessageLiteValue populatedRaw =
+        RawProtoMessageLiteValue.create(
+            testCase.populatedProto.toByteString(),
+            "cel.expr.conformance.proto3.TestAllTypes",
+            EMPTY_CONVERTER);
+    RawProtoMessageLiteValue emptyRaw =
+        RawProtoMessageLiteValue.create(
+            TestAllTypes.getDefaultInstance().toByteString(),
+            "cel.expr.conformance.proto3.TestAllTypes",
+            EMPTY_CONVERTER);
+
+    Optional<Object> populatedFound = populatedRaw.findByFieldNumber(testCase.selectField);
+    Optional<Object> emptyFound = emptyRaw.findByFieldNumber(testCase.selectField);
+
+    assertThat(populatedFound).hasValue(testCase.expectedPopulatedValue);
+    assertThat(emptyFound).isEmpty();
+  }
+
+  @Test
+  public void selectByFieldNumber_negativeInt32Varint_decodesSignedIntCorrectly() {
+    TestAllTypes proto = TestAllTypes.newBuilder().setSingleInt32(-42).build();
+    RawProtoMessageLiteValue raw =
+        RawProtoMessageLiteValue.create(
+            proto.toByteString(), "cel.expr.conformance.proto3.TestAllTypes", EMPTY_CONVERTER);
+    SelectField field =
+        SelectField.create(
+            TestAllTypes.SINGLE_INT32_FIELD_NUMBER,
+            "single_int32",
+            FieldLiteDescriptor.Type.INT32.getNumber(),
+            0L);
+
+    Object result = raw.selectByFieldNumber(field);
+
+    assertThat(result).isEqualTo(-42L);
+  }
+
+  @Test
+  public void selectByFieldNumber_negativeInt32MinValue_decodesSignedIntCorrectly() {
+    TestAllTypes proto = TestAllTypes.newBuilder().setSingleInt32(Integer.MIN_VALUE).build();
+    RawProtoMessageLiteValue raw =
+        RawProtoMessageLiteValue.create(
+            proto.toByteString(), "cel.expr.conformance.proto3.TestAllTypes", EMPTY_CONVERTER);
+    SelectField field =
+        SelectField.create(
+            TestAllTypes.SINGLE_INT32_FIELD_NUMBER,
+            "single_int32",
+            FieldLiteDescriptor.Type.INT32.getNumber(),
+            0L);
+
+    Object result = raw.selectByFieldNumber(field);
+
+    assertThat(result).isEqualTo((long) Integer.MIN_VALUE);
+  }
+
+  @Test
+  public void selectByFieldNumber_unpackedAndPackedRepeatedInt64_decodeIdentically()
+      throws Exception {
+    ByteArrayOutputStream unpackedBaos = new ByteArrayOutputStream();
+    CodedOutputStream unpackedCos = CodedOutputStream.newInstance(unpackedBaos);
+    unpackedCos.writeInt64(TestAllTypes.REPEATED_INT64_FIELD_NUMBER, 10L);
+    unpackedCos.writeInt64(TestAllTypes.REPEATED_INT64_FIELD_NUMBER, 20L);
+    unpackedCos.writeInt64(TestAllTypes.REPEATED_INT64_FIELD_NUMBER, 30L);
+    unpackedCos.flush();
+    RawProtoMessageLiteValue unpackedRaw =
+        RawProtoMessageLiteValue.create(
+            ByteString.copyFrom(unpackedBaos.toByteArray()),
+            "cel.expr.conformance.proto3.TestAllTypes",
+            EMPTY_CONVERTER);
+    TestAllTypes packedProto =
+        TestAllTypes.newBuilder()
+            .addRepeatedInt64(10L)
+            .addRepeatedInt64(20L)
+            .addRepeatedInt64(30L)
+            .build();
+    RawProtoMessageLiteValue packedRaw =
+        RawProtoMessageLiteValue.create(
+            packedProto.toByteString(),
+            "cel.expr.conformance.proto3.TestAllTypes",
+            EMPTY_CONVERTER);
+    SelectField field =
+        SelectField.create(
+            TestAllTypes.REPEATED_INT64_FIELD_NUMBER,
+            "repeated_int64",
+            FieldLiteDescriptor.Type.INT64.getNumber(),
+            ImmutableList.of());
+
+    Object unpackedResult = unpackedRaw.selectByFieldNumber(field);
+    Object packedResult = packedRaw.selectByFieldNumber(field);
+
+    assertThat(unpackedResult).isEqualTo(ImmutableList.of(10L, 20L, 30L));
+    assertThat(packedResult).isEqualTo(ImmutableList.of(10L, 20L, 30L));
+  }
+
+  @Test
+  public void hasFieldByNumber_unpackedAndPackedRepeatedInt64_returnsTrue() throws Exception {
+    ByteArrayOutputStream unpackedBaos = new ByteArrayOutputStream();
+    CodedOutputStream unpackedCos = CodedOutputStream.newInstance(unpackedBaos);
+    unpackedCos.writeInt64(TestAllTypes.REPEATED_INT64_FIELD_NUMBER, 10L);
+    unpackedCos.flush();
+    RawProtoMessageLiteValue unpackedRaw =
+        RawProtoMessageLiteValue.create(
+            ByteString.copyFrom(unpackedBaos.toByteArray()),
+            "cel.expr.conformance.proto3.TestAllTypes",
+            EMPTY_CONVERTER);
+    TestAllTypes packedProto = TestAllTypes.newBuilder().addRepeatedInt64(10L).build();
+    RawProtoMessageLiteValue packedRaw =
+        RawProtoMessageLiteValue.create(
+            packedProto.toByteString(),
+            "cel.expr.conformance.proto3.TestAllTypes",
+            EMPTY_CONVERTER);
+    SelectField hasField =
+        SelectField.create(TestAllTypes.REPEATED_INT64_FIELD_NUMBER, "repeated_int64");
+
+    boolean unpackedPresent = unpackedRaw.hasFieldByNumber(hasField);
+    boolean packedPresent = packedRaw.hasFieldByNumber(hasField);
+
+    assertThat(unpackedPresent).isTrue();
+    assertThat(packedPresent).isTrue();
+  }
+
+  @Test
+  public void findByFieldNumber_unpackedAndPackedRepeatedInt64_returnsExpectedValue()
+      throws Exception {
+    ByteArrayOutputStream unpackedBaos = new ByteArrayOutputStream();
+    CodedOutputStream unpackedCos = CodedOutputStream.newInstance(unpackedBaos);
+    unpackedCos.writeInt64(TestAllTypes.REPEATED_INT64_FIELD_NUMBER, 10L);
+    unpackedCos.flush();
+    RawProtoMessageLiteValue unpackedRaw =
+        RawProtoMessageLiteValue.create(
+            ByteString.copyFrom(unpackedBaos.toByteArray()),
+            "cel.expr.conformance.proto3.TestAllTypes",
+            EMPTY_CONVERTER);
+    TestAllTypes packedProto = TestAllTypes.newBuilder().addRepeatedInt64(10L).build();
+    RawProtoMessageLiteValue packedRaw =
+        RawProtoMessageLiteValue.create(
+            packedProto.toByteString(),
+            "cel.expr.conformance.proto3.TestAllTypes",
+            EMPTY_CONVERTER);
+    SelectField field =
+        SelectField.create(
+            TestAllTypes.REPEATED_INT64_FIELD_NUMBER,
+            "repeated_int64",
+            FieldLiteDescriptor.Type.INT64.getNumber(),
+            ImmutableList.of());
+
+    Optional<Object> unpackedFound = unpackedRaw.findByFieldNumber(field);
+    Optional<Object> packedFound = packedRaw.findByFieldNumber(field);
+
+    assertThat(unpackedFound).hasValue(ImmutableList.of(10L));
+    assertThat(packedFound).hasValue(ImmutableList.of(10L));
+  }
+
+  @Test
+  public void selectByFieldNumber_mixedUnpackedAndPackedRepeatedInt64_concatenatesInOrder()
+      throws Exception {
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    CodedOutputStream cos = CodedOutputStream.newInstance(baos);
+    cos.writeInt64(TestAllTypes.REPEATED_INT64_FIELD_NUMBER, 10L);
+    ByteArrayOutputStream packedChunk = new ByteArrayOutputStream();
+    CodedOutputStream packedCos = CodedOutputStream.newInstance(packedChunk);
+    packedCos.writeInt64NoTag(20L);
+    packedCos.writeInt64NoTag(30L);
+    packedCos.flush();
+    cos.writeByteArray(TestAllTypes.REPEATED_INT64_FIELD_NUMBER, packedChunk.toByteArray());
+    cos.writeInt64(TestAllTypes.REPEATED_INT64_FIELD_NUMBER, 40L);
+    cos.flush();
+    RawProtoMessageLiteValue raw =
+        RawProtoMessageLiteValue.create(
+            ByteString.copyFrom(baos.toByteArray()),
+            "cel.expr.conformance.proto3.TestAllTypes",
+            EMPTY_CONVERTER);
+    SelectField field =
+        SelectField.create(
+            TestAllTypes.REPEATED_INT64_FIELD_NUMBER,
+            "repeated_int64",
+            FieldLiteDescriptor.Type.INT64.getNumber(),
+            ImmutableList.of());
+
+    Object result = raw.selectByFieldNumber(field);
+
+    assertThat(result).isEqualTo(ImmutableList.of(10L, 20L, 30L, 40L));
+  }
+
+  @Test
+  public void selectByFieldNumber_fiveByteUnsignedInt32Varint_signExtendsCorrectly() {
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    baos.write((TestAllTypes.SINGLE_INT32_FIELD_NUMBER << 3));
+    // 5-byte varint encoding of 0xFFFFFFD6 (-42 in 32-bit two's complement).
+    // Verifies that 32-bit sign extension correctly yields -42L rather than +4294967254L.
+    baos.write(0xD6);
+    baos.write(0xFF);
+    baos.write(0xFF);
+    baos.write(0xFF);
+    baos.write(0x0F);
+    RawProtoMessageLiteValue raw =
+        RawProtoMessageLiteValue.create(
+            ByteString.copyFrom(baos.toByteArray()),
+            "cel.expr.conformance.proto3.TestAllTypes",
+            EMPTY_CONVERTER);
+    SelectField field =
+        SelectField.create(
+            TestAllTypes.SINGLE_INT32_FIELD_NUMBER,
+            "single_int32",
+            FieldLiteDescriptor.Type.INT32.getNumber(),
+            0L);
+
+    Object result = raw.selectByFieldNumber(field);
+
+    assertThat(result).isEqualTo(-42L);
+  }
+
+  @Test
+  public void selectByFieldNumber_unsetSubmessageWithProtoTypeName_returnsDefaultWithTypeName() {
+    RawProtoMessageLiteValue raw =
+        RawProtoMessageLiteValue.create(
+            ByteString.EMPTY, "cel.expr.conformance.proto3.TestAllTypes", EMPTY_CONVERTER);
+    SelectField field =
+        SelectField.create(
+            999L,
+            "custom_msg",
+            FieldLiteDescriptor.Type.MESSAGE.getNumber(),
+            null,
+            "test.CustomMessage");
+
+    Object result = raw.selectByFieldNumber(field);
+
+    assertThat(result).isInstanceOf(RawProtoMessageLiteValue.class);
+    assertThat(((RawProtoMessageLiteValue) result).celType().name())
+        .isEqualTo("test.CustomMessage");
+  }
+
+  @Test
+  public void selectByFieldNumber_wireSubmessageWithProtoTypeName_decodesWithTypeName()
+      throws Exception {
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    CodedOutputStream cos = CodedOutputStream.newInstance(baos);
+    cos.writeTag(999, WireFormat.WIRETYPE_LENGTH_DELIMITED);
+    cos.writeByteArrayNoTag(new byte[] {0x08, 0x2A});
+    cos.flush();
+    RawProtoMessageLiteValue raw =
+        RawProtoMessageLiteValue.create(
+            ByteString.copyFrom(baos.toByteArray()),
+            "cel.expr.conformance.proto3.TestAllTypes",
+            EMPTY_CONVERTER);
+    SelectField field =
+        SelectField.create(
+            999L,
+            "custom_msg",
+            FieldLiteDescriptor.Type.MESSAGE.getNumber(),
+            null,
+            "test.CustomMessage");
+
+    Object result = raw.selectByFieldNumber(field);
+
+    assertThat(result).isInstanceOf(RawProtoMessageLiteValue.class);
+    assertThat(((RawProtoMessageLiteValue) result).celType().name())
+        .isEqualTo("test.CustomMessage");
   }
 }

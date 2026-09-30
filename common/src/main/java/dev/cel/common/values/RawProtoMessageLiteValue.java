@@ -193,12 +193,27 @@ public abstract class RawProtoMessageLiteValue extends StructValue<String, RawPr
         fieldDescriptor != null
             ? fieldDescriptor.getEncodingType() == EncodingType.LIST
             : field.defaultValue() instanceof List;
-    String protoTypeName =
-        fieldDescriptor != null
-            ? fieldDescriptor.getFieldProtoTypeName()
-            : UNKNOWN_MESSAGE_TYPE_NAME;
+    String protoTypeName = resolveProtoTypeName(field, fieldDescriptor);
 
     return decodeWireEntries(unknowns, typeCode, protoTypeName, isRepeated, converter);
+  }
+
+  /**
+   * Resolves the protobuf message type name for a field.
+   *
+   * <p>Prefers the descriptor's message type name when present. Under runtime version skew (where
+   * the descriptor is omitted), falls back to the type name preserved in {@link SelectField} from
+   * the optimizer, or {@link #UNKNOWN_MESSAGE_TYPE_NAME} if unspecified.
+   */
+  private static String resolveProtoTypeName(
+      SelectField field, @Nullable FieldLiteDescriptor fieldDescriptor) {
+    if (fieldDescriptor != null) {
+      return fieldDescriptor.getFieldProtoTypeName();
+    }
+    if (!field.protoTypeName().isEmpty()) {
+      return field.protoTypeName();
+    }
+    return UNKNOWN_MESSAGE_TYPE_NAME;
   }
 
   private static Object resolveDefault(
@@ -211,7 +226,8 @@ public abstract class RawProtoMessageLiteValue extends StructValue<String, RawPr
 
     if (fieldDescriptor == null) {
       if (field.typeCode() == FieldLiteDescriptor.Type.MESSAGE.getNumber()) {
-        return create(ByteString.EMPTY, UNKNOWN_MESSAGE_TYPE_NAME, converter);
+        return create(
+            ByteString.EMPTY, resolveProtoTypeName(field, /* fieldDescriptor= */ null), converter);
       }
       throw CelAttributeNotFoundException.forFieldResolution(field.fieldName());
     }
@@ -249,6 +265,9 @@ public abstract class RawProtoMessageLiteValue extends StructValue<String, RawPr
             ? fieldDescriptor.getProtoFieldType().getNumber()
             : field.typeCode();
 
+    // In protobuf wire format, a zero-length entry for a singular field (e.g. empty string,
+    // bytes, or empty submessage) represents explicit presence on the wire. Only packed repeated
+    // fields with empty payload represent an empty/absent collection.
     if (!isRepeated) {
       return true;
     }
