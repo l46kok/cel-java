@@ -373,7 +373,7 @@ public final class CelVerifierZ3ImplTest {
         "nested_list == dyn([[1, 2, 3, 4, 5, dyn('not_an_int')]])"),
     // 1 == 1u holds without the inner lists being equal terms, so the flags aren't tied by EUF.
     BEYOND_BMC_LIMIT_NESTED_LIST_CROSS_TYPE_LITERAL_EQUALITY(
-        "dyn(nested_list) == [[dyn(1u), 2, 3, 4, 5, dyn('not_an_int')]]"),
+        "size(nested_list) == 1 && dyn(nested_list) == [[1u, 2, 3, 4, 5, dyn('not_an_int')]]"),
     BEYOND_BMC_LIMIT_DYN_MAP_LITERAL_EQUALITY(
         "string_int_map == dyn({'a': 1, 'b': 2, 'c': 3, 'd': 4, 'e': 5, 'f': dyn('not_an_int')})"),
     BEYOND_BMC_LIMIT_DYN_NESTED_MAP_VALUE_EQUALITY(
