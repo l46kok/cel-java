@@ -45,10 +45,9 @@ import dev.cel.expr.conformance.proto3.NestedTestAllTypes;
 import dev.cel.expr.conformance.proto3.NestedTestAllTypesCelLiteDescriptor;
 import dev.cel.expr.conformance.proto3.TestAllTypes;
 import dev.cel.expr.conformance.proto3.TestAllTypesCelLiteDescriptor;
-import dev.cel.extensions.CelLiteExtensions;
 import dev.cel.extensions.CelMathRuntimeLibrary;
+import dev.cel.extensions.CelSetsRuntimeLibrary;
 import dev.cel.extensions.CelStringRuntimeLibrary;
-import dev.cel.extensions.SetsFunction;
 import dev.cel.runtime.standard.EqualsOperator;
 import dev.cel.runtime.standard.IntFunction;
 import dev.cel.runtime.standard.IntFunction.IntOverload;
@@ -128,7 +127,7 @@ public class CelLiteRuntimeAndroidTest {
   public void toRuntimeBuilder_propertiesCopied() {
     CelOptions celOptions = CelOptions.current().enableCelValue(true).build();
     CelLiteRuntimeLibrary runtimeExtension =
-        CelLiteExtensions.sets(celOptions, SetsFunction.INTERSECTS);
+        CelSetsRuntimeLibrary.sets(celOptions, CelSetsRuntimeLibrary.Function.INTERSECTS);
     CelValueProvider celValueProvider = ProtoMessageLiteValueProvider.newInstance();
     IntFunction intFunction = IntFunction.create(IntOverload.INT64_TO_INT64);
     EqualsOperator equalsOperator = EqualsOperator.create();
@@ -752,6 +751,18 @@ public class CelLiteRuntimeAndroidTest {
     CelAbstractSyntaxTree ast = readCheckedExpr("compiled_string_lower_ascii");
 
     assertThat(runtime.createProgram(ast).eval()).isEqualTo("hello");
+  }
+
+  @Test
+  public void eval_setsExtension() throws Exception {
+    CelLiteRuntime runtime =
+        CelLiteRuntimeFactory.newLiteRuntimeBuilder()
+            .addLibraries(CelSetsRuntimeLibrary.sets())
+            .build();
+    // Expr: sets.contains([1, 2], [2])
+    CelAbstractSyntaxTree ast = readCheckedExpr("compiled_sets_contains");
+
+    assertThat(runtime.createProgram(ast).eval()).isEqualTo(true);
   }
 
   private enum CelOptionsTestCase {

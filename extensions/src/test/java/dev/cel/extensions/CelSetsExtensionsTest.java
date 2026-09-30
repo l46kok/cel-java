@@ -32,10 +32,16 @@ import dev.cel.common.CelValidationException;
 import dev.cel.common.CelValidationResult;
 import dev.cel.common.types.ListType;
 import dev.cel.common.types.SimpleType;
+import dev.cel.compiler.CelCompiler;
+import dev.cel.compiler.CelCompilerFactory;
 import dev.cel.expr.conformance.proto3.TestAllTypes;
+import dev.cel.extensions.CelSetsExtensions.Function;
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelFunctionBinding;
+import dev.cel.runtime.CelLiteRuntime;
+import dev.cel.runtime.CelLiteRuntimeFactory;
 import dev.cel.runtime.CelRuntime;
+import dev.cel.runtime.CelRuntimeFactory;
 import dev.cel.testing.CelRuntimeFlavor;
 import java.util.List;
 import org.junit.Assume;
@@ -376,8 +382,7 @@ public final class CelSetsExtensionsTest extends CelExtensionTestBase {
 
   @Test
   public void setsExtension_containsFunctionSubset_succeeds() throws Exception {
-    CelSetsExtensions setsExtensions =
-        CelExtensions.sets(CelOptions.DEFAULT, SetsFunction.CONTAINS);
+    CelSetsExtensions setsExtensions = CelExtensions.sets(CelOptions.DEFAULT, Function.CONTAINS);
     Cel cel =
         runtimeFlavor
             .builder()
@@ -392,8 +397,7 @@ public final class CelSetsExtensionsTest extends CelExtensionTestBase {
 
   @Test
   public void setsExtension_equivalentFunctionSubset_succeeds() throws Exception {
-    CelSetsExtensions setsExtensions =
-        CelExtensions.sets(CelOptions.DEFAULT, SetsFunction.EQUIVALENT);
+    CelSetsExtensions setsExtensions = CelExtensions.sets(CelOptions.DEFAULT, Function.EQUIVALENT);
     Cel cel =
         runtimeFlavor
             .builder()
@@ -408,8 +412,7 @@ public final class CelSetsExtensionsTest extends CelExtensionTestBase {
 
   @Test
   public void setsExtension_intersectsFunctionSubset_succeeds() throws Exception {
-    CelSetsExtensions setsExtensions =
-        CelExtensions.sets(CelOptions.DEFAULT, SetsFunction.INTERSECTS);
+    CelSetsExtensions setsExtensions = CelExtensions.sets(CelOptions.DEFAULT, Function.INTERSECTS);
     Cel cel =
         runtimeFlavor
             .builder()
@@ -425,8 +428,7 @@ public final class CelSetsExtensionsTest extends CelExtensionTestBase {
   @Test
   public void setsExtension_compileUnallowedFunction_throws() {
     Assume.assumeFalse(isParseOnly);
-    CelSetsExtensions setsExtensions =
-        CelExtensions.sets(CelOptions.DEFAULT, SetsFunction.EQUIVALENT);
+    CelSetsExtensions setsExtensions = CelExtensions.sets(CelOptions.DEFAULT, Function.EQUIVALENT);
     Cel cel = runtimeFlavor.builder().addCompilerLibraries(setsExtensions).build();
 
     assertThrows(
@@ -436,9 +438,8 @@ public final class CelSetsExtensionsTest extends CelExtensionTestBase {
   @Test
   public void setsExtension_evaluateUnallowedFunction_throws() throws Exception {
     CelSetsExtensions setsExtensions =
-        CelExtensions.sets(CelOptions.DEFAULT, SetsFunction.CONTAINS, SetsFunction.EQUIVALENT);
-    CelSetsExtensions runtimeLibrary =
-        CelExtensions.sets(CelOptions.DEFAULT, SetsFunction.EQUIVALENT);
+        CelExtensions.sets(CelOptions.DEFAULT, Function.CONTAINS, Function.EQUIVALENT);
+    CelSetsExtensions runtimeLibrary = CelExtensions.sets(CelOptions.DEFAULT, Function.EQUIVALENT);
     Cel cel =
         runtimeFlavor
             .builder()
@@ -460,5 +461,59 @@ public final class CelSetsExtensionsTest extends CelExtensionTestBase {
     }
   }
 
+  @Test
+  public void separateLibraryAndRuntime_allFunctions_success() throws Exception {
+    CelCompiler celCompiler =
+        CelCompilerFactory.standardCelCompilerBuilder()
+            .addLibraries(CelSetsCompilerLibrary.sets())
+            .build();
+    CelLiteRuntime celLiteRuntime =
+        CelLiteRuntimeFactory.newLiteRuntimeBuilder()
+            .addLibraries(CelSetsRuntimeLibrary.sets())
+            .build();
 
+    CelAbstractSyntaxTree ast = celCompiler.compile("sets.contains([1, 2], [2])").getAst();
+    boolean result = (boolean) celLiteRuntime.createProgram(ast).eval();
+
+    assertThat(result).isTrue();
+  }
+
+  @Test
+  public void separateLibraryAndRuntime_versioned_success() throws Exception {
+    CelCompiler celCompiler =
+        CelCompilerFactory.standardCelCompilerBuilder()
+            .addLibraries(CelSetsCompilerLibrary.sets(0))
+            .build();
+    CelRuntime celRuntime =
+        CelRuntimeFactory.standardCelRuntimeBuilder()
+            .addFunctionBindings(CelSetsRuntimeLibrary.sets(0).newFunctionBindings())
+            .build();
+
+    CelAbstractSyntaxTree ast = celCompiler.compile("sets.contains([1, 2], [2])").getAst();
+    boolean result = (boolean) celRuntime.createProgram(ast).eval();
+
+    assertThat(result).isTrue();
+  }
+
+  @Test
+  public void separateLibraryAndRuntime_subsetOfFunctions_success() throws Exception {
+    CelCompiler celCompiler =
+        CelCompilerFactory.standardCelCompilerBuilder()
+            .addLibraries(CelSetsCompilerLibrary.sets(CelSetsCompilerLibrary.Function.CONTAINS))
+            .build();
+    CelRuntime celRuntime =
+        CelRuntimeFactory.standardCelRuntimeBuilder()
+            .addFunctionBindings(
+                CelSetsRuntimeLibrary.sets(CelSetsRuntimeLibrary.Function.CONTAINS)
+                    .newFunctionBindings())
+            .build();
+
+    CelAbstractSyntaxTree ast = celCompiler.compile("sets.contains([1, 2], [2])").getAst();
+    boolean result = (boolean) celRuntime.createProgram(ast).eval();
+
+    assertThat(result).isTrue();
+    assertThrows(
+        CelValidationException.class,
+        () -> celCompiler.compile("sets.equivalent([1, 2], [1, 2])").getAst());
+  }
 }

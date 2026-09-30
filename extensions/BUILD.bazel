@@ -17,17 +17,6 @@ java_library(
 )
 
 java_library(
-    name = "lite_extensions",
-    visibility = ["//:internal"],
-    exports = ["//extensions/src/main/java/dev/cel/extensions:lite_extensions"],
-)
-
-cel_android_library(
-    name = "lite_extensions_android",
-    exports = ["//extensions/src/main/java/dev/cel/extensions:lite_extensions_android"],
-)
-
-java_library(
     name = "strings",
     exports = ["//extensions/src/main/java/dev/cel/extensions:strings"],
 )
@@ -82,8 +71,20 @@ java_library(
 )
 
 java_library(
-    name = "sets_function",
-    exports = ["//extensions/src/main/java/dev/cel/extensions:sets_function"],
+    name = "sets_compiler_library",
+    visibility = ["//:internal"],
+    exports = ["//extensions/src/main/java/dev/cel/extensions:sets_compiler_library"],
+)
+
+java_library(
+    name = "sets_runtime_library",
+    visibility = ["//:internal"],
+    exports = ["//extensions/src/main/java/dev/cel/extensions:sets_runtime_library"],
+)
+
+cel_android_library(
+    name = "sets_runtime_library_android",
+    exports = ["//extensions/src/main/java/dev/cel/extensions:sets_runtime_library_android"],
 )
 
 java_library(

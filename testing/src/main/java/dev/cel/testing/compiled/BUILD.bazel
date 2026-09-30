@@ -65,6 +65,7 @@ java_library(
         ":compiled_proto3_select_repeated_fields",
         ":compiled_proto3_select_wrappers",
         ":compiled_proto_message",
+        ":compiled_sets_contains",
         ":compiled_string_lower_ascii",
     ],
 )
@@ -110,6 +111,12 @@ compile_cel(
     name = "compiled_math_greatest",
     environment = "//testing/environment:all_extensions",
     expression = "math.greatest(1, 2)",
+)
+
+compile_cel(
+    name = "compiled_sets_contains",
+    environment = "//testing/environment:all_extensions",
+    expression = "sets.contains([1, 2], [2])",
 )
 
 compile_cel(

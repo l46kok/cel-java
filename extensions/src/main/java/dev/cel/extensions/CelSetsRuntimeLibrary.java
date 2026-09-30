@@ -16,21 +16,106 @@ package dev.cel.extensions;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.errorprone.annotations.Immutable;
+import dev.cel.common.CelOptions;
 import dev.cel.runtime.CelFunctionBinding;
 import dev.cel.runtime.CelLiteRuntimeBuilder;
 import dev.cel.runtime.CelLiteRuntimeLibrary;
 import dev.cel.runtime.RuntimeEquality;
+import dev.cel.runtime.RuntimeHelpers;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.Set;
 
+/** Runtime implementation of CEL Set extension functions. */
 @Immutable
-final class SetsExtensionsRuntimeImpl implements CelLiteRuntimeLibrary {
+public final class CelSetsRuntimeLibrary implements CelLiteRuntimeLibrary {
+
+  /** Enumeration of functions for Set runtime extension. */
+  public enum Function {
+    CONTAINS("sets.contains"),
+    EQUIVALENT("sets.equivalent"),
+    INTERSECTS("sets.intersects");
+
+    private final String functionName;
+
+    public String getFunction() {
+      return functionName;
+    }
+
+    Function(String functionName) {
+      this.functionName = functionName;
+    }
+  }
+
+  private static ImmutableSet<Function> getFunctionsForVersion(int version) {
+    switch (version) {
+      case 0:
+      case Integer.MAX_VALUE:
+        return ImmutableSet.copyOf(Function.values());
+      default:
+        throw new IllegalArgumentException("Unsupported 'sets' extension version " + version);
+    }
+  }
+
+  /**
+   * Returns the latest version of the 'sets' runtime functions using {@link CelOptions#DEFAULT}.
+   */
+  public static CelSetsRuntimeLibrary sets() {
+    return sets(CelOptions.DEFAULT);
+  }
+
+  /**
+   * Returns the specified version of the 'sets' runtime functions using {@link CelOptions#DEFAULT}.
+   */
+  public static CelSetsRuntimeLibrary sets(int version) {
+    return sets(CelOptions.DEFAULT, version);
+  }
+
+  /**
+   * Returns the 'sets' runtime functions with only the specified functions using {@link
+   * CelOptions#DEFAULT}.
+   */
+  public static CelSetsRuntimeLibrary sets(Function... functions) {
+    return sets(CelOptions.DEFAULT, functions);
+  }
+
+  /**
+   * Returns the 'sets' runtime functions with only the specified functions using {@link
+   * CelOptions#DEFAULT}.
+   */
+  public static CelSetsRuntimeLibrary sets(Set<Function> functions) {
+    return sets(CelOptions.DEFAULT, functions);
+  }
+
+  /** Returns the latest version of the 'sets' runtime functions. */
+  public static CelSetsRuntimeLibrary sets(CelOptions celOptions) {
+    return sets(celOptions, ImmutableSet.copyOf(Function.values()));
+  }
+
+  /** Returns the specified version of the 'sets' runtime functions. */
+  public static CelSetsRuntimeLibrary sets(CelOptions celOptions, int version) {
+    return sets(celOptions, getFunctionsForVersion(version));
+  }
+
+  /** Returns the 'sets' runtime functions with only the specified functions. */
+  public static CelSetsRuntimeLibrary sets(CelOptions celOptions, Function... functions) {
+    return sets(celOptions, ImmutableSet.copyOf(functions));
+  }
+
+  /** Returns the 'sets' runtime functions with only the specified functions. */
+  public static CelSetsRuntimeLibrary sets(CelOptions celOptions, Set<Function> functions) {
+    RuntimeEquality runtimeEquality = RuntimeEquality.create(RuntimeHelpers.create(), celOptions);
+    return new CelSetsRuntimeLibrary(runtimeEquality, functions);
+  }
+
   private final RuntimeEquality runtimeEquality;
+  private final ImmutableSet<Function> functions;
 
-  private final ImmutableSet<SetsFunction> functions;
+  CelSetsRuntimeLibrary(RuntimeEquality runtimeEquality, int version) {
+    this(runtimeEquality, getFunctionsForVersion(version));
+  }
 
-  SetsExtensionsRuntimeImpl(RuntimeEquality runtimeEquality, Set<SetsFunction> functions) {
+  CelSetsRuntimeLibrary(RuntimeEquality runtimeEquality, Set<Function> functions) {
     this.runtimeEquality = runtimeEquality;
     this.functions = ImmutableSet.copyOf(functions);
   }
@@ -40,9 +125,10 @@ final class SetsExtensionsRuntimeImpl implements CelLiteRuntimeLibrary {
     runtimeBuilder.addFunctionBindings(newFunctionBindings());
   }
 
-  ImmutableSet<CelFunctionBinding> newFunctionBindings() {
+  /** Creates the {@link CelFunctionBinding}s for the configured set functions. */
+  public ImmutableSet<CelFunctionBinding> newFunctionBindings() {
     ImmutableSet.Builder<CelFunctionBinding> bindingBuilder = ImmutableSet.builder();
-    for (SetsFunction function : functions) {
+    for (Function function : functions) {
       switch (function) {
         case CONTAINS:
           bindingBuilder.addAll(

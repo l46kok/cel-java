@@ -14,18 +14,15 @@
 
 package dev.cel.extensions;
 
-import com.google.common.collect.ImmutableMap;
+import static com.google.common.collect.ImmutableSet.toImmutableSet;
+
 import com.google.common.collect.ImmutableSet;
 import com.google.errorprone.annotations.Immutable;
 import dev.cel.checker.CelCheckerBuilder;
 import dev.cel.common.CelFunctionDecl;
 import dev.cel.common.CelOptions;
-import dev.cel.common.CelOverloadDecl;
 import dev.cel.common.internal.DefaultMessageFactory;
 import dev.cel.common.internal.DynamicProto;
-import dev.cel.common.types.ListType;
-import dev.cel.common.types.SimpleType;
-import dev.cel.common.types.TypeParamType;
 import dev.cel.compiler.CelCompilerLibrary;
 import dev.cel.runtime.CelRuntimeBuilder;
 import dev.cel.runtime.CelRuntimeLibrary;
@@ -44,68 +41,47 @@ import java.util.Set;
 public final class CelSetsExtensions
     implements CelCompilerLibrary, CelRuntimeLibrary, CelExtensionLibrary.FeatureSet {
 
-  private static final String SET_CONTAINS_OVERLOAD_DOC =
-      "Returns whether the first list argument contains all elements in the second list"
-          + " argument. The list may contain elements of any type and standard CEL"
-          + " equality is used to determine whether a value exists in both lists. If the"
-          + " second list is empty, the result will always return true.";
-  private static final String SET_EQUIVALENT_OVERLOAD_DOC =
-      "Returns whether the first and second list are set equivalent. Lists are set equivalent if"
-          + " for every item in the first list, there is an element in the second which is equal."
-          + " The lists may not be of the same size as they do not guarantee the elements within"
-          + " them are unique, so size does not factor into the computation.";
-  private static final String SET_INTERSECTS_OVERLOAD_DOC =
-      "Returns whether the first and second list intersect. Lists intersect if there is at least"
-          + " one element in the first list which is equal to an element in the second list. The"
-          + " lists may not be of the same size as they do not guarantee the elements within them"
-          + " are unique, so size does not factor into the computation. If either list is empty,"
-          + " the result will be false.";
+  /** Denotes the set extension function. */
+  public enum Function {
+    CONTAINS(CelSetsCompilerLibrary.Function.CONTAINS, CelSetsRuntimeLibrary.Function.CONTAINS),
+    EQUIVALENT(
+        CelSetsCompilerLibrary.Function.EQUIVALENT, CelSetsRuntimeLibrary.Function.EQUIVALENT),
+    INTERSECTS(
+        CelSetsCompilerLibrary.Function.INTERSECTS, CelSetsRuntimeLibrary.Function.INTERSECTS);
 
-  private static final ImmutableMap<SetsFunction, CelFunctionDecl> FUNCTION_DECL_MAP =
-      ImmutableMap.of(
-          SetsFunction.CONTAINS,
-          CelFunctionDecl.newFunctionDeclaration(
-              SetsFunction.CONTAINS.getFunction(),
-              CelOverloadDecl.newGlobalOverload(
-                  "list_sets_contains_list",
-                  SET_CONTAINS_OVERLOAD_DOC,
-                  SimpleType.BOOL,
-                  ListType.create(TypeParamType.create("T")),
-                  ListType.create(TypeParamType.create("T")))),
-          SetsFunction.EQUIVALENT,
-          CelFunctionDecl.newFunctionDeclaration(
-              SetsFunction.EQUIVALENT.getFunction(),
-              CelOverloadDecl.newGlobalOverload(
-                  "list_sets_equivalent_list",
-                  SET_EQUIVALENT_OVERLOAD_DOC,
-                  SimpleType.BOOL,
-                  ListType.create(TypeParamType.create("T")),
-                  ListType.create(TypeParamType.create("T")))),
-          SetsFunction.INTERSECTS,
-          CelFunctionDecl.newFunctionDeclaration(
-              SetsFunction.INTERSECTS.getFunction(),
-              CelOverloadDecl.newGlobalOverload(
-                  "list_sets_intersects_list",
-                  SET_INTERSECTS_OVERLOAD_DOC,
-                  SimpleType.BOOL,
-                  ListType.create(TypeParamType.create("T")),
-                  ListType.create(TypeParamType.create("T")))));
+    private final CelSetsCompilerLibrary.Function compilerFunction;
+    private final CelSetsRuntimeLibrary.Function runtimeFunction;
+
+    String getFunction() {
+      return compilerFunction.getFunction();
+    }
+
+    Function(
+        CelSetsCompilerLibrary.Function compilerFunction,
+        CelSetsRuntimeLibrary.Function runtimeFunction) {
+      this.compilerFunction = compilerFunction;
+      this.runtimeFunction = runtimeFunction;
+    }
+  }
 
   private static final class Library implements CelExtensionLibrary<CelSetsExtensions> {
-    private final CelSetsExtensions version0;
+    private final ImmutableSet<CelSetsExtensions> versions;
 
     Library(CelOptions celOptions) {
-      version0 = new CelSetsExtensions(celOptions);
+      versions =
+          CelSetsCompilerLibrary.library().versions().stream()
+              .map(compilerLibrary -> new CelSetsExtensions(celOptions, compilerLibrary))
+              .collect(toImmutableSet());
     }
 
     @Override
     public String name() {
-      return "sets";
+      return CelSetsCompilerLibrary.library().name();
     }
 
     @Override
     public ImmutableSet<CelSetsExtensions> versions() {
-      return ImmutableSet.of(version0);
+      return versions;
     }
   }
 
@@ -113,39 +89,51 @@ public final class CelSetsExtensions
     return new Library(options);
   }
 
-  private final ImmutableSet<SetsFunction> functions;
-  private final SetsExtensionsRuntimeImpl setsExtensionsRuntime;
+  private final CelSetsCompilerLibrary compilerLibrary;
+  private final CelSetsRuntimeLibrary setsRuntime;
 
   CelSetsExtensions(CelOptions celOptions) {
-    this(celOptions, ImmutableSet.copyOf(SetsFunction.values()));
+    this(celOptions, CelSetsCompilerLibrary.sets());
   }
 
-  CelSetsExtensions(CelOptions celOptions, Set<SetsFunction> functions) {
-    this.functions = ImmutableSet.copyOf(functions);
+  CelSetsExtensions(CelOptions celOptions, Set<Function> functions) {
+    this.compilerLibrary =
+        new CelSetsCompilerLibrary(
+            functions.stream().map(f -> f.compilerFunction).collect(toImmutableSet()));
     ProtoMessageRuntimeEquality runtimeEquality =
         ProtoMessageRuntimeEquality.create(
             DynamicProto.create(DefaultMessageFactory.INSTANCE), celOptions);
-    this.setsExtensionsRuntime = new SetsExtensionsRuntimeImpl(runtimeEquality, functions);
+    this.setsRuntime =
+        new CelSetsRuntimeLibrary(
+            runtimeEquality,
+            functions.stream().map(f -> f.runtimeFunction).collect(toImmutableSet()));
+  }
+
+  private CelSetsExtensions(CelOptions celOptions, CelSetsCompilerLibrary compilerLibrary) {
+    this.compilerLibrary = compilerLibrary;
+    ProtoMessageRuntimeEquality runtimeEquality =
+        ProtoMessageRuntimeEquality.create(
+            DynamicProto.create(DefaultMessageFactory.INSTANCE), celOptions);
+    this.setsRuntime = new CelSetsRuntimeLibrary(runtimeEquality, compilerLibrary.version());
   }
 
   @Override
   public int version() {
-    return 0;
+    return compilerLibrary.version();
   }
 
   @Override
   public ImmutableSet<CelFunctionDecl> functions() {
-    return ImmutableSet.copyOf(FUNCTION_DECL_MAP.values());
+    return compilerLibrary.functions();
   }
 
   @Override
   public void setCheckerOptions(CelCheckerBuilder checkerBuilder) {
-    functions.forEach(
-        function -> checkerBuilder.addFunctionDeclarations(FUNCTION_DECL_MAP.get(function)));
+    compilerLibrary.setCheckerOptions(checkerBuilder);
   }
 
   @Override
   public void setRuntimeOptions(CelRuntimeBuilder runtimeBuilder) {
-    runtimeBuilder.addFunctionBindings(setsExtensionsRuntime.newFunctionBindings());
+    runtimeBuilder.addFunctionBindings(setsRuntime.newFunctionBindings());
   }
 }

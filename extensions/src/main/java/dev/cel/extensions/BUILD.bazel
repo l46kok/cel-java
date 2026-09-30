@@ -41,42 +41,11 @@ java_library(
         ":protos",
         ":regex",
         ":sets",
-        ":sets_function",
         ":strings",
         "//common:options",
         "//extensions:extension_library",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
-    ],
-)
-
-java_library(
-    name = "lite_extensions",
-    srcs = ["CelLiteExtensions.java"],
-    tags = [
-    ],
-    deps = [
-        ":sets_function",
-        ":sets_runtime_impl",
-        "//common:options",
-        "//runtime:runtime_equality",
-        "//runtime:runtime_helpers",
-        "@maven//:com_google_guava_guava",
-    ],
-)
-
-cel_android_library(
-    name = "lite_extensions_android",
-    srcs = ["CelLiteExtensions.java"],
-    tags = [
-    ],
-    deps = [
-        ":sets_function",
-        ":sets_runtime_impl_android",
-        "//common:options",
-        "//runtime:runtime_equality_android",
-        "//runtime:runtime_helpers_android",
-        "@maven_android//:com_google_guava_guava",
     ],
 )
 
@@ -319,16 +288,15 @@ java_library(
     tags = [
     ],
     deps = [
-        ":sets_function",
-        ":sets_runtime_impl",
+        ":extension_library",
+        ":sets_compiler_library",
+        ":sets_runtime_library",
         "//checker:checker_builder",
-        "//common:compiler_common",
+        "//common:cel_function_decl",
         "//common:options",
         "//common/internal:default_message_factory",
         "//common/internal:dynamic_proto",
-        "//common/types",
         "//compiler:compiler_builder",
-        "//extensions:extension_library",
         "//runtime",
         "//runtime:proto_message_runtime_equality",
         "@maven//:com_google_errorprone_error_prone_annotations",
@@ -337,36 +305,49 @@ java_library(
 )
 
 java_library(
-    name = "sets_function",
-    srcs = ["SetsFunction.java"],
-    # used_by_android
+    name = "sets_compiler_library",
+    srcs = ["CelSetsCompilerLibrary.java"],
     tags = [
+    ],
+    deps = [
+        ":extension_library",
+        "//checker:checker_builder",
+        "//common:cel_function_decl",
+        "//common:cel_overload_decl",
+        "//common/types",
+        "//compiler:compiler_builder",
+        "@maven//:com_google_errorprone_error_prone_annotations",
+        "@maven//:com_google_guava_guava",
     ],
 )
 
 java_library(
-    name = "sets_runtime_impl",
-    srcs = ["SetsExtensionsRuntimeImpl.java"],
-    visibility = ["//visibility:private"],
+    name = "sets_runtime_library",
+    srcs = ["CelSetsRuntimeLibrary.java"],
+    tags = [
+    ],
     deps = [
-        ":sets_function",
+        "//common:options",
         "//runtime:function_binding",
         "//runtime:lite_runtime",
         "//runtime:runtime_equality",
+        "//runtime:runtime_helpers",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
     ],
 )
 
 cel_android_library(
-    name = "sets_runtime_impl_android",
-    srcs = ["SetsExtensionsRuntimeImpl.java"],
-    visibility = ["//visibility:private"],
+    name = "sets_runtime_library_android",
+    srcs = ["CelSetsRuntimeLibrary.java"],
+    tags = [
+    ],
     deps = [
-        ":sets_function",
+        "//common:options",
         "//runtime:function_binding_android",
         "//runtime:lite_runtime_android",
         "//runtime:runtime_equality_android",
+        "//runtime:runtime_helpers_android",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven_android//:com_google_guava_guava",
     ],

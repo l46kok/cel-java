@@ -251,9 +251,9 @@ public final class CelExtensions {
    *
    * <p>Refer to README.md for available functions.
    *
-   * <p>This will include all functions denoted in {@link SetsFunction}, including any future
-   * additions. To expose only a subset of functions, use {@link #sets(CelOptions, SetsFunction...)}
-   * instead.
+   * <p>This will include all functions denoted in {@link CelSetsExtensions.Function}, including any
+   * future additions. To expose only a subset of functions, use {@link #sets(CelOptions,
+   * CelSetsExtensions.Function...)} instead.
    */
   public static CelSetsExtensions sets(CelOptions celOptions) {
     return new CelSetsExtensions(celOptions);
@@ -264,9 +264,10 @@ public final class CelExtensions {
    *
    * <p>Refer to README.md for available functions.
    *
-   * <p>This will include only the specific functions denoted by {@link SetsFunction}.
+   * <p>This will include only the specific functions denoted by {@link CelSetsExtensions.Function}.
    */
-  public static CelSetsExtensions sets(CelOptions celOptions, SetsFunction... functions) {
+  public static CelSetsExtensions sets(
+      CelOptions celOptions, CelSetsExtensions.Function... functions) {
     return sets(celOptions, ImmutableSet.copyOf(functions));
   }
 
@@ -275,9 +276,10 @@ public final class CelExtensions {
    *
    * <p>Refer to README.md for available functions.
    *
-   * <p>This will include only the specific functions denoted by {@link SetsFunction}.
+   * <p>This will include only the specific functions denoted by {@link CelSetsExtensions.Function}.
    */
-  public static CelSetsExtensions sets(CelOptions celOptions, Set<SetsFunction> functions) {
+  public static CelSetsExtensions sets(
+      CelOptions celOptions, Set<CelSetsExtensions.Function> functions) {
     return new CelSetsExtensions(celOptions, functions);
   }
 
@@ -375,7 +377,8 @@ public final class CelExtensions {
             EnumSet.allOf(Function.class).stream().map(CelMathExtensions.Function::getFunction),
             EnumSet.allOf(CelStringExtensions.Function.class).stream()
                 .map(CelStringExtensions.Function::getFunction),
-            EnumSet.allOf(SetsFunction.class).stream().map(SetsFunction::getFunction),
+            EnumSet.allOf(CelSetsExtensions.Function.class).stream()
+                .map(CelSetsExtensions.Function::getFunction),
             EnumSet.allOf(CelEncoderExtensions.Function.class).stream()
                 .map(CelEncoderExtensions.Function::getFunction),
             EnumSet.allOf(CelListsExtensions.Function.class).stream()
