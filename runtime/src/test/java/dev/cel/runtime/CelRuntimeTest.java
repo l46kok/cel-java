@@ -142,13 +142,18 @@ public class CelRuntimeTest {
   public void advanceEvaluation_withUnknownTracking_noSelfReferenceInMerge(String expression)
       throws Exception {
     Cel cel =
-        CelFactory.standardCelBuilder()
+        runtimeFlavor
+            .builder()
             .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
             .addCompilerLibraries(CelExtensions.bindings())
             .setContainer(CelContainer.ofName("cel.expr.conformance.test"))
             .addVar("unknown_attr", SimpleType.INT)
             .addVar("my_list", ListType.create(SimpleType.INT))
-            .setOptions(CelOptions.current().enableUnknownTracking(true).build())
+            .setOptions(
+                CelOptions.current()
+                    .enableHeterogeneousNumericComparisons(true)
+                    .enableUnknownTracking(true)
+                    .build())
             .build();
 
     CelUnknownSet result =
@@ -168,6 +173,59 @@ public class CelRuntimeTest {
                                 .qualify(CelAttribute.Qualifier.ofInt(0)))));
 
     assertThat(result.attributes()).containsExactly(CelAttribute.create("unknown_attr"));
+  }
+
+  @Test
+  public void advanceEvaluation_withUnknownContext_tracksUnknowns() throws Exception {
+    Cel cel =
+        runtimeFlavor
+            .builder()
+            .setOptions(
+                CelOptions.current()
+                    .enableHeterogeneousNumericComparisons(true)
+                    .enableUnknownTracking(true)
+                    .build())
+            .setContainer(CelContainer.ofName("com.google"))
+            .addVar("com.google.a", SimpleType.BOOL)
+            .addVar("com.google.b", SimpleType.BOOL)
+            .setResultType(SimpleType.BOOL)
+            .build();
+    CelRuntime.Program program = cel.createProgram(cel.compile("b ? a : false").getAst());
+    UnknownContext context =
+        UnknownContext.create(
+            name -> name.equals("com.google.b") ? Optional.of(true) : Optional.empty(),
+            ImmutableList.of(CelAttributePattern.fromQualifiedIdentifier("com.google.a")));
+
+    CelUnknownSet unknownResult = (CelUnknownSet) program.advanceEvaluation(context);
+
+    assertThat(unknownResult.attributes())
+        .containsExactly(CelAttribute.fromQualifiedIdentifier("com.google.a"));
+  }
+
+  @Test
+  public void advanceEvaluation_withResolvedUnknownContext_evaluatesResult() throws Exception {
+    Cel cel =
+        runtimeFlavor
+            .builder()
+            .setOptions(
+                CelOptions.current()
+                    .enableHeterogeneousNumericComparisons(true)
+                    .enableUnknownTracking(true)
+                    .build())
+            .setContainer(CelContainer.ofName("com.google"))
+            .addVar("com.google.a", SimpleType.BOOL)
+            .addVar("com.google.b", SimpleType.BOOL)
+            .setResultType(SimpleType.BOOL)
+            .build();
+    CelRuntime.Program program = cel.createProgram(cel.compile("a || b").getAst());
+    ImmutableMap<String, Boolean> vars =
+        ImmutableMap.of("com.google.a", true, "com.google.b", false);
+    UnknownContext context =
+        UnknownContext.create(name -> Optional.ofNullable(vars.get(name)), ImmutableList.of());
+
+    Object resolvedResult = program.advanceEvaluation(context);
+
+    assertThat(resolvedResult).isEqualTo(true);
   }
 
   @Test

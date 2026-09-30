@@ -167,4 +167,20 @@ public class UnknownContextTest {
                 CelAttribute.fromQualifiedIdentifier("qualified.Identifier.field2")))
         .isEmpty();
   }
+
+  @Test
+  public void toPartialVars_preservesResolverAndUnknowns() {
+    CelAttributePattern pattern =
+        CelAttributePattern.fromQualifiedIdentifier("qualified.Identifier");
+    UnknownContext context =
+        UnknownContext.create(
+            name -> name.equals("x") ? Optional.of("val") : Optional.empty(),
+            ImmutableList.of(pattern));
+
+    PartialVars partialVars = context.toPartialVars();
+
+    assertThat(partialVars.resolver().find("x")).hasValue("val");
+    assertThat(partialVars.resolver().find("missing")).isEmpty();
+    assertThat(partialVars.unknowns()).containsExactly(pattern);
+  }
 }

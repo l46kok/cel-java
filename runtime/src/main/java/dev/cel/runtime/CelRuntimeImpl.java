@@ -255,8 +255,8 @@ public abstract class CelRuntimeImpl implements CelRuntime {
       }
 
       @Override
-      public Object advanceEvaluation(UnknownContext context) {
-        throw new UnsupportedOperationException("Unsupported operation.");
+      public Object advanceEvaluation(UnknownContext context) throws CelEvaluationException {
+        return program.eval(context.toPartialVars());
       }
     };
   }

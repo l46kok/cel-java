@@ -107,6 +107,11 @@ public class UnknownContext {
     return variableResolver;
   }
 
+  PartialVars toPartialVars() {
+    return PartialVars.of(
+        name -> Optional.ofNullable(variableResolver.resolve(name)), unresolvedAttributes);
+  }
+
   /**
    * Creates a new unknown context that is a copy of the current context with the provided
    * additional attribute values.
