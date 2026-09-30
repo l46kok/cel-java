@@ -192,16 +192,21 @@ final class CelVerifierZ3Impl implements CelVerifier {
       // Fall back to original ASTs if canonicalization or re-typechecking fails
     }
     try (Context ctx = new Context(ImmutableMap.of("model", "true"))) {
-      CelAstToZ3Translator translator =
-          new CelAstToZ3Translator(
-              ctx, comprehensionUnrollLimit, unknownIdentifiers, functionRegistry, typeProvider);
-      translator.getTypeSystem().enableParameterizedUnknownPropagation();
+      CelAstToZ3Translator translator = newTranslator(ctx, /* parameterizeUnknowns= */ true);
 
       TranslatedValue tvA = translator.translate(astA);
       TranslatedValue tvB = translator.translate(astB);
 
       BoolExpr divergenceCondition = ctx.mkNot(ctx.mkEq(tvA.z3Expr(), tvB.z3Expr()));
-      BoolExpr combinedTaint = ctx.mkOr(tvA.isApproximate(), tvB.isApproximate());
+      // Parameterized unknowns are keyed on the operation producing them, whereas CEL identifies
+      // an unknown only by its attributes (e.g. `a && true` and `a` both yield unknown {a}). Two
+      // distinct unknowns may thus still be equivalent.
+      BoolExpr combinedTaint =
+          CelZ3TypeSystem.mkOrFlattened(
+              ctx,
+              tvA.isApproximate(),
+              tvB.isApproximate(),
+              ctx.mkAnd(tvA.isZ3Unknown(), tvB.isZ3Unknown()));
 
       Solver solver = newSolver(ctx);
       for (BoolExpr constraint : translator.getTypeConstraints()) {
@@ -273,9 +278,7 @@ final class CelVerifierZ3Impl implements CelVerifier {
     }
 
     try (Context ctx = new Context(ImmutableMap.of("model", "true"))) {
-      CelAstToZ3Translator translator =
-          new CelAstToZ3Translator(
-              ctx, comprehensionUnrollLimit, unknownIdentifiers, functionRegistry, typeProvider);
+      CelAstToZ3Translator translator = newTranslator(ctx, /* parameterizeUnknowns= */ false);
 
       for (Map.Entry<String, CelAbstractSyntaxTree> entry : boundSymbols.entrySet()) {
         TranslatedValue tv = translator.translate(entry.getValue());
@@ -350,9 +353,7 @@ final class CelVerifierZ3Impl implements CelVerifier {
   private CelVerificationResult checkSatisfiability(
       CelAbstractSyntaxTree ast, boolean searchForCounterexample) throws CelVerificationException {
     try (Context ctx = new Context(ImmutableMap.of("model", "true"))) {
-      CelAstToZ3Translator translator =
-          new CelAstToZ3Translator(
-              ctx, comprehensionUnrollLimit, unknownIdentifiers, functionRegistry, typeProvider);
+      CelAstToZ3Translator translator = newTranslator(ctx, /* parameterizeUnknowns= */ false);
 
       TranslatedValue tv = translator.translate(ast);
       BoolExpr condition = translator.isTrue(tv.z3Expr());
@@ -500,6 +501,16 @@ final class CelVerifierZ3Impl implements CelVerifier {
     params.add("timeout", (int) timeout.toMillis());
     solver.setParameters(params);
     return solver;
+  }
+
+  private CelAstToZ3Translator newTranslator(Context ctx, boolean parameterizeUnknowns) {
+    return new CelAstToZ3Translator(
+        ctx,
+        comprehensionUnrollLimit,
+        unknownIdentifiers,
+        functionRegistry,
+        typeProvider,
+        parameterizeUnknowns);
   }
 
   private static String getCounterexampleString(

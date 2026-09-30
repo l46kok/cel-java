@@ -87,6 +87,7 @@ final class CelAstToZ3Translator {
   private final CelZ3OperatorTranslator operatorTranslator;
   private final Map<String, TranslatedValue> symbolTable;
   private final Set<BoolExpr> typeConstraints;
+  private final Map<Expr<?>, CelType> inputVariableTypes;
   private final ImmutableSet<String> unknownIdentifiers;
   private final int comprehensionUnrollLimit;
   private final CelTypeProvider typeProvider;
@@ -251,6 +252,7 @@ final class CelAstToZ3Translator {
             name,
             n -> {
               Expr<?> v = ctx.mkConst(n, typeSystem.celValueSort());
+              inputVariableTypes.put(v, type);
 
               // Variables at rest can never be pre-cooked Errors
               // Basically prevents error being a counterexample of var == var
@@ -286,6 +288,7 @@ final class CelAstToZ3Translator {
     // check to a trivial identity check (e.g., `list_ref_0 == list_ref_0`).
     if (listRef == null) {
       SeqExpr seq = ctx.mkEmptySeq(ctx.mkSeqSort(typeSystem.celValueSort()));
+      List<Expr<?>> values = new ArrayList<>();
       ImmutableList<Integer> optionalIndices = createList.optionalIndices();
       ImmutableList<CelExpr> elements = createList.elements();
       for (int i = 0; i < elements.size(); i++) {
@@ -299,19 +302,23 @@ final class CelAstToZ3Translator {
           elem = TranslatedValue.create(checkedValue, element, typeSystem, elem.isApproximate());
 
           Expr<?> optRef = typeSystem.getOptionalRef(elem.z3Expr());
+          Expr<?> value = typeSystem.getOptionalValue(optRef);
           seq =
               (SeqExpr)
                   ctx.mkITE(
                       typeSystem.optHasValue(optRef),
-                      typeSystem.mkConcatSafe(seq, ctx.mkUnit(typeSystem.getOptionalValue(optRef))),
+                      typeSystem.mkConcatSafe(seq, ctx.mkUnit(value)),
                       seq);
+          values.add(value);
         } else {
           seq = typeSystem.mkConcatSafe(seq, ctx.mkUnit(elem.z3Expr()));
+          values.add(elem.z3Expr());
         }
         elementsTv.add(elem);
       }
       listRef = typeSystem.mkListRefConst(LIST_REF_PREFIX);
       typeConstraints.add(ctx.mkEq(typeSystem.getSeq(listRef), seq));
+      propagateTruncatedTypeConstraint(typeSystem.wrapList(listRef), values);
       Expr<?> finalListRef = listRef;
       cacheKey.ifPresent(key -> listLiteralCache.put(key, finalListRef));
     }
@@ -329,6 +336,7 @@ final class CelAstToZ3Translator {
     Expr<?> keysSeq = ctx.mkEmptySeq(ctx.mkSeqSort(typeSystem.celValueSort()));
 
     List<TranslatedValue> elementsTv = new ArrayList<>();
+    List<Expr<?>> values = new ArrayList<>();
 
     for (CelExpr.CelMap.Entry entryAst : createMap.entries()) {
       TranslatedValue keyTv = translateExpr(entryAst.key(), ast);
@@ -350,6 +358,7 @@ final class CelAstToZ3Translator {
         finalValue = typeSystem.getOptionalValue(optRef);
       }
       elementsTv.add(valueTv);
+      values.add(finalValue);
 
       BoolExpr keyAlreadyPresent = (BoolExpr) ctx.mkSelect(mapPresence, key);
       BoolExpr shouldInsertKey = ctx.mkAnd(ctx.mkNot(keyAlreadyPresent), finalPresence);
@@ -368,7 +377,23 @@ final class CelAstToZ3Translator {
     typeConstraints.add(ctx.mkEq(typeSystem.getMapKeys(mapRef), keysSeq));
 
     Expr<?> result = typeSystem.wrapMap(mapRef);
+    propagateTruncatedTypeConstraint(result, values);
     return TranslatedValue.propagateStrict(ctx, typeSystem, result, celExpr, elementsTv);
+  }
+
+  /**
+   * Marks {@code container} as having a truncated type constraint if any of {@code elements} has
+   * one, unless it is an error or unknown: those are shared terms that hold no elements.
+   */
+  private void propagateTruncatedTypeConstraint(Expr<?> container, Iterable<Expr<?>> elements) {
+    BoolExpr hasTruncated =
+        ctx.mkOr(
+            typeSystem.isErrorOrUnknown(container),
+            typeSystem.hasTruncatedTypeConstraint(container));
+    for (Expr<?> element : elements) {
+      typeConstraints.add(
+          ctx.mkImplies(typeSystem.hasTruncatedTypeConstraint(element), hasTruncated));
+    }
   }
 
   private TranslatedValue translateStruct(CelExpr celExpr, CelAbstractSyntaxTree ast) {
@@ -673,8 +698,13 @@ final class CelAstToZ3Translator {
 
     typeConstraints.add(createTypeConstraint(fieldAccess, exprId, ast));
 
-    return TranslatedValue.propagateStrict(
-        ctx, typeSystem, fieldAccess, celExpr, ImmutableList.of(operandTv));
+    TranslatedValue result =
+        TranslatedValue.propagateStrict(
+            ctx, typeSystem, fieldAccess, celExpr, ImmutableList.of(operandTv));
+    // Map presence is only linked to the keys up to the unroll limit.
+    return operandType.kind() == CelKind.STRUCT
+        ? result
+        : result.withApproximation(operatorTranslator.isTruncatedMap(operand));
   }
 
   private TranslatedValue translateBlock(
@@ -710,7 +740,14 @@ final class CelAstToZ3Translator {
 
     return operatorTranslator
         .translateFunctionCall(functionName, args, exprId, ast)
-        .map(tv -> TranslatedValue.create(tv.z3Expr(), expr, typeSystem, tv.isApproximate()))
+        .map(
+            tv -> {
+              if (mayEmbedArgs(functionName, ast.getTypeOrThrow(exprId))) {
+                propagateTruncatedTypeConstraint(
+                    tv.z3Expr(), Iterables.transform(args, TranslatedValue::z3Expr));
+              }
+              return TranslatedValue.create(tv.z3Expr(), expr, typeSystem, tv.isApproximate());
+            })
         .orElseGet(
             () -> {
               // Uninterpreted function
@@ -730,6 +767,19 @@ final class CelAstToZ3Translator {
               return TranslatedValue.propagateStrict(
                   ctx, typeSystem, functionName, callRes, Optional.of(expr), isApprox, args);
             });
+  }
+
+  /**
+   * Whether a call may construct a container that embeds its args (e.g. list concatenation, map
+   * insertion or optional.of). Indexing and conditionals return existing values instead, so
+   * propagating to them would needlessly taint e.g. an element whenever its container has a
+   * truncated type constraint.
+   */
+  private static boolean mayEmbedArgs(String functionName, CelType resultType) {
+    return (!CelZ3OperatorTranslator.isStaticallyKnown(resultType)
+            || !resultType.parameters().isEmpty())
+        && !functionName.equals(Operator.INDEX.getFunction())
+        && !functionName.equals(Operator.CONDITIONAL.getFunction());
   }
 
   private <T> T withScope(String varName, TranslatedValue value, Supplier<T> action) {
@@ -856,7 +906,8 @@ final class CelAstToZ3Translator {
     if (!isList && !isMap) {
       BoolExpr isRuntimeListOrMap =
           ctx.mkOr(typeSystem.isList(iterRange), typeSystem.isMap(iterRange));
-      Expr<?> result = ctx.mkITE(isRuntimeListOrMap, typeSystem.mkUnknown(), typeSystem.mkError());
+      Expr<?> result =
+          ctx.mkITE(isRuntimeListOrMap, mkParameterizedUnknown(celExpr, ast), typeSystem.mkError());
       return TranslatedValue.create(result, celExpr, typeSystem, isRuntimeListOrMap);
     }
 
@@ -1063,14 +1114,17 @@ final class CelAstToZ3Translator {
     Expr<?> iterRangeExpr = iterRangeTv.z3Expr();
     BoolExpr rangeIsError = typeSystem.isError(iterRangeExpr);
     BoolExpr rangeIsUnknown = typeSystem.isUnknown(iterRangeExpr);
-    BoolExpr isNotError = ctx.mkNot(typeSystem.isError(resultTv.z3Expr()));
-    BoolExpr shouldYieldUnknown = ctx.mkAnd(isTruncated, isNotError);
 
+    // TODO: Model the loop condition for custom macros; until then, abstract the
+    // result of any non-true condition, since the unrolled value ignores early exits.
+    BoolExpr isConditionUnmodeled = ctx.mkBool(!isLiteralTrue(comp.loopCondition()));
+    BoolExpr isAbstracted =
+        CelZ3TypeSystem.mkOrFlattened(ctx, rangeIsUnknown, isTruncated, isConditionUnmodeled);
+    // An error is not final when truncated: an unknown from a later iteration overrides it.
     Expr<?> finalResult =
         CelZ3TypeSystem.SwitchBuilder.newBuilder(ctx)
             .addCase(rangeIsError, typeSystem.mkError())
-            .addCase(
-                ctx.mkOr(rangeIsUnknown, shouldYieldUnknown), mkParameterizedUnknown(celExpr, ast))
+            .addCase(isAbstracted, mkParameterizedUnknown(celExpr, ast))
             .build(resultTv.z3Expr());
 
     BoolExpr finalTaint =
@@ -1078,7 +1132,8 @@ final class CelAstToZ3Translator {
             ctx.mkITE(
                 ctx.mkOr(rangeIsError, rangeIsUnknown),
                 iterRangeTv.isApproximate(),
-                CelZ3TypeSystem.mkOrFlattened(ctx, resultTv.isApproximate(), shouldYieldUnknown));
+                CelZ3TypeSystem.mkOrFlattened(
+                    ctx, resultTv.isApproximate(), isTruncated, isConditionUnmodeled));
 
     return TranslatedValue.create(finalResult, celExpr, typeSystem, finalTaint);
   }
@@ -1200,6 +1255,11 @@ final class CelAstToZ3Translator {
         && comp.accuInit().constant().booleanValue() == expectedValue;
   }
 
+  private static boolean isLiteralTrue(CelExpr expr) {
+    CelConstant constant = expr.constantOrDefault();
+    return constant.getKind() == CelConstant.Kind.BOOLEAN_VALUE && constant.booleanValue();
+  }
+
   private static boolean isNotStrictlyFalseLoopCondition(CelComprehension comp, boolean expectNot) {
     CelExpr.CelCall call = comp.loopCondition().callOrDefault();
     if (!call.function().equals(Operator.NOT_STRICTLY_FALSE.getFunction())
@@ -1280,7 +1340,7 @@ final class CelAstToZ3Translator {
       // Constrain list elements using bounded unrolling up to comprehensionUnrollLimit rather
       // than Z3 forall quantifiers to prevent MBQI quantifier instantiation loops.
       // Assert: isList(val) ∧ for all unrolled 0 <= i < length: ¬isError(seq[i]) ∧
-      // typeConstraint(seq[i])
+      // typeConstraint(seq[i]).
       BoolExpr isList = typeSystem.isList(val);
       CelType elemType = ((ListType) type).elemType();
 
@@ -1290,6 +1350,13 @@ final class CelAstToZ3Translator {
 
       List<BoolExpr> boundsAndTypes = new ArrayList<>();
       boundsAndTypes.add(isList);
+      // Elements beyond the limit are unconstrained, which only matters if elemType is known.
+      if (CelZ3OperatorTranslator.isStaticallyKnown(elemType)) {
+        boundsAndTypes.add(
+            ctx.mkImplies(
+                ctx.mkGt(length, ctx.mkInt(comprehensionUnrollLimit)),
+                typeSystem.hasTruncatedTypeConstraint(val)));
+      }
       for (int i = 0; i < comprehensionUnrollLimit; i++) {
         IntExpr idx = ctx.mkInt(i);
         Expr elem = ctx.mkNth(seq, idx);
@@ -1323,6 +1390,14 @@ final class CelAstToZ3Translator {
       List<BoolExpr> boundsAndTypes = new ArrayList<>();
       boundsAndTypes.add(isMap);
       boundsAndTypes.add(getBoundedMapBijection(mapPresence, seq, (ArithExpr) length));
+      // Entries beyond the limit are unconstrained, which matters if keyType or valType is known.
+      if (CelZ3OperatorTranslator.isStaticallyKnown(keyType)
+          || CelZ3OperatorTranslator.isStaticallyKnown(valType)) {
+        boundsAndTypes.add(
+            ctx.mkImplies(
+                ctx.mkGt(length, ctx.mkInt(comprehensionUnrollLimit)),
+                typeSystem.hasTruncatedTypeConstraint(val)));
+      }
 
       for (int i = 0; i < comprehensionUnrollLimit; i++) {
         IntExpr idx = ctx.mkInt(i);
@@ -1400,7 +1475,8 @@ final class CelAstToZ3Translator {
       smtArgs.add(translateExpr(freeVar, ast).z3Expr());
     }
 
-    return typeSystem.mkParameterizedUnknown(sig.staticHash(), smtArgs.build());
+    return typeSystem.mkParameterizedUnknown(
+        "!trunc_" + Long.toHexString(sig.staticHash()), smtArgs.build());
   }
 
   CelAstToZ3Translator(
@@ -1408,17 +1484,20 @@ final class CelAstToZ3Translator {
       int comprehensionUnrollLimit,
       ImmutableSet<String> unknownIdentifiers,
       CelZ3FunctionRegistry functionRegistry,
-      CelTypeProvider typeProvider) {
+      CelTypeProvider typeProvider,
+      boolean parameterizeUnknowns) {
     this.ctx = ctx;
     this.comprehensionUnrollLimit = comprehensionUnrollLimit;
-    this.typeSystem = new CelZ3TypeSystem(ctx);
+    this.typeSystem = new CelZ3TypeSystem(ctx, parameterizeUnknowns);
     this.typeConstraints = new LinkedHashSet<>();
+    this.inputVariableTypes = new HashMap<>();
     this.operatorTranslator =
         new CelZ3OperatorTranslator(
             ctx,
             typeSystem,
             this.typeConstraints::add,
             this::createTypeConstraintForType,
+            val -> inputVariableTypes.getOrDefault(val, SimpleType.DYN),
             functionRegistry,
             comprehensionUnrollLimit);
     this.symbolTable = new HashMap<>();

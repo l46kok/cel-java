@@ -105,6 +105,8 @@ public final class CelVerifierZ3ImplTest {
           .addVar("nested_list_2", ListType.create(ListType.create(SimpleType.INT)))
           .addVar("dyn_list", ListType.create(SimpleType.DYN))
           .addVar("dyn_map", MapType.create(SimpleType.DYN, SimpleType.DYN))
+          .addVar("dyn_int_map", MapType.create(SimpleType.DYN, SimpleType.INT))
+          .addVar("string_dyn_map", MapType.create(SimpleType.STRING, SimpleType.DYN))
           .addVar("dyn_var", SimpleType.DYN)
           .addVar("dyn_var2", SimpleType.DYN)
           .addVar("opt_var", OptionalType.create(SimpleType.INT))
@@ -154,7 +156,8 @@ public final class CelVerifierZ3ImplTest {
     NULL_SATISFIABLE("unknown_var == null", "unknown_var = null"),
     DYNAMIC_VAR_NUMERIC_EQUALITY("dyn_var == 1 && dyn_var == 1.0", "dyn_var = 1"),
     DYNAMIC_VAR_NOT_IN_LIST(
-        "dyn_var == 1.5 && !(dyn_var in dyn_list) && size(dyn_list) > 5", "dyn_var = 1\\.5"),
+        "dyn_var == 1.5 && !(dyn_var in dyn_list) && size(dyn_list) == 6", "dyn_var = 1\\.5"),
+    DYNAMIC_LIST_EQUALITY_BEYOND_BMC_LIMIT("dyn_list == [1, 2, 3, 4, 5, 6]", "dyn_list = "),
     CROSS_NUMERIC_EQUALITY_INT_DYN_EXACT("1 == request", "request = 1"),
     MACRO_LIMIT("dyn_list.all(x, x == 1)", "Satisfying input:"),
     STRUCT_FIELD_MISSING_APPROXIMATE_SATISFIABLE("dyn_var.unknown_field", "dyn_var = "),
@@ -184,12 +187,20 @@ public final class CelVerifierZ3ImplTest {
     INT_MAX_DOUBLE_EQUALITY(
         "dyn(request) == 9223372036854775808.0", "request = 9223372036854775[2-8]\\d+"),
     UINT_MAX_DOUBLE_EQUALITY("dyn(u) == 18446744073709551616.0", "u = 1844674407370955\\d+u"),
+    // The type checker narrows `int_list + dyn_var` to list(int), which must not constrain dyn_var.
+    IN_NARROWED_LIST_CONCATENATION("dyn('a') in (int_list + dyn_var)", "dyn_var = "),
+    // Indexing and conditionals return existing values, so they do not inherit truncated type
+    // constraints from their operands.
+    DYN_ELEMENT_OF_LONG_NESTED_LIST_EQUALITY(
+        "size(nested_list) == 6 && dyn(nested_list[0]) == [1]", "nested_list = \\[\\[1\\]"),
+    DYN_CONDITIONAL_EQUALITY_WITH_LONG_LIST_BRANCH(
+        "size(int_list) == 6 && dyn(b ? [1] : int_list) == [1]", "b = true"),
     ;
 
-    final String expr;
-    final ImmutableList<String> expectedFragments;
+    private final String expr;
+    private final ImmutableList<String> expectedFragments;
 
-    IsSatisfiableTestCase(String expr, String... expectedFragments) {
+    private IsSatisfiableTestCase(String expr, String... expectedFragments) {
       this.expr = expr;
       this.expectedFragments = ImmutableList.copyOf(expectedFragments);
     }
@@ -353,11 +364,62 @@ public final class CelVerifierZ3ImplTest {
     APPROXIMATED_DOUBLE_TO_INT("int(1.5) == 1"),
     APPROXIMATED_INT_TO_STRING("string(123) == '123'"),
     APPROXIMATED_RANGE("int('123') > 100 && int('123') < 200"),
-    APPROXIMATED_BRANCHING("int('123') == 123 ? x > 5 : false");
+    APPROXIMATED_BRANCHING("int('123') == 123 ? x > 5 : false"),
+    // Containers are only type-constrained up to the unroll limit, so observing one through dyn may
+    // expose an element beyond it that violates the static type.
+    BEYOND_BMC_LIMIT_DYN_LIST_LITERAL_EQUALITY(
+        "int_list == dyn([1, 2, 3, 4, 5, dyn('not_an_int')])"),
+    BEYOND_BMC_LIMIT_DYN_NESTED_LIST_LITERAL_EQUALITY(
+        "nested_list == dyn([[1, 2, 3, 4, 5, dyn('not_an_int')]])"),
+    // 1 == 1u holds without the inner lists being equal terms, so the flags aren't tied by EUF.
+    BEYOND_BMC_LIMIT_NESTED_LIST_CROSS_TYPE_LITERAL_EQUALITY(
+        "dyn(nested_list) == [[dyn(1u), 2, 3, 4, 5, dyn('not_an_int')]]"),
+    BEYOND_BMC_LIMIT_DYN_MAP_LITERAL_EQUALITY(
+        "string_int_map == dyn({'a': 1, 'b': 2, 'c': 3, 'd': 4, 'e': 5, 'f': dyn('not_an_int')})"),
+    BEYOND_BMC_LIMIT_DYN_NESTED_MAP_VALUE_EQUALITY(
+        "dyn(string_int_list_map) == {'a': [1, 2, 3, 4, 5, dyn('not_an_int')]}"),
+    BEYOND_BMC_LIMIT_DYN_LIST_LITERAL_ELEMENT_EQUALITY(
+        "dyn([int_list]) == [[1, 2, 3, 4, 5, dyn('not_an_int')]]"),
+    BEYOND_BMC_LIMIT_DYN_LIST_LITERAL_OPTIONAL_ELEMENT_EQUALITY(
+        "dyn([?optional.of(int_list)]) == [[1, 2, 3, 4, 5, dyn('not_an_int')]]"),
+    BEYOND_BMC_LIMIT_OPTIONAL_LIST_LITERAL_EQUALITY_WITH_DYN_LIST(
+        "size(int_list) == 6 && dyn([?optional.of(int_list)]) == dyn_list"),
+    BEYOND_BMC_LIMIT_DYN_MAP_LITERAL_VALUE_EQUALITY(
+        "dyn({'a': int_list}) == {'a': [1, 2, 3, 4, 5, dyn('not_an_int')]}"),
+    BEYOND_BMC_LIMIT_DYN_MAP_LITERAL_OPTIONAL_VALUE_EQUALITY(
+        "dyn({?'a': optional.of(int_list)}) == {'a': [1, 2, 3, 4, 5, dyn('not_an_int')]}"),
+    BEYOND_BMC_LIMIT_OPTIONAL_MAP_LITERAL_EQUALITY_WITH_DYN_MAP(
+        "size(int_list) == 6 && dyn({?'a': optional.of(int_list)}) == dyn_map"),
+    BEYOND_BMC_LIMIT_EQUALITY_WITH_DYN_LIST(
+        "int_list == dyn_list && size(dyn_list) == 6 && 'not_an_int' in dyn_list"),
+    BEYOND_BMC_LIMIT_IN_DYN_LIST("size(int_list) == 6 && dyn('not_an_int') in dyn(int_list)"),
+    BEYOND_BMC_LIMIT_DYN_IN_NESTED_LIST(
+        "size(nested_list) == 1 && dyn([1, 2, 3, 4, 5, dyn('not_an_int')]) in nested_list"),
+    BEYOND_BMC_LIMIT_IN_DYN_MAP("size(string_int_map) == 6 && dyn(1) in dyn(string_int_map)"),
+    BEYOND_BMC_LIMIT_IN_DYN_LIST_CONCATENATION("'a' in dyn(int_list + [1])"),
+    // A long map's type constraint is truncated even if only its key or its value type is known.
+    BEYOND_BMC_LIMIT_DYN_KEY_MAP_IN_LITERAL(
+        "dyn(dyn_int_map) in [{1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: dyn('not_an_int')}]"),
+    BEYOND_BMC_LIMIT_DYN_VALUE_MAP_IN_LITERAL(
+        "dyn(string_dyn_map) in [{'a': 1, 'b': 2, 'c': 3, 'd': 4, 'e': 5, dyn(6): 6}]"),
+    // Map presence is only linked to the keys up to the unroll limit.
+    BEYOND_BMC_LIMIT_MAP_KEYS_IN(
+        "size(string_int_map) == 6 && ['a', 'b', 'c', 'd', 'e', 'f', 'g'].all(k, k in"
+            + " string_int_map)"),
+    BEYOND_BMC_LIMIT_MAP_KEYS_HAS(
+        "size(string_int_map) == 6 && has(string_int_map.a) && has(string_int_map.b) &&"
+            + " has(string_int_map.c) && has(string_int_map.d) && has(string_int_map.e) &&"
+            + " has(string_int_map.f) && has(string_int_map.g)"),
+    BEYOND_BMC_LIMIT_MAP_KEYS_OPTIONAL_SELECT(
+        "size(string_int_map) == 6 && string_int_map.?a.hasValue() &&"
+            + " string_int_map.?b.hasValue() && string_int_map.?c.hasValue() &&"
+            + " string_int_map.?d.hasValue() && string_int_map.?e.hasValue() &&"
+            + " string_int_map.?f.hasValue() && string_int_map.?g.hasValue()"),
+    ;
 
-    final String expr;
+    private final String expr;
 
-    IsSatisfiableInconclusiveTestCase(String expr) {
+    private IsSatisfiableInconclusiveTestCase(String expr) {
       this.expr = expr;
     }
   }
@@ -454,11 +516,12 @@ public final class CelVerifierZ3ImplTest {
     BEYOND_BMC_LIMIT_UNCONSTRAINED_MAP_KEY_TYPE(
         "size(string_int_map) == 6 && dyn(1) in string_int_map"),
     LIST_INDEX_DYN_STRING_KEY("int_list[dyn('0')] == 1"),
+    NON_BOOL_LOGICAL_OPERAND("dyn(1) && true"),
     ;
 
-    final String expr;
+    private final String expr;
 
-    IsUnsatisfiableTestCase(String expr) {
+    private IsUnsatisfiableTestCase(String expr) {
       this.expr = expr;
     }
   }
@@ -983,6 +1046,20 @@ public final class CelVerifierZ3ImplTest {
   }
 
   @Test
+  public void isAlwaysTrue_approximateOperandWithUnknown_inconclusive() throws Exception {
+    // The truncated `all` may really be false, which absorbs the unknown, so this is always true.
+    CelAbstractSyntaxTree ast =
+        CEL.compile("!(int_list.all(x, x > 0) && unknown_var) || int_list.all(x, x > 0)").getAst();
+    CelVerifier verifier =
+        CelVerifierFactory.newVerifier(CEL).addUnknownIdentifier("unknown_var").build();
+
+    CelVerificationResult result = verifier.isAlwaysTrue(ast);
+
+    assertThat(result.status()).isEqualTo(VerificationStatus.INCONCLUSIVE);
+    assertThat(result.message()).contains("depends on approximations");
+  }
+
+  @Test
   public void isAlwaysTrue_dynamicComprehensionNonBoolYieldsError() throws Exception {
     // Testing the path where a comprehension step successfully evaluates but yields a
     // non-boolean result. To bypass standard field access CEL errors, we constrain dyn_list to a
@@ -1098,6 +1175,42 @@ public final class CelVerifierZ3ImplTest {
     // when unknown_var is Unknown, whereas `1 / 0` evaluates to Error. Thus they are not
     // equivalent.
     assertThat(result.status()).isEqualTo(VerificationStatus.VIOLATED);
+  }
+
+  private enum UnknownIdentifierEquivalenceTestCase {
+    // CEL identifies an unknown by its attributes, so both sides may yield the same unknown.
+    LOGICAL_AND_IDENTITY("a && true", "a"),
+    ADDITION_COMMUTATIVITY("x + 1", "1 + x"),
+    // An error is not final beyond the unroll limit: a later unknown step overrides it.
+    TRUNCATED_ERROR_THEN_UNKNOWN(
+        "int_list.transformList(i, v, i < 5 ? 1 / 0 : unknown_var)",
+        "int_list.transformList(i, v, 1 / 0)"),
+    ;
+
+    private final String exprA;
+    private final String exprB;
+
+    private UnknownIdentifierEquivalenceTestCase(String exprA, String exprB) {
+      this.exprA = exprA;
+      this.exprB = exprB;
+    }
+  }
+
+  @Test
+  public void verifyEquivalence_withUnknownIdentifiers_inconclusive(
+      @TestParameter UnknownIdentifierEquivalenceTestCase testCase) throws Exception {
+    CelAbstractSyntaxTree astA = CEL.compile(testCase.exprA).getAst();
+    CelAbstractSyntaxTree astB = CEL.compile(testCase.exprB).getAst();
+    CelVerifier verifier =
+        CelVerifierFactory.newVerifier(CEL)
+            .addUnknownIdentifier("a")
+            .addUnknownIdentifier("x")
+            .addUnknownIdentifier("unknown_var")
+            .build();
+
+    CelVerificationResult result = verifier.verifyEquivalence(astA, astB);
+
+    assertThat(result.status()).isEqualTo(VerificationStatus.INCONCLUSIVE);
   }
 
   @Test
@@ -1572,12 +1685,35 @@ public final class CelVerifierZ3ImplTest {
         "size(int_list) == 5 ? int_list[5] == 1 : true",
         "Condition is not always true\\.",
         "Counterexample input:"),
+    // The type checker narrows static types (e.g. `['guest'] + dyn_var` is typed list(string)), so
+    // those must not constrain inputs, even in subexpressions that are never evaluated.
+    NARROWED_LIST_IN_DOES_NOT_CONSTRAIN_INPUTS(
+        "dyn_var != [0] || (false && 'x' in (['guest'] + dyn_var))",
+        "Condition is not always true\\.",
+        "Counterexample input:",
+        "dyn_var = "),
+    NARROWED_LIST_INDEX_DOES_NOT_CONSTRAIN_INPUTS(
+        "dyn_var != [0] || (false && (['guest'] + dyn_var)[1] == 'x')",
+        "Condition is not always true\\.",
+        "Counterexample input:",
+        "dyn_var = "),
+    NARROWED_LIST_EQUALITY_DOES_NOT_CONSTRAIN_INPUTS(
+        "dyn_var != [1, 2, 3, 4, 5] ||"
+            + " (false && (['a'] + dyn_var) == ['a', 'b', 'c', 'd', 'e', 'f'])",
+        "Condition is not always true\\.",
+        "Counterexample input:",
+        "dyn_var = "),
+    NARROWED_ITERATION_VARIABLE_DOES_NOT_CONSTRAIN_INPUTS(
+        "dyn_int_map != {1: 1} || (false && [dyn_int_map, string_dyn_map].exists(m, dyn(1) in m))",
+        "Condition is not always true\\.",
+        "Counterexample input:",
+        "dyn_int_map = \\{1: 1\\}"),
     ;
 
-    final String expr;
-    final ImmutableList<String> expectedFragments;
+    private final String expr;
+    private final ImmutableList<String> expectedFragments;
 
-    IsAlwaysTrueViolationTestCase(String expr, String... expectedFragments) {
+    private IsAlwaysTrueViolationTestCase(String expr, String... expectedFragments) {
       this.expr = expr;
       this.expectedFragments = ImmutableList.copyOf(expectedFragments);
     }
@@ -1642,11 +1778,14 @@ public final class CelVerifierZ3ImplTest {
         "x == y && y == port ? dyn_list.all(e, x == x) == dyn_list.all(e, y == port) : true"),
     LIST_INDEX_BEYOND_BMC_LIMIT("size(int_list) == 6 ? int_list[5] == 1 : true"),
     MAP_INDEX_BEYOND_BMC_LIMIT("size(string_int_map) == 6 ? string_int_map['a'] == 1 : true"),
+    // The approximate operand may really be false, which absorbs the error.
+    LOGICAL_AND_APPROXIMATE_OPERAND_WITH_ERROR(
+        "size(int_list) < 6 || !(dyn(int_list)[5] == 'x' && 1 / 0 == 1)"),
     ;
 
-    final String expr;
+    private final String expr;
 
-    IsInconclusiveTestCase(String expr) {
+    private IsInconclusiveTestCase(String expr) {
       this.expr = expr;
     }
   }
@@ -1726,12 +1865,13 @@ public final class CelVerifierZ3ImplTest {
     STRUCT_DIFFERENT_DEFAULT_FIELDS_WITH_TRUNCATED_VALUE(
         "TestAllTypes{single_int64: int_list.all(i, v, i < 5) ? 0 : 1}",
         "TestAllTypes{single_sint64: int_list.all(i, v, i < 5) ? 0 : 1}"),
-    CHAINED_MAP_ALL_TRUE_INCONCLUSIVE("int_list.map(x, 1).all(v, v == 1)", "true");
+    DYN_RANGE_DIFFERENT_COMPREHENSIONS("dyn_var.all(e, e > 0)", "dyn_var.all(e, e < 0)"),
+    CHAINED_MAP_ALL_TRUE("int_list.map(x, 1).all(v, v == 1)", "true");
 
-    final String exprA;
-    final String exprB;
+    private final String exprA;
+    private final String exprB;
 
-    EquivalenceInconclusiveTestCase(String exprA, String exprB) {
+    private EquivalenceInconclusiveTestCase(String exprA, String exprB) {
       this.exprA = exprA;
       this.exprB = exprB;
     }
@@ -2849,7 +2989,8 @@ public final class CelVerifierZ3ImplTest {
               /* comprehensionUnrollLimit= */ 3,
               /* unknownIdentifiers= */ ImmutableSet.of(),
               /* functionRegistry= */ CelZ3FunctionRegistry.create(ImmutableList.of()),
-              /* typeProvider= */ CelVerifierZ3Impl.EMPTY_TYPE_PROVIDER);
+              /* typeProvider= */ CelVerifierZ3Impl.EMPTY_TYPE_PROVIDER,
+              /* parameterizeUnknowns= */ false);
 
       Expr<?> result = translator.translate(ast).z3Expr();
       String resultString = result.toString();
@@ -2870,7 +3011,8 @@ public final class CelVerifierZ3ImplTest {
               /* comprehensionUnrollLimit= */ 3,
               /* unknownIdentifiers= */ ImmutableSet.of(),
               /* functionRegistry= */ CelZ3FunctionRegistry.create(ImmutableList.of()),
-              /* typeProvider= */ CelVerifierZ3Impl.EMPTY_TYPE_PROVIDER);
+              /* typeProvider= */ CelVerifierZ3Impl.EMPTY_TYPE_PROVIDER,
+              /* parameterizeUnknowns= */ false);
 
       Expr<?> result = translator.translate(ast).z3Expr();
       String resultString = result.toString();
@@ -2977,6 +3119,42 @@ public final class CelVerifierZ3ImplTest {
     CelVerificationResult result = verifier.isAlwaysTrue(ast);
 
     assertThat(result.status()).isEqualTo(VerificationStatus.VERIFIED);
+  }
+
+  @Test
+  public void isAlwaysTrue_customComprehensionWithLoopCondition_inconclusive() throws Exception {
+    // first_elem() stops folding once the accumulator is set, so it returns 1 for [1, 2]. The loop
+    // condition over a non-literal range is not modeled, so the verifier must not claim that the
+    // result is the last element.
+    Cel cel =
+        CelFactory.plannerCelBuilder()
+            .addVar("int_list", ListType.create(SimpleType.INT))
+            .addMacros(
+                CelMacro.newReceiverMacro(
+                    "first_elem",
+                    0,
+                    (exprFactory, target, arguments) ->
+                        Optional.of(
+                            exprFactory.fold(
+                                "x",
+                                target,
+                                "accu",
+                                exprFactory.newIntLiteral(-1),
+                                exprFactory.newGlobalCall(
+                                    Operator.EQUALS.getFunction(),
+                                    exprFactory.newIdentifier("accu"),
+                                    exprFactory.newIntLiteral(-1)),
+                                exprFactory.newIdentifier("x"),
+                                exprFactory.newIdentifier("accu")))))
+            .build();
+    CelAbstractSyntaxTree ast =
+        cel.compile("int_list == [1, 2] ? int_list.first_elem() == 2 : true").getAst();
+    CelVerifier verifier = CelVerifierFactory.newVerifier(cel).build();
+
+    CelVerificationResult result = verifier.isAlwaysTrue(ast);
+
+    assertThat(result.status()).isEqualTo(VerificationStatus.INCONCLUSIVE);
+    assertThat(result.message()).contains("depends on approximations");
   }
 
   @Test

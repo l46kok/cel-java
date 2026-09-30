@@ -131,6 +131,7 @@ public final class CelZ3TypeSystem {
   private static final String FUNC_MSG_VALUES = "msg_values";
   private static final String FUNC_MSG_PRESENCE = "msg_presence";
   private static final String FUNC_MSG_TYPE_NAME = "msg_type_name";
+  private static final String FUNC_HAS_TRUNCATED_TYPE_CONSTRAINT = "!has_truncated_type_constraint";
 
   private final Context ctx;
   private final Map<FuncDeclKey, FuncDecl<?>> funcDeclCache;
@@ -169,8 +170,9 @@ public final class CelZ3TypeSystem {
   private final FuncDecl msgValuesFunc;
   private final FuncDecl msgPresenceFunc;
   private final FuncDecl msgTypeNameFunc;
+  private final FuncDecl<?> hasTruncatedTypeConstraintFunc;
 
-  private boolean propagateParameterizedUnknowns;
+  private final boolean parameterizeUnknowns;
 
   public Expr<?> mkListRefConst(String prefix) {
     return ctx.mkFreshConst(prefix, listRefSort);
@@ -454,44 +456,19 @@ public final class CelZ3TypeSystem {
     return ctx.mkApp(unknownCons.ConstructorDecl(), unknownId);
   }
 
-  /** Creates a parameterized unknown representing a truncated comprehension. */
-  Expr<?> mkParameterizedUnknown(long staticHash, List<Expr<?>> smtArgs) {
-    Sort[] domain = new Sort[smtArgs.size()];
-    for (int i = 0; i < smtArgs.size(); i++) {
-      domain[i] = celValueSort();
-    }
-
-    String ufName = "!trunc_" + Long.toHexString(staticHash);
-    FuncDecl<?> truncUf = internFuncDecl(ufName, domain, unknownIdSort);
-
-    Expr<?> uniqueUnknownId =
-        smtArgs.isEmpty()
-            ? ctx.mkConst(ufName, unknownIdSort)
-            : ctx.mkApp(truncUf, smtArgs.toArray(new Expr<?>[0]));
-
-    return mkUnknown(uniqueUnknownId);
-  }
-
-  void enableParameterizedUnknownPropagation() {
-    this.propagateParameterizedUnknowns = true;
+  /**
+   * Creates an unknown whose ID is the uninterpreted function {@code name} applied to {@code args},
+   * so that EUF only equates unknowns produced by the same operation over the same arguments.
+   */
+  Expr<?> mkParameterizedUnknown(String name, List<Expr<?>> args) {
+    Sort[] domain = new Sort[args.size()];
+    Arrays.fill(domain, celValueSort());
+    FuncDecl<?> uf = internFuncDecl(name, domain, unknownIdSort);
+    return mkUnknown(ctx.mkApp(uf, args.toArray(new Expr<?>[0])));
   }
 
   boolean isParameterizingUnknowns() {
-    return propagateParameterizedUnknowns;
-  }
-
-  /**
-   * Creates a parameterized unknown representing an operation applied to one or more unknown
-   * values, preserving EUF congruence only when both the operation and all arguments match.
-   *
-   * <p>Only use this when {@link #isParameterizingUnknowns()} is true. Otherwise, verification only
-   * observes whether a value is unknown, not which unknown it is.
-   */
-  Expr<?> mkPropagatedUnknown(String opName, List<Expr<?>> allArgs) {
-    Sort[] domain = new Sort[allArgs.size()];
-    Arrays.fill(domain, celValueSort());
-    FuncDecl<?> propUf = internFuncDecl(opName, domain, unknownIdSort);
-    return mkUnknown(ctx.mkApp(propUf, allArgs.toArray(new Expr<?>[0])));
+    return parameterizeUnknowns;
   }
 
   /**
@@ -514,10 +491,11 @@ public final class CelZ3TypeSystem {
       errors[i] = isError(checkArgs.get(i));
       unknowns[i] = isUnknown(checkArgs.get(i));
     }
-    // Only equivalence checks, which parameterize unknowns, can tell unknowns apart. The other
-    // checks only observe whether a value is unknown, so the generic unknown suffices for them.
+    // Equivalence checks compare unknowns, which may stand in for truncated values that differ, so
+    // they must not equate unknowns derived from different inputs. The other checks only observe
+    // whether a value is unknown, so the generic unknown suffices for them.
     Expr<?> unknownResult =
-        propagateParameterizedUnknowns ? mkPropagatedUnknown(opName, allArgs) : mkUnknown();
+        parameterizeUnknowns ? mkParameterizedUnknown(opName, allArgs) : mkUnknown();
     BoolExpr hasError = ctx.mkOr(errors);
     BoolExpr hasUnknown = ctx.mkOr(unknowns);
     // Unknowns have higher precedence than error
@@ -782,6 +760,16 @@ public final class CelZ3TypeSystem {
     return ctx.mkApp(msgTypeNameFunc, msgRef);
   }
 
+  /**
+   * Whether {@code val} is, or was built from, a container whose type constraint was truncated at
+   * the unroll limit, so it may hold elements that do not conform to their static type. This is
+   * uninterpreted, but forced by the type constraints of containers longer than the limit, and
+   * propagated to containers built from them.
+   */
+  BoolExpr hasTruncatedTypeConstraint(Expr<?> val) {
+    return (BoolExpr) ctx.mkApp(hasTruncatedTypeConstraintFunc, val);
+  }
+
   /** Checks if the given arithmetic expression overflows a 64-bit integer. */
   public BoolExpr checkIntOverflow(ArithExpr result) {
     return ctx.mkOr(
@@ -958,7 +946,7 @@ public final class CelZ3TypeSystem {
     return ctx.mkNot(arg);
   }
 
-  CelZ3TypeSystem(Context ctx) {
+  CelZ3TypeSystem(Context ctx, boolean parameterizeUnknowns) {
     this.ctx = ctx;
     this.funcDeclCache = new HashMap<>();
     this.boolCons =
@@ -1099,6 +1087,9 @@ public final class CelZ3TypeSystem {
             ctx.mkArraySort(ctx.getStringSort(), ctx.getBoolSort()));
     this.msgTypeNameFunc =
         ctx.mkFuncDecl(FUNC_MSG_TYPE_NAME, new Sort[] {this.messageRefSort}, ctx.getStringSort());
-    this.propagateParameterizedUnknowns = false;
+    this.hasTruncatedTypeConstraintFunc =
+        ctx.mkFuncDecl(
+            FUNC_HAS_TRUNCATED_TYPE_CONSTRAINT, new Sort[] {this.celValueSort}, ctx.getBoolSort());
+    this.parameterizeUnknowns = parameterizeUnknowns;
   }
 }

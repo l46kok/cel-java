@@ -143,7 +143,8 @@ abstract class TranslatedValue {
     List<BoolExpr> exactErrors = new ArrayList<>();
     List<BoolExpr> exactUnknowns = new ArrayList<>();
     List<BoolExpr> unknowns = new ArrayList<>();
-    List<BoolExpr> argTaints = new ArrayList<>(args.size());
+    List<BoolExpr> taints = new ArrayList<>();
+    taints.add(baseTaint);
     List<Expr<?>> nonConstZ3Args = new ArrayList<>();
     List<Expr<?>> allZ3Args = new ArrayList<>(args.size());
 
@@ -151,7 +152,7 @@ abstract class TranslatedValue {
       Expr<?> z3Expr = arg.z3Expr();
       BoolExpr isApprox = arg.isApproximate();
       allZ3Args.add(z3Expr);
-      argTaints.add(isApprox);
+      taints.add(isApprox);
       if (arg.isLiteral(ExprKind.Kind.CONSTANT)) {
         continue;
       }
@@ -163,13 +164,10 @@ abstract class TranslatedValue {
 
       unknowns.add(isUnknown);
       exactErrors.add(CelZ3TypeSystem.mkAndFlattened(ctx, isError, isExact));
-      if (!ts.isParameterizingUnknowns()) {
-        exactUnknowns.add(CelZ3TypeSystem.mkAndFlattened(ctx, isUnknown, isExact));
-      }
+      exactUnknowns.add(CelZ3TypeSystem.mkAndFlattened(ctx, isUnknown, isExact));
     }
 
-    BoolExpr anyArgTaint = CelZ3TypeSystem.mkOrFlattened(ctx, argTaints);
-    BoolExpr anyTaint = CelZ3TypeSystem.mkOrFlattened(ctx, baseTaint, anyArgTaint);
+    BoolExpr anyTaint = CelZ3TypeSystem.mkOrFlattened(ctx, taints);
     if (nonConstZ3Args.isEmpty()) {
       return create(baseResult, celExpr, ts, anyTaint);
     }
@@ -178,14 +176,8 @@ abstract class TranslatedValue {
         ts.propagateErrorAndUnknown(opName, baseResult, nonConstZ3Args, allZ3Args);
 
     BoolExpr hasExactError = CelZ3TypeSystem.mkOrFlattened(ctx, exactErrors);
+    BoolExpr hasExactUnknown = CelZ3TypeSystem.mkOrFlattened(ctx, exactUnknowns);
     BoolExpr hasUnknown = CelZ3TypeSystem.mkOrFlattened(ctx, unknowns);
-    // A parameterized unknown is keyed on every argument, so it is only exact if no argument (not
-    // just the unknown one) is approximate.
-    BoolExpr hasExactUnknown =
-        ts.isParameterizingUnknowns()
-            ? CelZ3TypeSystem.mkAndFlattened(
-                ctx, hasUnknown, CelZ3TypeSystem.mkNotFlattened(ctx, anyArgTaint))
-            : CelZ3TypeSystem.mkOrFlattened(ctx, exactUnknowns);
 
     BoolExpr isSafe =
         CelZ3TypeSystem.mkOrFlattened(
@@ -219,8 +211,11 @@ abstract class TranslatedValue {
           mapSb.append('_').append(entry.optionalEntry());
         }
         return mapSb.toString();
-      default:
+      case LIST:
         return "LIST_" + expr.list().optionalIndices();
+      default:
+        throw new IllegalArgumentException(
+            "Unexpected expression kind: " + expr.exprKind().getKind());
     }
   }
 
