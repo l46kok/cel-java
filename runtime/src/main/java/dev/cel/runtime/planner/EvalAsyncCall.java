@@ -17,6 +17,7 @@ package dev.cel.runtime.planner;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static dev.cel.runtime.planner.EvalHelpers.evalNonstrictly;
 import static dev.cel.runtime.planner.EvalHelpers.evalStrictly;
+import static dev.cel.runtime.planner.EvalHelpers.maybeAdaptNonStrictArg;
 
 import com.google.common.collect.ImmutableList;
 import com.google.errorprone.annotations.Immutable;
@@ -75,13 +76,11 @@ final class EvalAsyncCall extends PlannedInterpretable {
           isStrict
               ? evalStrictly(args[i], resolver, frame)
               : evalNonstrictly(args[i], resolver, frame);
-      if (isStrict) {
-        accumulatedUnknowns = AccumulatedUnknowns.maybeMerge(accumulatedUnknowns, argVal);
-      }
-      evaluatedArgs[i] = argVal;
+      evaluatedArgs[i] = isStrict ? argVal : maybeAdaptNonStrictArg(argVal);
+      accumulatedUnknowns = AccumulatedUnknowns.maybeMerge(accumulatedUnknowns, argVal);
     }
 
-    if (accumulatedUnknowns != null) {
+    if (isStrict && accumulatedUnknowns != null) {
       return accumulatedUnknowns;
     }
 
@@ -94,15 +93,20 @@ final class EvalAsyncCall extends PlannedInterpretable {
     }
 
     try {
-      return frame
-          .asyncTracker()
-          .recordOrGet(
-              expr().id(),
-              functionName,
-              resolvedOverload.getOverloadId(),
-              evaluatedArgs,
-              overload,
-              celValueConverter);
+      Object result =
+          frame
+              .asyncTracker()
+              .recordOrGet(
+                  expr().id(),
+                  functionName,
+                  resolvedOverload.getOverloadId(),
+                  evaluatedArgs,
+                  overload,
+                  celValueConverter);
+      if (!isStrict && result instanceof AccumulatedUnknowns) {
+        return AccumulatedUnknowns.maybeMerge(accumulatedUnknowns, result);
+      }
+      return result;
     } catch (CelRuntimeException e) {
       throw new LocalizedEvaluationException(e, expr().id());
     } catch (RuntimeException e) {

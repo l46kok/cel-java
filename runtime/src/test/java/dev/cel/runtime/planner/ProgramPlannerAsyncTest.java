@@ -15,6 +15,7 @@
 package dev.cel.runtime.planner;
 
 import static com.google.common.base.Preconditions.checkState;
+import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.util.concurrent.Futures.immediateFailedFuture;
 import static com.google.common.util.concurrent.Futures.immediateFuture;
@@ -57,12 +58,16 @@ import dev.cel.runtime.CelAsyncCall;
 import dev.cel.runtime.CelAsyncDrainAction;
 import dev.cel.runtime.CelAsyncDrainStrategy;
 import dev.cel.runtime.CelAsyncEvaluationOptions;
+import dev.cel.runtime.CelAsyncFunctionOverload;
 import dev.cel.runtime.CelAsyncObserver;
 import dev.cel.runtime.CelAttribute;
 import dev.cel.runtime.CelAttributePattern;
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelFunctionBinding;
+import dev.cel.runtime.CelFunctionOverload;
+import dev.cel.runtime.CelFunctionResolver;
 import dev.cel.runtime.CelLateFunctionBindings;
+import dev.cel.runtime.CelResolvedOverload;
 import dev.cel.runtime.CelRuntime;
 import dev.cel.runtime.CelRuntime.Program;
 import dev.cel.runtime.CelRuntimeBuilder;
@@ -72,9 +77,12 @@ import dev.cel.runtime.CelVariableResolver;
 import dev.cel.runtime.PartialVars;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -83,6 +91,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.LongStream;
 import org.jspecify.annotations.Nullable;
 import org.junit.After;
 import org.junit.Test;
@@ -109,6 +118,9 @@ public final class ProgramPlannerAsyncTest {
                   "asyncAdd",
                   newGlobalOverload(
                       "asyncAdd_int_int", SimpleType.INT, SimpleType.INT, SimpleType.INT)),
+              newFunctionDeclaration(
+                  "asyncNonStrictIdentity",
+                  newGlobalOverload("asyncNonStrictIdentity_dyn", SimpleType.DYN, SimpleType.DYN)),
               newFunctionDeclaration(
                   "asyncSum3",
                   newGlobalOverload(
@@ -141,7 +153,10 @@ public final class ProgramPlannerAsyncTest {
               newFunctionDeclaration(
                   "lateAdd",
                   newGlobalOverload(
-                      "lateAdd_int_int", SimpleType.INT, SimpleType.INT, SimpleType.INT)))
+                      "lateAdd_int_int", SimpleType.INT, SimpleType.INT, SimpleType.INT)),
+              newFunctionDeclaration(
+                  "lateBoundFunc",
+                  newGlobalOverload("lateBoundFunc_int", SimpleType.INT, SimpleType.INT)))
           .build();
 
   private static final CelFunctionBinding ASYNC_SQUARE_INT =
@@ -1765,6 +1780,607 @@ public final class ProgramPlannerAsyncTest {
     assertThat(evalEx.getErrorCode()).isEqualTo(CelErrorCode.DIVIDE_BY_ZERO);
   }
 
+  @Test
+  public void evalAsync_comprehensionFilter_filtersCorrectly() throws Exception {
+    CelAbstractSyntaxTree ast = CEL_COMPILER.compile("list_var.filter(x, asyncIsEven(x))").getAst();
+    CelRuntime runtime =
+        plannerRuntimeBuilder()
+            .addFunctionBindings(
+                CelFunctionBinding.fromAsync(
+                    "asyncIsEven_int", Long.class, (Long arg) -> immediateFuture(arg % 2 == 0)))
+            .build();
+    Program program = runtime.createProgram(ast);
+
+    ListenableFuture<Object> future =
+        program.evalAsync(ImmutableMap.of("list_var", ImmutableList.of(1L, 2L, 3L, 4L, 5L, 6L)));
+    Object result = future.get(5, SECONDS);
+
+    assertThat((Iterable<?>) result).containsExactly(2L, 4L, 6L).inOrder();
+  }
+
+  @Test
+  public void evalAsync_comprehensionPredicate_evaluatesSpeculatively(
+      @TestParameter ComprehensionPredicateTestCase testCase) throws Exception {
+    CelAbstractSyntaxTree ast = CEL_COMPILER.compile(testCase.expression).getAst();
+    CelRuntime runtime =
+        plannerRuntimeBuilder()
+            .addFunctionBindings(
+                CelFunctionBinding.fromAsync(
+                    "asyncIsEven_int", Long.class, (Long arg) -> immediateFuture(arg % 2L == 0L)))
+            .build();
+    Program program = runtime.createProgram(ast);
+
+    ListenableFuture<Object> future = program.evalAsync(testCase.variables);
+    Object result = future.get(5, SECONDS);
+
+    assertThat(result).isEqualTo(testCase.expectedResult);
+  }
+
+  @Test
+  public void evalAsync_comprehensionMap_evaluatesCorrectly() throws Exception {
+    CelAbstractSyntaxTree ast = CEL_COMPILER.compile("list_var.map(x, asyncSquare(x))").getAst();
+    CelRuntime runtime =
+        plannerRuntimeBuilder()
+            .addFunctionBindings(
+                CelFunctionBinding.fromAsync(
+                    "asyncSquare_int", Long.class, (Long arg) -> immediateFuture(arg * arg)))
+            .build();
+    Program program = runtime.createProgram(ast);
+
+    ListenableFuture<Object> future =
+        program.evalAsync(ImmutableMap.of("list_var", ImmutableList.of(1L, 2L, 3L)));
+    Object result = future.get(5, SECONDS);
+
+    assertThat((Iterable<?>) result).containsExactly(1L, 4L, 9L).inOrder();
+  }
+
+  @Test
+  public void syncEval_onLateBoundAsyncFunction_throwsCelEvaluationException(
+      @TestParameter boolean parsedOnly) throws Exception {
+    String fnName = parsedOnly ? "customLateAsync" : "lateBoundFunc";
+    CelAbstractSyntaxTree ast =
+        parsedOnly
+            ? CEL_COMPILER.parse("customLateAsync(7)").getAst()
+            : CEL_COMPILER.compile("lateBoundFunc(10)").getAst();
+    CelRuntime runtime =
+        parsedOnly
+            ? plannerRuntimeBuilder().build()
+            : plannerRuntimeBuilder().addLateBoundFunctions("lateBoundFunc").build();
+    Program program = runtime.createProgram(ast);
+    CelFunctionResolver lateBoundResolver =
+        newLateBoundAsyncResolver(fnName, (Long arg) -> immediateFuture(100L));
+
+    CelEvaluationException e =
+        assertThrows(
+            CelEvaluationException.class, () -> program.eval(ImmutableMap.of(), lateBoundResolver));
+
+    assertThat(e)
+        .hasMessageThat()
+        .contains(
+            String.format(
+                "Async function '%s' cannot be late-bound. Late-bound functions must be"
+                    + " synchronous.",
+                fnName));
+  }
+
+  @Test
+  public void evalAsync_comprehensionAsyncError_propagatesFailure() throws Exception {
+    CelAbstractSyntaxTree ast =
+        CEL_COMPILER.compile("list_var.map(i, i == 2 ? asyncFail(i) : asyncSquare(i))").getAst();
+    CelRuntime runtime =
+        plannerRuntimeBuilder()
+            .addFunctionBindings(
+                CelFunctionBinding.fromAsync(
+                    "asyncSquare_int", Long.class, (Long arg) -> immediateFuture(arg * arg)),
+                CelFunctionBinding.fromAsync(
+                    "asyncFail_int",
+                    Long.class,
+                    (Long arg) ->
+                        immediateFailedFuture(new IllegalArgumentException("comprehension fail"))))
+            .build();
+    Program program = runtime.createProgram(ast);
+
+    ListenableFuture<Object> future =
+        program.evalAsync(ImmutableMap.of("list_var", ImmutableList.of(1L, 2L, 3L)));
+    ExecutionException e = assertThrows(ExecutionException.class, future::get);
+
+    assertThat(e).hasCauseThat().isInstanceOf(CelEvaluationException.class);
+    assertThat(e).hasCauseThat().hasMessageThat().contains("comprehension fail");
+  }
+
+  @Test
+  @SuppressWarnings("Immutable") // Test only
+  public void evalAsync_highVolumeFanout_respectsConcurrencyAndCompletes() throws Exception {
+    ImmutableList<Long> items = LongStream.rangeClosed(1, 50).boxed().collect(toImmutableList());
+    ImmutableList<Long> expected =
+        LongStream.rangeClosed(1, 50).map(x -> x * x).boxed().collect(toImmutableList());
+    CelAbstractSyntaxTree ast = CEL_COMPILER.compile("list_var.map(x, asyncSquare(x))").getAst();
+    AtomicInteger activeConcurrent = new AtomicInteger();
+    AtomicInteger maxConcurrent = new AtomicInteger();
+    ListeningExecutorService workerPool = listeningDecorator(Executors.newFixedThreadPool(4));
+    try {
+      CelAsyncEvaluationOptions options =
+          CelAsyncEvaluationOptions.builder().setMaxConcurrency(3).build();
+      CelRuntime runtime =
+          plannerRuntimeBuilder()
+              .setAsyncEvaluationOptions(options)
+              .addFunctionBindings(
+                  CelFunctionBinding.fromAsync(
+                      "asyncSquare_int",
+                      Long.class,
+                      (Long arg) ->
+                          workerPool.submit(
+                              () -> {
+                                int cur = activeConcurrent.incrementAndGet();
+                                maxConcurrent.accumulateAndGet(cur, Math::max);
+                                try {
+                                  Thread.sleep(5);
+                                  return arg * arg;
+                                } finally {
+                                  activeConcurrent.decrementAndGet();
+                                }
+                              })))
+              .build();
+      Program program = runtime.createProgram(ast);
+
+      ListenableFuture<Object> future = program.evalAsync(ImmutableMap.of("list_var", items));
+      Object result = future.get(10, SECONDS);
+
+      assertThat((Iterable<?>) result).containsExactlyElementsIn(expected).inOrder();
+      assertThat(maxConcurrent.get()).isAtLeast(2);
+      assertThat(maxConcurrent.get()).isAtMost(3);
+    } finally {
+      workerPool.shutdownNow();
+    }
+  }
+
+  @Test
+  @SuppressWarnings("Immutable") // Test only
+  public void evalAsync_comprehensionFilter_mergesAccumulatedUnknownsAndDispatchesInParallel(
+      @TestParameter ComprehensionFilterTestCase testCase) throws Exception {
+    CelAbstractSyntaxTree ast = CEL_COMPILER.compile(testCase.expression).getAst();
+    Map<Long, SettableFuture<Object>> futures = new HashMap<>();
+    futures.put(1L, SettableFuture.create());
+    futures.put(2L, SettableFuture.create());
+    CelRuntime runtime =
+        plannerRuntimeBuilder()
+            .addFunctionBindings(
+                CelFunctionBinding.fromAsync(
+                    "asyncIsEven_int", Long.class, (Long arg) -> futures.get(arg)))
+            .build();
+    Program program = runtime.createProgram(ast);
+
+    ListenableFuture<Object> evalFuture = program.evalAsync(testCase.variables);
+    boolean firstCancelledInitial = futures.get(1L).isCancelled();
+    boolean secondCancelledInitial = futures.get(2L).isCancelled();
+    boolean doneInitial = evalFuture.isDone();
+    futures.get(1L).set(false);
+    boolean doneAfterFirst = evalFuture.isDone();
+    futures.get(2L).set(true);
+    Object result = evalFuture.get(5, SECONDS);
+
+    assertThat(firstCancelledInitial).isFalse();
+    assertThat(secondCancelledInitial).isFalse();
+    assertThat(doneInitial).isFalse();
+    assertThat(doneAfterFirst).isFalse();
+    assertThat((Iterable<?>) result).containsExactly(testCase.expectedElement);
+  }
+
+  @Test
+  @SuppressWarnings("Immutable") // Test only
+  public void evalAsync_comprehensionExistsOverMap_withInFlightAsync_evaluatesCorrectly()
+      throws Exception {
+    CelAbstractSyntaxTree ast =
+        CEL_COMPILER.compile("map_var.exists(k, asyncIsEven(map_var[k]))").getAst();
+    SettableFuture<Object> futureA = SettableFuture.create();
+    SettableFuture<Object> futureB = SettableFuture.create();
+    CelRuntime runtime =
+        plannerRuntimeBuilder()
+            .addFunctionBindings(
+                CelFunctionBinding.fromAsync(
+                    "asyncIsEven_int",
+                    Long.class,
+                    (Long arg) -> {
+                      if (arg == 1L) {
+                        return futureA;
+                      }
+                      return futureB;
+                    }))
+            .build();
+    Program program = runtime.createProgram(ast);
+
+    ListenableFuture<Object> evalFuture =
+        program.evalAsync(ImmutableMap.of("map_var", ImmutableMap.of("a", 1L, "b", 4L)));
+    boolean doneBeforeSet = evalFuture.isDone();
+    futureA.set(false);
+    futureB.set(true);
+    Object result = evalFuture.get(5, SECONDS);
+
+    assertThat(doneBeforeSet).isFalse();
+    assertThat(result).isEqualTo(true);
+  }
+
+  @Test
+  @SuppressWarnings("Immutable") // Test only
+  public void evalAsync_comprehensionMap_withInFlightAsync_evaluatesCorrectly() throws Exception {
+    CelAbstractSyntaxTree ast = CEL_COMPILER.compile("list_var.map(x, asyncSquare(x))").getAst();
+    SettableFuture<Object> future1 = SettableFuture.create();
+    SettableFuture<Object> future2 = SettableFuture.create();
+    CelRuntime runtime =
+        plannerRuntimeBuilder()
+            .addFunctionBindings(
+                CelFunctionBinding.fromAsync(
+                    "asyncSquare_int",
+                    Long.class,
+                    (Long arg) -> {
+                      if (arg == 2L) {
+                        return future1;
+                      }
+                      return future2;
+                    }))
+            .build();
+    Program program = runtime.createProgram(ast);
+
+    ListenableFuture<Object> evalFuture =
+        program.evalAsync(ImmutableMap.of("list_var", ImmutableList.of(2L, 3L)));
+    boolean doneBeforeSet = evalFuture.isDone();
+    future1.set(4L);
+    future2.set(9L);
+    Object result = evalFuture.get(5, SECONDS);
+
+    assertThat(doneBeforeSet).isFalse();
+    assertThat((Iterable<?>) result).containsExactly(4L, 9L).inOrder();
+  }
+
+  @Test
+  @SuppressWarnings("Immutable") // Test only
+  public void evalAsync_evaluationCancelled_clearsPendingGateTasks() throws Exception {
+    CelAbstractSyntaxTree ast = CEL_COMPILER.compile("[1, 2].map(n, asyncSquare(n))").getAst();
+    SettableFuture<Object> firstFuture = SettableFuture.create();
+    SettableFuture<Object> secondFuture = SettableFuture.create();
+    CountDownLatch task1Started = new CountDownLatch(1);
+    AtomicInteger tasksSubmitted = new AtomicInteger();
+    ListeningExecutorService trackingExecutor = newTrackingExecutor(tasksSubmitted);
+    CelAsyncEvaluationOptions options =
+        CelAsyncEvaluationOptions.builder().setMaxConcurrency(1).build();
+    CelRuntime runtime =
+        plannerRuntimeBuilder()
+            .setAsyncExecutor(trackingExecutor)
+            .setAsyncEvaluationOptions(options)
+            .addFunctionBindings(
+                CelFunctionBinding.fromAsync(
+                    "asyncSquare_int",
+                    Long.class,
+                    (Long arg) -> {
+                      if (arg == 1L) {
+                        task1Started.countDown();
+                        return firstFuture;
+                      }
+                      return secondFuture;
+                    }))
+            .build();
+    Program program = runtime.createProgram(ast);
+
+    ListenableFuture<Object> evalFuture = program.evalAsync();
+    boolean started = task1Started.await(5, SECONDS);
+    int submittedBeforeCancel = tasksSubmitted.get();
+    evalFuture.cancel(/* mayInterruptIfRunning= */ true);
+    firstFuture.set(1L);
+
+    assertThat(started).isTrue();
+    assertThat(submittedBeforeCancel).isEqualTo(1);
+    assertThat(tasksSubmitted.get()).isEqualTo(1);
+  }
+
+  @Test
+  @SuppressWarnings("Immutable") // Test only
+  public void evalAsync_evaluationError_clearsPendingGateTasks() throws Exception {
+    CelAbstractSyntaxTree ast = CEL_COMPILER.compile("[1, 2].map(n, asyncSquare(n))").getAst();
+    SettableFuture<Object> firstFuture = SettableFuture.create();
+    SettableFuture<Object> secondFuture = SettableFuture.create();
+    CountDownLatch task1Started = new CountDownLatch(1);
+    AtomicInteger tasksSubmitted = new AtomicInteger();
+    ListeningExecutorService trackingExecutor = newTrackingExecutor(tasksSubmitted);
+    CelAsyncEvaluationOptions options =
+        CelAsyncEvaluationOptions.builder().setMaxConcurrency(1).build();
+    AtomicInteger task2Executed = new AtomicInteger();
+    CelRuntime runtime =
+        plannerRuntimeBuilder()
+            .setAsyncExecutor(trackingExecutor)
+            .setAsyncEvaluationOptions(options)
+            .addFunctionBindings(
+                CelFunctionBinding.fromAsync(
+                    "asyncSquare_int",
+                    Long.class,
+                    (Long arg) -> {
+                      if (arg == 1L) {
+                        task1Started.countDown();
+                        return firstFuture;
+                      }
+                      task2Executed.incrementAndGet();
+                      return secondFuture;
+                    }))
+            .build();
+    Program program = runtime.createProgram(ast);
+
+    ListenableFuture<Object> evalFuture = program.evalAsync();
+    boolean started = task1Started.await(5, SECONDS);
+    int submittedBeforeError = tasksSubmitted.get();
+    firstFuture.setException(new RuntimeException("/ by zero"));
+    ExecutionException exception =
+        assertThrows(ExecutionException.class, () -> evalFuture.get(5, SECONDS));
+
+    assertThat(started).isTrue();
+    assertThat(submittedBeforeError).isEqualTo(1);
+    assertThat(exception).hasCauseThat().isInstanceOf(CelEvaluationException.class);
+    assertThat(exception).hasCauseThat().hasMessageThat().contains("/ by zero");
+    assertThat(task2Executed.get()).isEqualTo(0);
+    assertThat(tasksSubmitted.get()).isEqualTo(2);
+  }
+
+  @Test
+  @SuppressWarnings("Immutable") // Test only
+  public void
+      evalAsync_comprehensionFilter_withInFlightIteration1AndConcreteIteration2_waitsForCompletion(
+          @TestParameter ComprehensionFilterTestCase testCase) throws Exception {
+    CelAbstractSyntaxTree ast = CEL_COMPILER.compile(testCase.expression).getAst();
+    CountDownLatch callsDispatched = new CountDownLatch(2);
+    SettableFuture<Object> future1 = SettableFuture.create();
+    CelRuntime runtime =
+        plannerRuntimeBuilder()
+            .addFunctionBindings(
+                CelFunctionBinding.fromAsync(
+                    "asyncIsEven_int",
+                    Long.class,
+                    (Long arg) -> {
+                      callsDispatched.countDown();
+                      if (arg == 1L) {
+                        return future1;
+                      }
+                      return immediateFuture(true);
+                    }))
+            .build();
+    Program program = runtime.createProgram(ast);
+
+    ListenableFuture<Object> evalFuture = program.evalAsync(testCase.variables);
+    boolean dispatched = callsDispatched.await(5, SECONDS);
+    boolean doneWhileInFlight = evalFuture.isDone();
+    future1.set(false);
+    Object result = evalFuture.get(5, SECONDS);
+
+    assertThat(dispatched).isTrue();
+    assertThat(doneWhileInFlight).isFalse();
+    assertThat((Iterable<?>) result).containsExactly(testCase.expectedElement);
+  }
+
+  @Test
+  @SuppressWarnings("Immutable") // Test only
+  public void evalAsync_comprehensionAll_lastElementFalseWithFirstElementInFlight_shortCircuits()
+      throws Exception {
+    CelAbstractSyntaxTree ast = CEL_COMPILER.compile("list_var.all(x, asyncIsEven(x))").getAst();
+    SettableFuture<Object> inFlightFirstElement = SettableFuture.create();
+    CelRuntime runtime =
+        plannerRuntimeBuilder()
+            .addFunctionBindings(
+                CelFunctionBinding.fromAsync(
+                    "asyncIsEven_int",
+                    Long.class,
+                    (Long arg) -> {
+                      if (arg == 1L) {
+                        return inFlightFirstElement;
+                      }
+                      return immediateFuture(false);
+                    }))
+            .build();
+    Program program = runtime.createProgram(ast);
+
+    ListenableFuture<Object> evalFuture =
+        program.evalAsync(ImmutableMap.of("list_var", ImmutableList.of(1L, 2L)));
+    Object result = evalFuture.get(5, SECONDS);
+
+    assertThat(result).isEqualTo(false);
+    assertThat(inFlightFirstElement.isCancelled()).isTrue();
+  }
+
+  @Test
+  public void evalAsync_withLateBoundResolverAndMap_evaluatesSuccessfully() throws Exception {
+    CelAbstractSyntaxTree ast = CEL_COMPILER.compile("lateBoundFunc(x)").getAst();
+    CelRuntime runtime = plannerRuntimeBuilder().addLateBoundFunctions("lateBoundFunc").build();
+    Program program = runtime.createProgram(ast);
+    CelFunctionResolver lateResolver =
+        newLateBoundSyncResolver("lateBoundFunc", (Long arg) -> arg * 10L);
+
+    ListenableFuture<Object> future = program.evalAsync(ImmutableMap.of("x", 2L), lateResolver);
+    Object result = future.get(5, SECONDS);
+
+    assertThat(result).isEqualTo(20L);
+  }
+
+  @Test
+  public void evalAsync_withLateBoundResolverAndVariableResolver_evaluatesSuccessfully()
+      throws Exception {
+    CelAbstractSyntaxTree ast = CEL_COMPILER.compile("lateBoundFunc(x)").getAst();
+    CelRuntime runtime = plannerRuntimeBuilder().addLateBoundFunctions("lateBoundFunc").build();
+    Program program = runtime.createProgram(ast);
+    CelVariableResolver resolver = name -> name.equals("x") ? Optional.of(5L) : Optional.empty();
+    CelFunctionResolver lateResolver =
+        newLateBoundSyncResolver("lateBoundFunc", (Long arg) -> arg * 10L);
+
+    ListenableFuture<Object> future = program.evalAsync(resolver, lateResolver);
+    Object result = future.get(5, SECONDS);
+
+    assertThat(result).isEqualTo(50L);
+  }
+
+  @Test
+  public void evalAsync_withLateBoundAsyncOverload_throwsException() throws Exception {
+    CelAbstractSyntaxTree ast = CEL_COMPILER.compile("lateBoundFunc(x)").getAst();
+    CelRuntime runtime = plannerRuntimeBuilder().addLateBoundFunctions("lateBoundFunc").build();
+    Program program = runtime.createProgram(ast);
+    CelFunctionResolver lateResolver =
+        newLateBoundAsyncResolver("lateBoundFunc", (Long arg) -> immediateFuture(arg * 10L));
+
+    ListenableFuture<Object> future = program.evalAsync(ImmutableMap.of("x", 2L), lateResolver);
+    ExecutionException e = assertThrows(ExecutionException.class, () -> future.get(5, SECONDS));
+
+    assertThat(e).hasCauseThat().isInstanceOf(CelEvaluationException.class);
+    assertThat(e)
+        .hasCauseThat()
+        .hasMessageThat()
+        .contains(
+            "Async function 'lateBoundFunc' cannot be late-bound. Late-bound functions must be"
+                + " synchronous.");
+  }
+
+  @Test
+  public void
+      evalAsync_parsedOnly_distinctOverloadIdWithoutLateBoundResolver_throwsCelEvaluationException()
+          throws Exception {
+    CelAbstractSyntaxTree ast = CEL_COMPILER.parse("asyncSquare(5)").getAst();
+    CelRuntime runtime =
+        plannerRuntimeBuilder()
+            .addFunctionBindings(
+                CelFunctionBinding.fromAsync(
+                    "asyncSquare_int", Long.class, (Long arg) -> immediateFuture(arg * arg)))
+            .build();
+    Program program = runtime.createProgram(ast);
+
+    ListenableFuture<Object> future = program.evalAsync();
+    ExecutionException e = assertThrows(ExecutionException.class, future::get);
+
+    assertThat(e).hasCauseThat().isInstanceOf(CelEvaluationException.class);
+    assertThat(e)
+        .hasCauseThat()
+        .hasMessageThat()
+        .contains("No matching overload for function 'asyncSquare'");
+  }
+
+  @Test
+  public void evalAsync_comprehensionAll_shortCircuitsAndSuppressesSubsequentError()
+      throws Exception {
+    CelCompiler compiler =
+        CelCompilerFactory.standardCelCompilerBuilder()
+            .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
+            .setOptions(CelOptions.current().build())
+            .addVar("list_var", ListType.create(SimpleType.INT))
+            .addFunctionDeclarations(
+                newFunctionDeclaration(
+                    "asyncFalse",
+                    newGlobalOverload("asyncFalse_int", SimpleType.BOOL, SimpleType.INT)))
+            .build();
+    CelAbstractSyntaxTree ast =
+        compiler.compile("list_var.all(x, x == 1 ? asyncFalse(x) : (1 / (2 - x) == 0))").getAst();
+    CelRuntime runtime =
+        plannerRuntimeBuilder()
+            .addFunctionBindings(
+                CelFunctionBinding.fromAsync(
+                    "asyncFalse_int", Long.class, (Long arg) -> immediateFuture(false)))
+            .build();
+    Program program = runtime.createProgram(ast);
+
+    ListenableFuture<Object> future =
+        program.evalAsync(ImmutableMap.of("list_var", ImmutableList.of(1L, 2L)));
+    Object result = future.get(5, SECONDS);
+
+    assertThat(result).isEqualTo(false);
+  }
+
+  @Test
+  public void evalAsync_parsedOnly_lateBoundSynchronousFunction_evaluatesSuccessfully()
+      throws Exception {
+    CelAbstractSyntaxTree ast = CEL_COMPILER.parse("lateBoundSync(10)").getAst();
+    CelRuntime runtime = plannerRuntimeBuilder().build();
+    Program program = runtime.createProgram(ast);
+    CelFunctionResolver lateBoundResolver =
+        newLateBoundSyncResolver("lateBoundSync", (Long arg) -> arg * 3);
+
+    ListenableFuture<Object> future = program.evalAsync(ImmutableMap.of(), lateBoundResolver);
+    Object result = future.get(5, SECONDS);
+
+    assertThat(result).isEqualTo(30L);
+  }
+
+  @Test
+  public void evalAsync_parsedOnly_lateBoundSyncWithAsyncArgument_defersAndResolves()
+      throws Exception {
+    CelAbstractSyntaxTree ast = CEL_COMPILER.parse("lateBoundSync(asyncSquare(5))").getAst();
+    CelRuntime runtime =
+        plannerRuntimeBuilder()
+            .addFunctionBindings(
+                CelFunctionBinding.fromAsync(
+                    "asyncSquare", Long.class, (Long arg) -> immediateFuture(arg * arg)))
+            .build();
+    Program program = runtime.createProgram(ast);
+    CelFunctionResolver lateBoundResolver =
+        newLateBoundSyncResolver("lateBoundSync", (Long arg) -> arg * 3);
+
+    ListenableFuture<Object> future = program.evalAsync(ImmutableMap.of(), lateBoundResolver);
+    Object result = future.get(5, SECONDS);
+
+    assertThat(result).isEqualTo(75L);
+  }
+
+  @Test
+  @SuppressWarnings("Immutable") // Test only
+  public void evalAsync_nonStrictCustomFunction_aliasingHazard_isPrevented() throws Exception {
+    CelAbstractSyntaxTree ast =
+        CEL_COMPILER.compile("[1, 2].map(x, asyncNonStrictIdentity(asyncSquare(x)))").getAst();
+    SettableFuture<Object> firstFuture = SettableFuture.create();
+    SettableFuture<Object> secondFuture = SettableFuture.create();
+    CelFunctionBinding nonStrictBinding =
+        new CelFunctionBinding() {
+          @Override
+          public String getOverloadId() {
+            return "asyncNonStrictIdentity_dyn";
+          }
+
+          @Override
+          public ImmutableList<Class<?>> getArgTypes() {
+            return ImmutableList.of(Object.class);
+          }
+
+          @Override
+          public CelFunctionOverload getDefinition() {
+            return (CelAsyncFunctionOverload)
+                args -> {
+                  // Should receive CelUnknownSet, not AccumulatedUnknowns!
+                  Object arg = args[0];
+                  if (!(arg instanceof CelUnknownSet) && !(arg instanceof Long)) {
+                    return immediateFailedFuture(
+                        new RuntimeException(
+                            "Type leakage! Expected CelUnknownSet or Long, got: "
+                                + arg.getClass().getName()));
+                  }
+                  return immediateFuture(arg);
+                };
+          }
+
+          @Override
+          public boolean isStrict() {
+            return false;
+          }
+        };
+    CelRuntime runtime =
+        plannerRuntimeBuilder()
+            .addFunctionBindings(
+                CelFunctionBinding.fromAsync(
+                    "asyncSquare_int",
+                    Long.class,
+                    (Long arg) -> arg == 1L ? firstFuture : secondFuture),
+                nonStrictBinding)
+            .build();
+    Program program = runtime.createProgram(ast);
+
+    ListenableFuture<Object> evalFuture = program.evalAsync();
+    // Complete them one by one. If aliasing is present, completing the first will corrupt the
+    // second.
+    firstFuture.set(1L);
+    secondFuture.set(4L);
+    Object result = evalFuture.get(5, SECONDS);
+
+    assertThat((Iterable<?>) result).containsExactly(1L, 4L).inOrder();
+  }
+
   private CelRuntimeBuilder plannerRuntimeBuilder() {
     return CelRuntimeFactory.plannerRuntimeBuilder().setAsyncExecutor(executor);
   }
@@ -1784,6 +2400,180 @@ public final class ProgramPlannerAsyncTest {
         .addFunctionBindings(bindings)
         .build()
         .createProgram(ast);
+  }
+
+  private static CelFunctionResolver newLateBoundAsyncResolver(
+      String functionName, CelAsyncFunctionOverload.Unary<Long> function) {
+    return new CelFunctionResolver() {
+      @Override
+      public Optional<CelResolvedOverload> findOverloadMatchingArgs(
+          String functionNameArg, Collection<String> overloadIds, Object[] args) {
+        if (functionNameArg.equals(functionName) && args.length == 1 && args[0] instanceof Long) {
+          return Optional.of(
+              CelResolvedOverload.of(
+                  functionName,
+                  functionName + "_int",
+                  CelFunctionBinding.fromAsync(functionName + "_int", Long.class, function)
+                      .getDefinition(),
+                  /* isStrict= */ true,
+                  Long.class));
+        }
+        return Optional.empty();
+      }
+
+      @Override
+      public Optional<CelResolvedOverload> findOverloadMatchingArgs(
+          String functionNameArg, Object[] args) {
+        return findOverloadMatchingArgs(functionNameArg, ImmutableList.of(), args);
+      }
+    };
+  }
+
+  private static CelFunctionResolver newLateBoundSyncResolver(
+      String functionName, CelFunctionOverload.Unary<Long> function) {
+    return new CelFunctionResolver() {
+      @Override
+      public Optional<CelResolvedOverload> findOverloadMatchingArgs(
+          String functionNameArg, Collection<String> overloadIds, Object[] args) {
+        if (functionNameArg.equals(functionName) && args.length == 1 && args[0] instanceof Long) {
+          return Optional.of(
+              CelResolvedOverload.of(
+                  functionName,
+                  functionName + "_int",
+                  CelFunctionBinding.from(functionName + "_int", Long.class, function)
+                      .getDefinition(),
+                  /* isStrict= */ true,
+                  Long.class));
+        }
+        return Optional.empty();
+      }
+
+      @Override
+      public Optional<CelResolvedOverload> findOverloadMatchingArgs(
+          String functionNameArg, Object[] args) {
+        return findOverloadMatchingArgs(functionNameArg, ImmutableList.of(), args);
+      }
+    };
+  }
+
+  private ListeningExecutorService newTrackingExecutor(AtomicInteger tasksSubmitted) {
+    return new ForwardingListeningExecutorService() {
+      @Override
+      protected ListeningExecutorService delegate() {
+        return executor;
+      }
+
+      @Override
+      public void execute(Runnable command) {
+        tasksSubmitted.incrementAndGet();
+        super.execute(command);
+      }
+
+      @Override
+      public <T> ListenableFuture<T> submit(Callable<T> task) {
+        tasksSubmitted.incrementAndGet();
+        return super.submit(task);
+      }
+    };
+  }
+
+  @SuppressWarnings("ImmutableEnumChecker") // Test only
+  private enum ComprehensionPredicateTestCase {
+    EXISTS_LIST_TRUE(
+        "list_var.exists(x, asyncIsEven(x))",
+        ImmutableMap.of("list_var", ImmutableList.of(1L, 3L, 4L, 7L)),
+        true),
+    EXISTS_LIST_FALSE(
+        "list_var.exists(x, asyncIsEven(x))",
+        ImmutableMap.of("list_var", ImmutableList.of(1L, 3L, 5L, 7L)),
+        false),
+    EXISTS_LIST_EMPTY(
+        "list_var.exists(x, asyncIsEven(x))",
+        ImmutableMap.of("list_var", ImmutableList.of()),
+        false),
+    EXISTS_MAP_TRUE(
+        "map_var.exists(k, asyncIsEven(map_var[k]))",
+        ImmutableMap.of("map_var", ImmutableMap.of("a", 1L, "b", 4L)),
+        true),
+    EXISTS_MAP_FALSE(
+        "map_var.exists(k, asyncIsEven(map_var[k]))",
+        ImmutableMap.of("map_var", ImmutableMap.of("a", 1L, "b", 3L)),
+        false),
+    ALL_LIST_TRUE(
+        "list_var.all(x, asyncIsEven(x))",
+        ImmutableMap.of("list_var", ImmutableList.of(2L, 4L, 6L)),
+        true),
+    ALL_LIST_FALSE(
+        "list_var.all(x, asyncIsEven(x))",
+        ImmutableMap.of("list_var", ImmutableList.of(2L, 3L, 6L)),
+        false),
+    ALL_LIST_EMPTY(
+        "list_var.all(x, asyncIsEven(x))", ImmutableMap.of("list_var", ImmutableList.of()), true),
+    ALL_MAP_TRUE(
+        "map_var.all(k, asyncIsEven(map_var[k]))",
+        ImmutableMap.of("map_var", ImmutableMap.of("a", 2L, "b", 4L)),
+        true),
+    ALL_MAP_FALSE(
+        "map_var.all(k, asyncIsEven(map_var[k]))",
+        ImmutableMap.of("map_var", ImmutableMap.of("a", 2L, "b", 3L)),
+        false),
+    EXISTS_ONE_LIST_TRUE(
+        "list_var.exists_one(x, asyncIsEven(x))",
+        ImmutableMap.of("list_var", ImmutableList.of(1L, 4L, 7L)),
+        true),
+    EXISTS_ONE_LIST_FALSE(
+        "list_var.exists_one(x, asyncIsEven(x))",
+        ImmutableMap.of("list_var", ImmutableList.of(2L, 4L, 7L)),
+        false),
+    EXISTS_ONE_MAP_TRUE(
+        "map_var.exists_one(k, asyncIsEven(map_var[k]))",
+        ImmutableMap.of("map_var", ImmutableMap.of("a", 1L, "b", 4L)),
+        true),
+    EXISTS_ONE_MAP_FALSE(
+        "map_var.exists_one(k, asyncIsEven(map_var[k]))",
+        ImmutableMap.of("map_var", ImmutableMap.of("a", 2L, "b", 4L)),
+        false);
+
+    private final String expression;
+
+    @SuppressWarnings("Immutable")
+    private final ImmutableMap<String, Object> variables;
+
+    private final boolean expectedResult;
+
+    ComprehensionPredicateTestCase(
+        String expression, ImmutableMap<String, Object> variables, boolean expectedResult) {
+      this.expression = expression;
+      this.variables = variables;
+      this.expectedResult = expectedResult;
+    }
+  }
+
+  @SuppressWarnings({"ImmutableEnumChecker", "Immutable"}) // Test only
+  private enum ComprehensionFilterTestCase {
+    LIST(
+        "list_var.filter(x, asyncIsEven(x))",
+        ImmutableMap.of("list_var", ImmutableList.of(1L, 2L)),
+        2L),
+    MAP(
+        "map_var.filter(k, asyncIsEven(map_var[k]))",
+        ImmutableMap.of("map_var", ImmutableMap.of("a", 1L, "b", 2L)),
+        "b");
+
+    private final String expression;
+
+    @SuppressWarnings("Immutable")
+    private final ImmutableMap<String, Object> variables;
+
+    @SuppressWarnings("Immutable")
+    private final Object expectedElement;
+
+    ComprehensionFilterTestCase(
+        String expression, ImmutableMap<String, Object> variables, Object expectedElement) {
+      this.expression = expression;
+      this.variables = variables;
+      this.expectedElement = expectedElement;
+    }
   }
 
   @ThreadSafe

@@ -1224,6 +1224,34 @@ public final class ProgramPlannerTest {
   }
 
   @Test
+  public void plan_foldFilter_withInterleavedUnknownAndConcreteElements_accumulatesAllUnknowns(
+      @TestParameter({
+            "[unk1, 1, -1, unk2].filter(x, x > 0)",
+            "{'a': unk1, 'b': 1, 'c': -1, 'd': unk2}.filter(k, {'a': unk1, 'b': 1, 'c': -1, 'd':"
+                + " unk2}[k] > 0)"
+          })
+          String expr)
+      throws Exception {
+    CelCompiler compiler =
+        CelCompilerFactory.standardCelCompilerBuilder()
+            .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
+            .addVar("unk1", SimpleType.INT)
+            .addVar("unk2", SimpleType.INT)
+            .build();
+    CelAbstractSyntaxTree ast = compile(compiler, expr);
+    Program program = PLANNER.plan(ast);
+
+    CelUnknownSet result =
+        (CelUnknownSet)
+            program.eval(
+                PartialVars.of(
+                    CelAttributePattern.create("unk1"), CelAttributePattern.create("unk2")));
+
+    assertThat(result.attributes())
+        .containsExactly(CelAttribute.create("unk1"), CelAttribute.create("unk2"));
+  }
+
+  @Test
   public void newPlanner_withAsyncOptionsAndExecutor_plansSuccessfully() throws Exception {
     ListeningExecutorService executor = newDirectExecutorService();
     try {
@@ -1256,6 +1284,8 @@ public final class ProgramPlannerTest {
   @Test
   public void newPlanner_nullRuntimeEquality_throwsNullPointerException() {
     DefaultDispatcher dispatcher = newDispatcher();
+    ImmutableSet<String> customOverloads = ImmutableSet.of();
+    CelAsyncEvaluationOptions asyncOptions = CelAsyncEvaluationOptions.defaultOptions();
 
     assertThrows(
         NullPointerException.class,
@@ -1267,15 +1297,16 @@ public final class ProgramPlannerTest {
                 CEL_VALUE_CONVERTER,
                 CEL_CONTAINER,
                 CEL_OPTIONS,
-                ImmutableSet.of(),
+                customOverloads,
                 /* runtimeEquality= */ null,
-                CelAsyncEvaluationOptions.defaultOptions(),
+                asyncOptions,
                 /* asyncExecutor= */ null));
   }
 
   @Test
   public void newPlanner_nullAsyncOptions_throwsNullPointerException() {
     DefaultDispatcher dispatcher = newDispatcher();
+    ImmutableSet<String> customOverloads = ImmutableSet.of();
 
     assertThrows(
         NullPointerException.class,
@@ -1287,7 +1318,7 @@ public final class ProgramPlannerTest {
                 CEL_VALUE_CONVERTER,
                 CEL_CONTAINER,
                 CEL_OPTIONS,
-                ImmutableSet.of(),
+                customOverloads,
                 RUNTIME_EQUALITY,
                 /* asyncOptions= */ null,
                 /* asyncExecutor= */ null));

@@ -82,8 +82,7 @@ final class EvalHelpers {
       Object[] args)
       throws CelEvaluationException {
     try {
-      Object result = overload.invoke(args);
-      return convertAndAdaptResult(valueConverter, result);
+      return convertAndAdaptResult(valueConverter, overload.invoke(args));
     } catch (RuntimeException e) {
       throw handleDispatchException(e, overload, args);
     }
@@ -95,11 +94,11 @@ final class EvalHelpers {
       CelValueConverter valueConverter,
       Object arg)
       throws CelEvaluationException {
+    Object invokeArg = overload.isStrict() ? arg : maybeAdaptNonStrictArg(arg);
     try {
-      Object result = overload.invoke(arg);
-      return convertAndAdaptResult(valueConverter, result);
+      return convertAndAdaptResult(valueConverter, overload.invoke(invokeArg));
     } catch (RuntimeException e) {
-      throw handleDispatchException(e, overload, arg);
+      throw handleDispatchException(e, overload, invokeArg);
     }
   }
 
@@ -110,12 +109,20 @@ final class EvalHelpers {
       Object arg1,
       Object arg2)
       throws CelEvaluationException {
+    Object invokeArg1 = overload.isStrict() ? arg1 : maybeAdaptNonStrictArg(arg1);
+    Object invokeArg2 = overload.isStrict() ? arg2 : maybeAdaptNonStrictArg(arg2);
     try {
-      Object result = overload.invoke(arg1, arg2);
-      return convertAndAdaptResult(valueConverter, result);
+      return convertAndAdaptResult(valueConverter, overload.invoke(invokeArg1, invokeArg2));
     } catch (RuntimeException e) {
-      throw handleDispatchException(e, overload, arg1, arg2);
+      throw handleDispatchException(e, overload, invokeArg1, invokeArg2);
     }
+  }
+
+  static Object maybeAdaptNonStrictArg(Object val) {
+    if (val instanceof ErrorValue) {
+      return ((ErrorValue) val).value();
+    }
+    return InterpreterUtil.maybeAdaptToCelUnknownSet(val);
   }
 
   /**
