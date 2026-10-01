@@ -762,6 +762,28 @@ public class SubexpressionOptimizerTest {
                 + " @index0)");
   }
 
+  @Test
+  public void optimize_afterSelectOptimizer_throwsException(
+      @TestParameter({"msg.single_int64 == 1 && msg.single_int64 == 1", "has(msg.single_int64)"})
+          String expression)
+      throws Exception {
+    CelOptimizer selectThenCseOptimizer =
+        CelOptimizerFactory.standardCelOptimizerBuilder(cel)
+            .addAstOptimizers(
+                SelectOptimizer.newInstance(TestAllTypes.getDescriptor().getFile()),
+                SubexpressionOptimizer.getInstance())
+            .build();
+    CelAbstractSyntaxTree ast = cel.compile(expression).getAst();
+
+    CelOptimizationException e =
+        assertThrows(CelOptimizationException.class, () -> selectThenCseOptimizer.optimize(ast));
+
+    assertThat(e).hasCauseThat().isInstanceOf(IllegalStateException.class);
+    assertThat(e)
+        .hasMessageThat()
+        .contains("SubexpressionOptimizer must run before SelectOptimizer.");
+  }
+
   /**
    * Converts AST containing cel.block related test functions to internal functions (e.g: cel.block
    * -> cel.@block)

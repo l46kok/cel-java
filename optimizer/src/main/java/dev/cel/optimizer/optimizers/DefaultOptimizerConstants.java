@@ -46,5 +46,8 @@ final class DefaultOptimizerConstants {
           .addAll(CelExtensions.getAllFunctionNames())
           .build();
 
+  static final String CEL_ATTRIBUTE_FUNCTION_NAME = "cel.@attribute";
+  static final String CEL_HAS_FIELD_FUNCTION_NAME = "cel.@hasField";
+
   private DefaultOptimizerConstants() {}
 }

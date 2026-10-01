@@ -18,6 +18,8 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableList.toImmutableList;
+import static dev.cel.optimizer.optimizers.DefaultOptimizerConstants.CEL_ATTRIBUTE_FUNCTION_NAME;
+import static dev.cel.optimizer.optimizers.DefaultOptimizerConstants.CEL_HAS_FIELD_FUNCTION_NAME;
 
 import com.google.auto.value.AutoValue;
 import com.google.common.annotations.VisibleForTesting;
@@ -138,9 +140,6 @@ public final class SelectOptimizer implements CelAstOptimizer {
    * wire-decoding ambiguities with singular submessages, maps use this dedicated type code.
    */
   private static final long CEL_MAP_TYPE_CODE = -1L;
-
-  private static final String CEL_ATTRIBUTE_FUNCTION_NAME = "cel.@attribute";
-  private static final String CEL_HAS_FIELD_FUNCTION_NAME = "cel.@hasField";
 
   private static final TypeParamType TYPE_PARAM_T = TypeParamType.create("T");
 

@@ -15,8 +15,11 @@
 package dev.cel.optimizer.optimizers;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
+import static dev.cel.optimizer.optimizers.DefaultOptimizerConstants.CEL_ATTRIBUTE_FUNCTION_NAME;
+import static dev.cel.optimizer.optimizers.DefaultOptimizerConstants.CEL_HAS_FIELD_FUNCTION_NAME;
 import static java.util.stream.Collectors.toCollection;
 
 import com.google.auto.value.AutoValue;
@@ -91,6 +94,9 @@ import java.util.stream.Stream;
  *        @index0.startsWith("hello") && @index1.endsWith("world"))
  * }
  * </pre>
+ *
+ * <p><b>Optimizer Ordering:</b> {@code SubexpressionOptimizer} does not support ASTs that have
+ * already been optimized by {@link SelectOptimizer}.
  */
 public final class SubexpressionOptimizer implements CelAstOptimizer {
 
@@ -124,6 +130,13 @@ public final class SubexpressionOptimizer implements CelAstOptimizer {
     return new SubexpressionOptimizer(cseOptions);
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * @throws IllegalStateException if {@code ast} contains select-optimized nodes ({@code
+   *     cel.@attribute} or {@code cel.@hasField}), as common subexpression elimination must run
+   *     before {@link SelectOptimizer}.
+   */
   @Override
   public OptimizationResult optimize(CelAbstractSyntaxTree ast, Cel cel) {
     OptimizationResult result = optimizeUsingCelBlock(ast, cel);
@@ -134,6 +147,17 @@ public final class SubexpressionOptimizer implements CelAstOptimizer {
   }
 
   private OptimizationResult optimizeUsingCelBlock(CelAbstractSyntaxTree ast, Cel cel) {
+    boolean hasSelectOptimizedNodes =
+        CelNavigableExpr.fromExpr(ast.getExpr())
+            .allNodes()
+            .filter(node -> node.getKind() == Kind.CALL)
+            .map(node -> node.expr().call().function())
+            .anyMatch(
+                func ->
+                    func.equals(CEL_ATTRIBUTE_FUNCTION_NAME)
+                        || func.equals(CEL_HAS_FIELD_FUNCTION_NAME));
+    checkState(!hasSelectOptimizedNodes, "SubexpressionOptimizer must run before SelectOptimizer.");
+
     CelMutableAst astToModify = CelMutableAst.fromCelAst(ast);
     if (!cseOptions.populateMacroCalls()) {
       astToModify.source().clearMacroCalls();

@@ -119,6 +119,7 @@ java_library(
     tags = [
     ],
     deps = [
+        ":default_optimizer_constants",
         "//:auto_value",
         "//bundle:cel",
         "//checker:standard_decl",
