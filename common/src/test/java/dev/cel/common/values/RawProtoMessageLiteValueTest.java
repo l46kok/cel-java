@@ -21,38 +21,27 @@ import static org.junit.Assert.assertThrows;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.primitives.UnsignedLong;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.CodedOutputStream;
-import com.google.protobuf.Int64Value;
-import com.google.protobuf.MessageLite;
 import com.google.protobuf.WireFormat;
 import com.google.testing.junit.testparameterinjector.TestParameter;
 import com.google.testing.junit.testparameterinjector.TestParameterInjector;
 import dev.cel.common.exceptions.CelAttributeNotFoundException;
-import dev.cel.common.internal.CelLiteDescriptorPool;
 import dev.cel.common.internal.DefaultLiteDescriptorPool;
 import dev.cel.common.internal.ProtoTimeUtils;
 import dev.cel.expr.conformance.proto3.TestAllTypes;
-import dev.cel.expr.conformance.proto3.TestAllTypesCelDescriptor;
 import dev.cel.protobuf.CelLiteDescriptor.FieldLiteDescriptor;
-import dev.cel.protobuf.CelLiteDescriptor.MessageLiteDescriptor;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.NoSuchElementException;
 import java.util.Optional;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
 @RunWith(TestParameterInjector.class)
 public final class RawProtoMessageLiteValueTest {
-
-  private static final ProtoLiteCelValueConverter CONVERTER =
-      ProtoLiteCelValueConverter.newInstance(
-          DefaultLiteDescriptorPool.newInstance(
-              ImmutableSet.of(TestAllTypesCelDescriptor.getDescriptor())));
 
   private static final ProtoLiteCelValueConverter EMPTY_CONVERTER =
       ProtoLiteCelValueConverter.newInstance(DefaultLiteDescriptorPool.newInstance());
@@ -845,98 +834,6 @@ public final class RawProtoMessageLiteValueTest {
   }
 
   @Test
-  public void selectByFieldNumber_withConverter_resolvesDescriptor() {
-    RawProtoMessageLiteValue raw =
-        RawProtoMessageLiteValue.create(
-            ByteString.EMPTY, "cel.expr.conformance.proto3.TestAllTypes", CONVERTER);
-
-    Object val = raw.selectByFieldNumber(SelectField.create(14L, "single_string"));
-
-    assertThat(val).isEqualTo("");
-  }
-
-  @Test
-  public void
-      selectByFieldNumber_absentSubmessageWithMissingChildDescriptor_returnsEmptyRawProtoMessageLiteValue() {
-    CelLiteDescriptorPool poolWithoutNested =
-        new CelLiteDescriptorPool() {
-          @Override
-          public Optional<MessageLiteDescriptor> findDescriptor(String protoTypeName) {
-            if (protoTypeName.equals("cel.expr.conformance.proto3.TestAllTypes")) {
-              return DefaultLiteDescriptorPool.newInstance(
-                      ImmutableSet.of(TestAllTypesCelDescriptor.getDescriptor()))
-                  .findDescriptor(protoTypeName);
-            }
-            return Optional.empty();
-          }
-
-          @Override
-          public Optional<MessageLiteDescriptor> findDescriptor(MessageLite messageLite) {
-            return Optional.empty();
-          }
-
-          @Override
-          public MessageLiteDescriptor getDescriptorOrThrow(String protoTypeName) {
-            return findDescriptor(protoTypeName)
-                .orElseThrow(() -> new NoSuchElementException(protoTypeName));
-          }
-        };
-    ProtoLiteCelValueConverter converter =
-        ProtoLiteCelValueConverter.newInstance(poolWithoutNested);
-    RawProtoMessageLiteValue raw =
-        RawProtoMessageLiteValue.create(
-            ByteString.EMPTY, "cel.expr.conformance.proto3.TestAllTypes", converter);
-
-    Object val = raw.selectByFieldNumber(SelectField.create(21L, "single_nested_message"));
-
-    assertThat(val).isInstanceOf(RawProtoMessageLiteValue.class);
-    RawProtoMessageLiteValue rawChild = (RawProtoMessageLiteValue) val;
-    assertThat(rawChild.rawWireBytes()).isEqualTo(ByteString.EMPTY);
-    assertThat(rawChild.celType().name())
-        .isEqualTo("cel.expr.conformance.proto3.TestAllTypes.NestedMessage");
-  }
-
-  @Test
-  public void
-      selectByFieldNumber_absentRepeatedMessageWithMissingChildDescriptor_returnsEmptyList() {
-    CelLiteDescriptorPool poolWithoutNested =
-        new CelLiteDescriptorPool() {
-          @Override
-          public Optional<MessageLiteDescriptor> findDescriptor(String protoTypeName) {
-            if (protoTypeName.equals("cel.expr.conformance.proto3.TestAllTypes")) {
-              return DefaultLiteDescriptorPool.newInstance(
-                      ImmutableSet.of(TestAllTypesCelDescriptor.getDescriptor()))
-                  .findDescriptor(protoTypeName);
-            }
-            return Optional.empty();
-          }
-
-          @Override
-          public Optional<MessageLiteDescriptor> findDescriptor(MessageLite messageLite) {
-            return Optional.empty();
-          }
-
-          @Override
-          public MessageLiteDescriptor getDescriptorOrThrow(String protoTypeName) {
-            return findDescriptor(protoTypeName)
-                .orElseThrow(() -> new NoSuchElementException(protoTypeName));
-          }
-        };
-    ProtoLiteCelValueConverter converter =
-        ProtoLiteCelValueConverter.newInstance(poolWithoutNested);
-    RawProtoMessageLiteValue raw =
-        RawProtoMessageLiteValue.create(
-            ByteString.EMPTY, "cel.expr.conformance.proto3.TestAllTypes", converter);
-
-    Object val =
-        raw.selectByFieldNumber(
-            SelectField.create(
-                TestAllTypes.REPEATED_NESTED_MESSAGE_FIELD_NUMBER, "repeated_nested_message"));
-
-    assertThat(val).isEqualTo(ImmutableList.of());
-  }
-
-  @Test
   public void selectByFieldNumber_unknownFieldWithoutTypeCode_throwsCelAttributeNotFoundException()
       throws Exception {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -947,7 +844,7 @@ public final class RawProtoMessageLiteValueTest {
         RawProtoMessageLiteValue.create(
             ByteString.copyFrom(baos.toByteArray()),
             "cel.expr.conformance.proto3.TestAllTypes",
-            CONVERTER);
+            EMPTY_CONVERTER);
     SelectField selectField = SelectField.create(999L, "unknown_field");
 
     assertThrows(CelAttributeNotFoundException.class, () -> raw.selectByFieldNumber(selectField));
@@ -984,25 +881,18 @@ public final class RawProtoMessageLiteValueTest {
   }
 
   @Test
-  public void hasFieldByNumber_emptyPackedRepeated_returnsFalse(
-      @TestParameter boolean withDescriptor) throws Exception {
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    CodedOutputStream cos = CodedOutputStream.newInstance(baos);
-    cos.writeBytes(TestAllTypes.REPEATED_INT32_FIELD_NUMBER, ByteString.EMPTY);
-    cos.flush();
+  public void hasFieldByNumber_emptyPackedRepeated_returnsFalse() throws Exception {
+    ByteString wire =
+        encode(out -> out.writeBytes(TestAllTypes.REPEATED_INT32_FIELD_NUMBER, ByteString.EMPTY));
     RawProtoMessageLiteValue raw =
         RawProtoMessageLiteValue.create(
-            ByteString.copyFrom(baos.toByteArray()),
-            "cel.expr.conformance.proto3.TestAllTypes",
-            withDescriptor ? CONVERTER : EMPTY_CONVERTER);
+            wire, "cel.expr.conformance.proto3.TestAllTypes", EMPTY_CONVERTER);
     SelectField selectField =
-        withDescriptor
-            ? SelectField.create(TestAllTypes.REPEATED_INT32_FIELD_NUMBER, "repeated_int32")
-            : SelectField.create(
-                TestAllTypes.REPEATED_INT32_FIELD_NUMBER,
-                "repeated_int32",
-                FieldLiteDescriptor.Type.INT32.getNumber(),
-                ImmutableList.of());
+        SelectField.create(
+            TestAllTypes.REPEATED_INT32_FIELD_NUMBER,
+            "repeated_int32",
+            FieldLiteDescriptor.Type.INT32.getNumber(),
+            ImmutableList.of());
 
     assertThat(raw.hasFieldByNumber(selectField)).isFalse();
   }
@@ -1022,7 +912,7 @@ public final class RawProtoMessageLiteValueTest {
         RawProtoMessageLiteValue.create(
             ByteString.copyFrom(baos.toByteArray()),
             "cel.expr.conformance.proto3.TestAllTypes",
-            CONVERTER);
+            EMPTY_CONVERTER);
 
     assertThat(
             raw.hasFieldByNumber(
@@ -1031,25 +921,18 @@ public final class RawProtoMessageLiteValueTest {
   }
 
   @Test
-  public void hasFieldByNumber_emptyByteStringOnScalarPackableField_returnsTrue(
-      @TestParameter boolean withDescriptor) throws Exception {
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    CodedOutputStream cos = CodedOutputStream.newInstance(baos);
-    cos.writeByteArray(TestAllTypes.SINGLE_INT32_FIELD_NUMBER, new byte[0]);
-    cos.flush();
+  public void hasFieldByNumber_emptyByteStringOnScalarPackableField_returnsTrue() throws Exception {
+    ByteString wire =
+        encode(out -> out.writeByteArray(TestAllTypes.SINGLE_INT32_FIELD_NUMBER, new byte[0]));
     RawProtoMessageLiteValue raw =
         RawProtoMessageLiteValue.create(
-            ByteString.copyFrom(baos.toByteArray()),
-            "cel.expr.conformance.proto3.TestAllTypes",
-            withDescriptor ? CONVERTER : EMPTY_CONVERTER);
+            wire, "cel.expr.conformance.proto3.TestAllTypes", EMPTY_CONVERTER);
     SelectField selectField =
-        withDescriptor
-            ? SelectField.create(TestAllTypes.SINGLE_INT32_FIELD_NUMBER, "single_int32")
-            : SelectField.create(
-                TestAllTypes.SINGLE_INT32_FIELD_NUMBER,
-                "single_int32",
-                FieldLiteDescriptor.Type.INT32.getNumber(),
-                0);
+        SelectField.create(
+            TestAllTypes.SINGLE_INT32_FIELD_NUMBER,
+            "single_int32",
+            FieldLiteDescriptor.Type.INT32.getNumber(),
+            0);
 
     assertThat(raw.hasFieldByNumber(selectField)).isTrue();
   }
@@ -1101,21 +984,28 @@ public final class RawProtoMessageLiteValueTest {
 
   @SuppressWarnings("ImmutableEnumChecker") // Test only
   private enum SelectByFieldNumberTestCase {
-    INT64(SelectField.create(TestAllTypes.SINGLE_INT64_FIELD_NUMBER, "single_int64"), 99L),
-    STRING(SelectField.create(TestAllTypes.SINGLE_STRING_FIELD_NUMBER, "single_string"), "hello"),
-    MAP_STRING_STRING(
-        SelectField.create(TestAllTypes.MAP_STRING_STRING_FIELD_NUMBER, "map_string_string"),
-        ImmutableMap.of("k1", "v1", "k2", "v2")),
-    MAP_INT32_BYTES(
-        SelectField.create(TestAllTypes.MAP_INT32_BYTES_FIELD_NUMBER, "map_int32_bytes"),
-        ImmutableMap.of(
-            0L, CelByteString.copyFromUtf8("val_for_default_key"), 42L, CelByteString.EMPTY)),
+    INT64(
+        SelectField.create(
+            TestAllTypes.SINGLE_INT64_FIELD_NUMBER,
+            "single_int64",
+            FieldLiteDescriptor.Type.INT64.getNumber(),
+            0L),
+        99L),
+    STRING(
+        SelectField.create(
+            TestAllTypes.SINGLE_STRING_FIELD_NUMBER,
+            "single_string",
+            FieldLiteDescriptor.Type.STRING.getNumber(),
+            ""),
+        "hello"),
     DURATION(
-        SelectField.create(TestAllTypes.SINGLE_DURATION_FIELD_NUMBER, "single_duration"),
-        Duration.ofSeconds(10L, 500L)),
-    INT64_WRAPPER(
-        SelectField.create(TestAllTypes.SINGLE_INT64_WRAPPER_FIELD_NUMBER, "single_int64_wrapper"),
-        12345L);
+        SelectField.create(
+            TestAllTypes.SINGLE_DURATION_FIELD_NUMBER,
+            "single_duration",
+            FieldLiteDescriptor.Type.MESSAGE.getNumber(),
+            Duration.ZERO,
+            "google.protobuf.Duration"),
+        Duration.ofSeconds(10L, 500L));
 
     private final SelectField selectField;
     private final Object expectedValue;
@@ -1127,22 +1017,17 @@ public final class RawProtoMessageLiteValueTest {
   }
 
   @Test
-  public void selectByFieldNumber_withDescriptor_decodesExpectedValue(
+  public void selectByFieldNumber_decodesExpectedValue(
       @TestParameter SelectByFieldNumberTestCase testCase) {
     TestAllTypes proto =
         TestAllTypes.newBuilder()
             .setSingleInt64(99L)
             .setSingleString("hello")
-            .putMapStringString("k1", "v1")
-            .putMapStringString("k2", "v2")
-            .putMapInt32Bytes(0, ByteString.copyFromUtf8("val_for_default_key"))
-            .putMapInt32Bytes(42, ByteString.EMPTY)
             .setSingleDuration(ProtoTimeUtils.toProtoDuration(Duration.ofSeconds(10L, 500L)))
-            .setSingleInt64Wrapper(Int64Value.of(12345L))
             .build();
     RawProtoMessageLiteValue raw =
         RawProtoMessageLiteValue.create(
-            proto.toByteString(), "cel.expr.conformance.proto3.TestAllTypes", CONVERTER);
+            proto.toByteString(), "cel.expr.conformance.proto3.TestAllTypes", EMPTY_CONVERTER);
 
     Object selected = raw.selectByFieldNumber(testCase.selectField);
 
@@ -1150,60 +1035,17 @@ public final class RawProtoMessageLiteValueTest {
   }
 
   @Test
-  public void findByFieldNumber_scalarField_returnsScalar(@TestParameter boolean withDescriptor) {
+  public void findByFieldNumber_scalarFieldWithoutDescriptor_returnsScalar() {
     TestAllTypes proto = TestAllTypes.newBuilder().setSingleInt64(99L).build();
     RawProtoMessageLiteValue raw =
         RawProtoMessageLiteValue.create(
-            proto.toByteString(),
-            "cel.expr.conformance.proto3.TestAllTypes",
-            withDescriptor ? CONVERTER : EMPTY_CONVERTER);
+            proto.toByteString(), "cel.expr.conformance.proto3.TestAllTypes", EMPTY_CONVERTER);
 
     Optional<Object> nav =
         raw.findByFieldNumber(
             SelectField.create(TestAllTypes.SINGLE_INT64_FIELD_NUMBER, "single_int64"));
 
     assertThat(nav).hasValue(99L);
-  }
-
-  @Test
-  public void selectByFieldNumber_unsetWrapperFieldWithoutWrapperDescriptor_returnsNullValue() {
-    MessageLiteDescriptor testAllTypesDesc =
-        TestAllTypesCelDescriptor.getDescriptor()
-            .getProtoTypeNamesToDescriptors()
-            .get("cel.expr.conformance.proto3.TestAllTypes");
-    CelLiteDescriptorPool poolWithoutWrappers =
-        new CelLiteDescriptorPool() {
-          @Override
-          public Optional<MessageLiteDescriptor> findDescriptor(String protoTypeName) {
-            if (protoTypeName.equals(testAllTypesDesc.getProtoTypeName())) {
-              return Optional.of(testAllTypesDesc);
-            }
-            return Optional.empty();
-          }
-
-          @Override
-          public Optional<MessageLiteDescriptor> findDescriptor(MessageLite messageLite) {
-            return findDescriptor(messageLite.getClass().getName());
-          }
-
-          @Override
-          public MessageLiteDescriptor getDescriptorOrThrow(String protoTypeName) {
-            return findDescriptor(protoTypeName)
-                .orElseThrow(() -> new NoSuchElementException(protoTypeName));
-          }
-        };
-    ProtoLiteCelValueConverter converter =
-        ProtoLiteCelValueConverter.newInstance(poolWithoutWrappers);
-    RawProtoMessageLiteValue raw =
-        RawProtoMessageLiteValue.create(
-            ByteString.EMPTY, "cel.expr.conformance.proto3.TestAllTypes", converter);
-
-    Object result =
-        raw.selectByFieldNumber(
-            SelectField.create(
-                TestAllTypes.SINGLE_INT64_WRAPPER_FIELD_NUMBER, "single_int64_wrapper"));
-
-    assertThat(result).isEqualTo(NullValue.NULL_VALUE);
   }
 
   @Test
@@ -1252,7 +1094,7 @@ public final class RawProtoMessageLiteValueTest {
             TestAllTypes.MAP_STRING_STRING_FIELD_NUMBER,
             "map_string_string",
             SelectField.CEL_MAP_TYPE_CODE,
-            null);
+            ImmutableMap.of());
 
     UnsupportedOperationException e =
         assertThrows(UnsupportedOperationException.class, () -> raw.selectByFieldNumber(field));
@@ -1260,6 +1102,18 @@ public final class RawProtoMessageLiteValueTest {
     assertThat(e)
         .hasMessageThat()
         .contains("Decoding unknown map field from wire bytes is unsupported");
+  }
+
+  private interface WireWriter {
+    void write(CodedOutputStream out) throws IOException;
+  }
+
+  private static ByteString encode(WireWriter writer) throws IOException {
+    ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+    CodedOutputStream out = CodedOutputStream.newInstance(bytes);
+    writer.write(out);
+    out.flush();
+    return ByteString.copyFrom(bytes.toByteArray());
   }
 
   @SuppressWarnings("ImmutableEnumChecker") // Test only
@@ -1308,44 +1162,58 @@ public final class RawProtoMessageLiteValueTest {
   }
 
   @Test
-  public void selectByFieldNumber_wellKnownFieldWithoutDescriptor_decodesOrReturnsDefault(
+  public void selectByFieldNumber_populatedWellKnownFieldWithoutDescriptor_decodesValue(
       @TestParameter WellKnownFieldWithoutDescriptorTestCase testCase) {
     RawProtoMessageLiteValue populatedRaw =
         RawProtoMessageLiteValue.create(
             testCase.populatedProto.toByteString(),
-            "cel.expr.conformance.proto3.TestAllTypes",
-            EMPTY_CONVERTER);
-    RawProtoMessageLiteValue emptyRaw =
-        RawProtoMessageLiteValue.create(
-            TestAllTypes.getDefaultInstance().toByteString(),
             "cel.expr.conformance.proto3.TestAllTypes",
             EMPTY_CONVERTER);
 
     Object populatedSelected = populatedRaw.selectByFieldNumber(testCase.selectField);
-    Object emptySelected = emptyRaw.selectByFieldNumber(testCase.selectField);
 
     assertThat(populatedSelected).isEqualTo(testCase.expectedPopulatedValue);
-    assertThat(emptySelected).isEqualTo(testCase.expectedDefaultValue);
   }
 
   @Test
-  public void findByFieldNumber_wellKnownFieldWithoutDescriptor_returnsOptionalValue(
+  public void selectByFieldNumber_absentWellKnownFieldWithoutDescriptor_returnsDefault(
       @TestParameter WellKnownFieldWithoutDescriptorTestCase testCase) {
-    RawProtoMessageLiteValue populatedRaw =
-        RawProtoMessageLiteValue.create(
-            testCase.populatedProto.toByteString(),
-            "cel.expr.conformance.proto3.TestAllTypes",
-            EMPTY_CONVERTER);
     RawProtoMessageLiteValue emptyRaw =
         RawProtoMessageLiteValue.create(
             TestAllTypes.getDefaultInstance().toByteString(),
             "cel.expr.conformance.proto3.TestAllTypes",
             EMPTY_CONVERTER);
 
+    Object emptySelected = emptyRaw.selectByFieldNumber(testCase.selectField);
+
+    assertThat(emptySelected).isEqualTo(testCase.expectedDefaultValue);
+  }
+
+  @Test
+  public void findByFieldNumber_populatedWellKnownFieldWithoutDescriptor_returnsPresentOptional(
+      @TestParameter WellKnownFieldWithoutDescriptorTestCase testCase) {
+    RawProtoMessageLiteValue populatedRaw =
+        RawProtoMessageLiteValue.create(
+            testCase.populatedProto.toByteString(),
+            "cel.expr.conformance.proto3.TestAllTypes",
+            EMPTY_CONVERTER);
+
     Optional<Object> populatedFound = populatedRaw.findByFieldNumber(testCase.selectField);
-    Optional<Object> emptyFound = emptyRaw.findByFieldNumber(testCase.selectField);
 
     assertThat(populatedFound).hasValue(testCase.expectedPopulatedValue);
+  }
+
+  @Test
+  public void findByFieldNumber_absentWellKnownFieldWithoutDescriptor_returnsEmptyOptional(
+      @TestParameter WellKnownFieldWithoutDescriptorTestCase testCase) {
+    RawProtoMessageLiteValue emptyRaw =
+        RawProtoMessageLiteValue.create(
+            TestAllTypes.getDefaultInstance().toByteString(),
+            "cel.expr.conformance.proto3.TestAllTypes",
+            EMPTY_CONVERTER);
+
+    Optional<Object> emptyFound = emptyRaw.findByFieldNumber(testCase.selectField);
+
     assertThat(emptyFound).isEmpty();
   }
 

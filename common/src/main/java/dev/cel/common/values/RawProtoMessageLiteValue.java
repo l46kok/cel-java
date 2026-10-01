@@ -15,15 +15,12 @@
 package dev.cel.common.values;
 
 import static com.google.common.base.Preconditions.checkNotNull;
-import static dev.cel.common.values.ProtoLiteCelValueConverter.MAP_KEY_FIELD_NAME;
-import static dev.cel.common.values.ProtoLiteCelValueConverter.MAP_VALUE_FIELD_NAME;
 
 import com.google.auto.value.AutoValue;
 import com.google.auto.value.extension.memoized.Memoized;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Multimaps;
@@ -34,17 +31,12 @@ import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.WireFormat;
 import dev.cel.common.annotations.Internal;
 import dev.cel.common.exceptions.CelAttributeNotFoundException;
-import dev.cel.common.internal.WellKnownProto;
 import dev.cel.common.types.CelType;
 import dev.cel.common.types.StructTypeReference;
 import dev.cel.protobuf.CelLiteDescriptor.FieldLiteDescriptor;
-import dev.cel.protobuf.CelLiteDescriptor.FieldLiteDescriptor.EncodingType;
-import dev.cel.protobuf.CelLiteDescriptor.FieldLiteDescriptor.JavaType;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
 import org.jspecify.annotations.Nullable;
@@ -122,65 +114,37 @@ public abstract class RawProtoMessageLiteValue extends StructValue<String, RawPr
 
   @Override
   public Object selectByFieldNumber(SelectField field) {
-    int fieldNumber = field.fieldNumber();
-    FieldLiteDescriptor fieldDescriptor =
-        protoLiteCelValueConverter()
-            .findFieldDescriptor(celType().name(), fieldNumber)
-            .orElse(null);
     return selectWireOrDefault(
-        field, fieldDescriptor, unknownFields().get(fieldNumber), protoLiteCelValueConverter());
+        field, unknownFields().get(field.fieldNumber()), protoLiteCelValueConverter());
   }
 
   @Override
   public boolean hasFieldByNumber(SelectField field) {
-    int fieldNumber = field.fieldNumber();
-    FieldLiteDescriptor fieldDescriptor =
-        protoLiteCelValueConverter()
-            .findFieldDescriptor(celType().name(), fieldNumber)
-            .orElse(null);
-    return isPresentInWire(field, fieldDescriptor, unknownFields().get(fieldNumber));
+    return isPresentInWire(field, unknownFields().get(field.fieldNumber()));
   }
 
   @Override
   public Optional<Object> findByFieldNumber(SelectField field) {
-    int fieldNumber = field.fieldNumber();
-    FieldLiteDescriptor fieldDescriptor =
-        protoLiteCelValueConverter()
-            .findFieldDescriptor(celType().name(), fieldNumber)
-            .orElse(null);
     return navigateWire(
-        field, fieldDescriptor, unknownFields().get(fieldNumber), protoLiteCelValueConverter());
+        field, unknownFields().get(field.fieldNumber()), protoLiteCelValueConverter());
   }
 
   /**
-   * Decodes a field value from preserved wire bytes, falling back to schema or default values.
+   * Decodes a field value from preserved wire bytes, falling back to default values.
    *
    * <p>Package-private: shared with {@code ProtoMessageLiteValue} for unknown field resolution.
    */
   static Object selectWireOrDefault(
-      SelectField field,
-      @Nullable FieldLiteDescriptor fieldDescriptor,
-      ImmutableList<Object> unknowns,
-      ProtoLiteCelValueConverter converter) {
+      SelectField field, ImmutableList<Object> unknowns, ProtoLiteCelValueConverter converter) {
     if (unknowns.isEmpty()) {
-      return resolveDefault(field, fieldDescriptor, converter);
+      return resolveDefault(field, converter);
     }
-    return decodeWireField(field, fieldDescriptor, unknowns, converter);
+    return decodeWireField(field, unknowns, converter);
   }
 
   private static Object decodeWireField(
-      SelectField field,
-      @Nullable FieldLiteDescriptor fieldDescriptor,
-      ImmutableList<Object> unknowns,
-      ProtoLiteCelValueConverter converter) {
-    if (fieldDescriptor != null && fieldDescriptor.getEncodingType() == EncodingType.MAP) {
-      return decodeMapEntries(unknowns, fieldDescriptor, converter);
-    }
-
-    int typeCode =
-        fieldDescriptor != null
-            ? fieldDescriptor.getProtoFieldType().getNumber()
-            : field.typeCode();
+      SelectField field, ImmutableList<Object> unknowns, ProtoLiteCelValueConverter converter) {
+    int typeCode = field.typeCode();
     if (typeCode == SelectField.CEL_MAP_TYPE_CODE) {
       throw new UnsupportedOperationException(
           "Decoding unknown map field from wire bytes is unsupported: " + field.fieldName());
@@ -189,58 +153,28 @@ public abstract class RawProtoMessageLiteValue extends StructValue<String, RawPr
       throw CelAttributeNotFoundException.forFieldResolution(field.fieldName());
     }
 
-    boolean isRepeated =
-        fieldDescriptor != null
-            ? fieldDescriptor.getEncodingType() == EncodingType.LIST
-            : field.defaultValue() instanceof List;
-    String protoTypeName = resolveProtoTypeName(field, fieldDescriptor);
+    boolean isRepeated = field.defaultValue() instanceof List;
+    String protoTypeName = resolveProtoTypeName(field);
 
     return decodeWireEntries(unknowns, typeCode, protoTypeName, isRepeated, converter);
   }
 
   /**
-   * Resolves the protobuf message type name for a field.
-   *
-   * <p>Prefers the descriptor's message type name when present. Under runtime version skew (where
-   * the descriptor is omitted), falls back to the type name preserved in {@link SelectField} from
-   * the optimizer, or {@link #UNKNOWN_MESSAGE_TYPE_NAME} if unspecified.
+   * Resolves the protobuf message type name for a field from the optimizer metadata in {@link
+   * SelectField}, or {@link #UNKNOWN_MESSAGE_TYPE_NAME} if unspecified.
    */
-  private static String resolveProtoTypeName(
-      SelectField field, @Nullable FieldLiteDescriptor fieldDescriptor) {
-    if (fieldDescriptor != null) {
-      return fieldDescriptor.getFieldProtoTypeName();
-    }
+  private static String resolveProtoTypeName(SelectField field) {
     if (!field.protoTypeName().isEmpty()) {
       return field.protoTypeName();
     }
     return UNKNOWN_MESSAGE_TYPE_NAME;
   }
 
-  private static Object resolveDefault(
-      SelectField field,
-      @Nullable FieldLiteDescriptor fieldDescriptor,
-      ProtoLiteCelValueConverter converter) {
+  private static Object resolveDefault(SelectField field, ProtoLiteCelValueConverter converter) {
     if (field.defaultValue() != null) {
       return field.defaultValue();
     }
-
-    if (fieldDescriptor == null) {
-      if (field.typeCode() == FieldLiteDescriptor.Type.MESSAGE.getNumber()) {
-        return create(
-            ByteString.EMPTY, resolveProtoTypeName(field, /* fieldDescriptor= */ null), converter);
-      }
-      throw CelAttributeNotFoundException.forFieldResolution(field.fieldName());
-    }
-
-    String protoTypeName = fieldDescriptor.getFieldProtoTypeName();
-    if (fieldDescriptor.getEncodingType() == EncodingType.SINGULAR
-        && fieldDescriptor.getJavaType() == JavaType.MESSAGE
-        && !WellKnownProto.isWrapperType(protoTypeName)
-        && !converter.hasDescriptor(protoTypeName)) {
-      return create(ByteString.EMPTY, protoTypeName, converter);
-    }
-
-    return converter.getDefaultCelValue(fieldDescriptor);
+    return create(ByteString.EMPTY, resolveProtoTypeName(field), converter);
   }
 
   /**
@@ -248,22 +182,13 @@ public abstract class RawProtoMessageLiteValue extends StructValue<String, RawPr
    *
    * <p>Package-private: shared with {@code ProtoMessageLiteValue} for unknown field resolution.
    */
-  static boolean isPresentInWire(
-      SelectField field,
-      @Nullable FieldLiteDescriptor fieldDescriptor,
-      ImmutableList<Object> unknowns) {
+  static boolean isPresentInWire(SelectField field, ImmutableList<Object> unknowns) {
     if (unknowns.isEmpty()) {
       return false;
     }
 
-    boolean isRepeated =
-        fieldDescriptor != null
-            ? fieldDescriptor.getEncodingType() == EncodingType.LIST
-            : field.defaultValue() instanceof List;
-    int typeCode =
-        fieldDescriptor != null
-            ? fieldDescriptor.getProtoFieldType().getNumber()
-            : field.typeCode();
+    boolean isRepeated = field.defaultValue() instanceof List;
+    int typeCode = field.typeCode();
 
     // In protobuf wire format, a zero-length entry for a singular field (e.g. empty string,
     // bytes, or empty submessage) represents explicit presence on the wire. Only packed repeated
@@ -295,15 +220,12 @@ public abstract class RawProtoMessageLiteValue extends StructValue<String, RawPr
    * <p>Package-private: shared with {@code ProtoMessageLiteValue} for unknown field resolution.
    */
   static Optional<Object> navigateWire(
-      SelectField field,
-      @Nullable FieldLiteDescriptor fieldDescriptor,
-      ImmutableList<Object> unknowns,
-      ProtoLiteCelValueConverter converter) {
-    if (!isPresentInWire(field, fieldDescriptor, unknowns)) {
+      SelectField field, ImmutableList<Object> unknowns, ProtoLiteCelValueConverter converter) {
+    if (!isPresentInWire(field, unknowns)) {
       return Optional.empty();
     }
-    if (fieldDescriptor != null || field.typeCode() != SelectField.NO_TYPE_CODE) {
-      return Optional.of(selectWireOrDefault(field, fieldDescriptor, unknowns, converter));
+    if (field.typeCode() != SelectField.NO_TYPE_CODE) {
+      return Optional.of(selectWireOrDefault(field, unknowns, converter));
     }
     Object lastEntry = unknowns.get(unknowns.size() - 1);
     if (lastEntry instanceof ByteString) {
@@ -316,32 +238,6 @@ public abstract class RawProtoMessageLiteValue extends StructValue<String, RawPr
               converter));
     }
     return Optional.of(lastEntry);
-  }
-
-  private static ImmutableMap<Object, Object> decodeMapEntries(
-      ImmutableList<Object> unknowns,
-      FieldLiteDescriptor mapFieldDescriptor,
-      ProtoLiteCelValueConverter converter) {
-    String entryTypeName = mapFieldDescriptor.getFieldProtoTypeName();
-    Object defaultKey = converter.getDefaultCelValue(entryTypeName, MAP_KEY_FIELD_NAME);
-    Object defaultValue = converter.getDefaultCelValue(entryTypeName, MAP_VALUE_FIELD_NAME);
-    Map<Object, Object> resultMap = new LinkedHashMap<>();
-    for (Object raw : unknowns) {
-      ByteString bytes = requireType(raw, ByteString.class, WireFormat.FieldType.MESSAGE);
-      try {
-        ImmutableMap<String, Object> entryFields =
-            converter.readAllFields(bytes.toByteArray(), entryTypeName).values();
-        Object key = entryFields.get(MAP_KEY_FIELD_NAME);
-        key = (key == null) ? defaultKey : converter.toRuntimeValue(key);
-        Object value = entryFields.get(MAP_VALUE_FIELD_NAME);
-        value = (value == null) ? defaultValue : converter.toRuntimeValue(value);
-        resultMap.put(key, value);
-      } catch (IOException e) {
-        throw new IllegalArgumentException(
-            "Failed to decode map entry for field: " + mapFieldDescriptor.getFieldName(), e);
-      }
-    }
-    return ImmutableMap.copyOf(resultMap);
   }
 
   static @Nullable Object decodeWireEntries(

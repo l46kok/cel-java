@@ -101,46 +101,45 @@ public abstract class ProtoMessageLiteValue extends StructValue<String, MessageL
   @Override
   public Object selectByFieldNumber(SelectField field) {
     FieldLiteDescriptor fd = findFieldDescriptor(field);
-    Object known = findKnownFieldValue(fd);
-    if (known != null) {
-      return protoLiteCelValueConverter().toRuntimeValue(known);
+    if (fd != null) {
+      Object known = fieldValues().get(fd.getFieldName());
+      if (known != null) {
+        return protoLiteCelValueConverter().toRuntimeValue(known);
+      }
+      if (field.defaultValue() != null) {
+        return field.defaultValue();
+      }
+      return protoLiteCelValueConverter().getDefaultCelValue(fd);
     }
     return RawProtoMessageLiteValue.selectWireOrDefault(
-        field, fd, unknownFields().get(field.fieldNumber()), protoLiteCelValueConverter());
+        field, unknownFields().get(field.fieldNumber()), protoLiteCelValueConverter());
   }
 
   @Override
   public boolean hasFieldByNumber(SelectField field) {
     FieldLiteDescriptor fd = findFieldDescriptor(field);
-    if (findKnownFieldValue(fd) != null) {
-      return true;
+    if (fd != null) {
+      return fieldValues().containsKey(fd.getFieldName());
     }
     return RawProtoMessageLiteValue.isPresentInWire(
-        field, fd, unknownFields().get(field.fieldNumber()));
+        field, unknownFields().get(field.fieldNumber()));
   }
 
   @Override
   public Optional<Object> findByFieldNumber(SelectField field) {
     FieldLiteDescriptor fd = findFieldDescriptor(field);
-    Object known = findKnownFieldValue(fd);
-    if (known != null) {
-      return Optional.of(protoLiteCelValueConverter().toRuntimeValue(known));
+    if (fd != null) {
+      return Optional.ofNullable(fieldValues().get(fd.getFieldName()))
+          .map(value -> protoLiteCelValueConverter().toRuntimeValue(value));
     }
     return RawProtoMessageLiteValue.navigateWire(
-        field, fd, unknownFields().get(field.fieldNumber()), protoLiteCelValueConverter());
+        field, unknownFields().get(field.fieldNumber()), protoLiteCelValueConverter());
   }
 
   private @Nullable FieldLiteDescriptor findFieldDescriptor(SelectField field) {
     return protoLiteCelValueConverter()
         .findFieldDescriptor(celType().name(), field.fieldNumber())
         .orElse(null);
-  }
-
-  private @Nullable Object findKnownFieldValue(@Nullable FieldLiteDescriptor fieldDescriptor) {
-    if (fieldDescriptor == null) {
-      return null;
-    }
-    return fieldValues().get(fieldDescriptor.getFieldName());
   }
 
   public static ProtoMessageLiteValue create(

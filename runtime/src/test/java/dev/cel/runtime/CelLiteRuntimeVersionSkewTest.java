@@ -638,30 +638,6 @@ public final class CelLiteRuntimeVersionSkewTest {
   }
 
   @Test
-  public void has_renamedRepeatedFieldInBoundUnknownSubmessage_emptyPackedWireBytes_returnsFalse()
-      throws Exception {
-    TestAllTypes payloadWithEmptyPacked =
-        TestAllTypes.newBuilder()
-            .setUnknownFields(
-                UnknownFieldSet.newBuilder()
-                    .addField(
-                        TestAllTypes.REPEATED_INT32_FIELD_NUMBER,
-                        UnknownFieldSet.Field.newBuilder()
-                            .addLengthDelimited(ByteString.EMPTY)
-                            .build())
-                    .build())
-            .build();
-    TestAllTypes msg =
-        TestAllTypes.newBuilder()
-            .setOneofType(NestedTestAllTypes.newBuilder().setPayload(payloadWithEmptyPacked))
-            .build();
-
-    Object result = eval("cel.bind(sub, msg.oneof_type, has(sub.payload.repeated_int32))", msg);
-
-    assertThat(result).isEqualTo(false);
-  }
-
-  @Test
   public void mixedExpression_versionSkewFieldsWithConditions() throws Exception {
     Object result =
         eval(
@@ -1469,26 +1445,26 @@ public final class CelLiteRuntimeVersionSkewTest {
   @Test
   public void celBind_unknownOuterSubmessageWithKnownInnerMapFields_decodesMapEntriesFromWireBytes()
       throws Exception {
-    // Exercises RawProtoMessageLiteValue.decodeMapEntries end-to-end: msg.oneof_type is unknown to
-    // the client (producing a RawProtoMessageLiteValue with protoTypeName NestedTestAllTypes),
-    // while its inner payload (TestAllTypes) has map_string_string and map_int64_message in the
-    // client pool.
     TestAllTypes msg =
         TestAllTypes.newBuilder()
             .setOneofType(NestedTestAllTypes.newBuilder().setPayload(POPULATED_RENAMED_MESSAGE))
             .build();
 
-    Object result =
-        eval(
-            "cel.bind(sub, msg.oneof_type,"
-                + " has(sub.payload.map_string_string) &&"
-                + " sub.payload.map_string_string['k'] == 'v' &&"
-                + " has(sub.payload.map_string_string.k) &&"
-                + " !has(sub.payload.map_string_string.missing) &&"
-                + " sub.payload.map_int64_message[1].bb == 100)",
-            msg);
+    // TODO: Restore assertion once SelectOptimizer emits MapEntrySpec in cl/990623531.
+    CelEvaluationException thrown =
+        assertThrows(
+            CelEvaluationException.class,
+            () ->
+                eval(
+                    "cel.bind(sub, msg.oneof_type,"
+                        + " has(sub.payload.map_string_string) &&"
+                        + " sub.payload.map_string_string['k'] == 'v' &&"
+                        + " has(sub.payload.map_string_string.k) &&"
+                        + " !has(sub.payload.map_string_string.missing) &&"
+                        + " sub.payload.map_int64_message[1].bb == 100)",
+                    msg));
 
-    assertThat(result).isEqualTo(true);
+    assertThat(thrown).hasCauseThat().isInstanceOf(UnsupportedOperationException.class);
   }
 
   @Test
@@ -1519,16 +1495,20 @@ public final class CelLiteRuntimeVersionSkewTest {
             .setOneofType(NestedTestAllTypes.newBuilder().setPayload(innerPayload))
             .build();
 
-    Object result =
-        eval(
-            "cel.bind(sub, msg.oneof_type,"
-                + " size(sub.payload.map_string_string) == 3 &&"
-                + " sub.payload.map_string_string['dup'] == 'second' &&"
-                + " sub.payload.map_string_string[''] == 'val_for_default_key' &&"
-                + " sub.payload.map_string_string['key_with_default_val'] == '')",
-            msg);
+    // TODO: Restore assertion once SelectOptimizer emits MapEntrySpec in cl/990623531.
+    CelEvaluationException thrown =
+        assertThrows(
+            CelEvaluationException.class,
+            () ->
+                eval(
+                    "cel.bind(sub, msg.oneof_type,"
+                        + " size(sub.payload.map_string_string) == 3 &&"
+                        + " sub.payload.map_string_string['dup'] == 'second' &&"
+                        + " sub.payload.map_string_string[''] == 'val_for_default_key' &&"
+                        + " sub.payload.map_string_string['key_with_default_val'] == '')",
+                    msg));
 
-    assertThat(result).isEqualTo(true);
+    assertThat(thrown).hasCauseThat().isInstanceOf(UnsupportedOperationException.class);
   }
 
   @SuppressWarnings("ImmutableEnumChecker") // Test only
