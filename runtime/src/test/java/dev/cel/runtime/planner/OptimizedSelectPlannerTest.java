@@ -114,6 +114,7 @@ public final class OptimizedSelectPlannerTest {
           CEL_CONTAINER,
           CEL_OPTIONS,
           ImmutableSet.of(),
+          RUNTIME_EQUALITY,
           CelAsyncEvaluationOptions.defaultOptions(),
           /* asyncExecutor= */ null);
 

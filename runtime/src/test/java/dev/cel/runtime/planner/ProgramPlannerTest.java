@@ -131,6 +131,7 @@ public final class ProgramPlannerTest {
           CEL_CONTAINER,
           CEL_OPTIONS,
           ImmutableSet.of("late_bound_func"),
+          RUNTIME_EQUALITY,
           CelAsyncEvaluationOptions.defaultOptions(),
           /* asyncExecutor= */ null);
 
@@ -332,6 +333,7 @@ public final class ProgramPlannerTest {
             container,
             CEL_OPTIONS,
             ImmutableSet.of(),
+            RUNTIME_EQUALITY,
             CelAsyncEvaluationOptions.defaultOptions(),
             /* asyncExecutor= */ null);
 
@@ -1037,6 +1039,7 @@ public final class ProgramPlannerTest {
             CEL_CONTAINER,
             options,
             ImmutableSet.of(),
+            RuntimeEquality.create(RuntimeHelpers.create(), options),
             CelAsyncEvaluationOptions.defaultOptions(),
             /* asyncExecutor= */ null);
     CelAbstractSyntaxTree ast = compile(expression);
@@ -1060,6 +1063,7 @@ public final class ProgramPlannerTest {
             CEL_CONTAINER,
             options,
             /* lateBoundFunctionNames= */ ImmutableSet.of(),
+            RuntimeEquality.create(RuntimeHelpers.create(), options),
             CelAsyncEvaluationOptions.defaultOptions(),
             /* asyncExecutor= */ null);
     CelAbstractSyntaxTree ast = compile("[1, 2, 3].map(x, [1, 2].map(y, x + y))");
@@ -1234,6 +1238,7 @@ public final class ProgramPlannerTest {
               CEL_CONTAINER,
               CEL_OPTIONS,
               ImmutableSet.of(),
+              RUNTIME_EQUALITY,
               asyncOptions,
               executor);
       CelAbstractSyntaxTree ast = compile("1 + 2");
@@ -1246,6 +1251,26 @@ public final class ProgramPlannerTest {
     } finally {
       executor.shutdownNow();
     }
+  }
+
+  @Test
+  public void newPlanner_nullRuntimeEquality_throwsNullPointerException() {
+    DefaultDispatcher dispatcher = newDispatcher();
+
+    assertThrows(
+        NullPointerException.class,
+        () ->
+            ProgramPlanner.newPlanner(
+                TYPE_PROVIDER,
+                VALUE_PROVIDER,
+                dispatcher,
+                CEL_VALUE_CONVERTER,
+                CEL_CONTAINER,
+                CEL_OPTIONS,
+                ImmutableSet.of(),
+                /* runtimeEquality= */ null,
+                CelAsyncEvaluationOptions.defaultOptions(),
+                /* asyncExecutor= */ null));
   }
 
   @Test
@@ -1263,6 +1288,7 @@ public final class ProgramPlannerTest {
                 CEL_CONTAINER,
                 CEL_OPTIONS,
                 ImmutableSet.of(),
+                RUNTIME_EQUALITY,
                 /* asyncOptions= */ null,
                 /* asyncExecutor= */ null));
   }
@@ -1292,6 +1318,7 @@ public final class ProgramPlannerTest {
             CEL_CONTAINER,
             CEL_OPTIONS,
             ImmutableSet.of(),
+            RUNTIME_EQUALITY,
             CelAsyncEvaluationOptions.defaultOptions(),
             /* asyncExecutor= */ null);
     Program program = planner.plan(ast);
@@ -1366,6 +1393,7 @@ public final class ProgramPlannerTest {
             CelContainer.ofName("cel.example"),
             CEL_OPTIONS,
             /* lateBoundFunctionNames= */ ImmutableSet.of(),
+            RUNTIME_EQUALITY,
             CelAsyncEvaluationOptions.defaultOptions(),
             /* asyncExecutor= */ null);
     CelAbstractSyntaxTree ast = compile(celCompiler, "[{'z': 0}].exists(y, y.z == 0)");
@@ -1393,6 +1421,7 @@ public final class ProgramPlannerTest {
             CelContainer.ofName("y"),
             CEL_OPTIONS,
             /* lateBoundFunctionNames= */ ImmutableSet.of(),
+            RUNTIME_EQUALITY,
             CelAsyncEvaluationOptions.defaultOptions(),
             /* asyncExecutor= */ null);
     CelAbstractSyntaxTree ast = compile(celCompiler, "[{'z': 0}].exists(y, y.z == 0 && .y.z == 1)");
@@ -1419,6 +1448,7 @@ public final class ProgramPlannerTest {
             CelContainer.newBuilder().build(),
             CEL_OPTIONS,
             /* lateBoundFunctionNames= */ ImmutableSet.of(),
+            RUNTIME_EQUALITY,
             CelAsyncEvaluationOptions.defaultOptions(),
             /* asyncExecutor= */ null);
     CelAbstractSyntaxTree ast = compile(celCompiler, "[0].exists(x, x == 0 && .x == 1)");
@@ -1445,6 +1475,7 @@ public final class ProgramPlannerTest {
             CelContainer.newBuilder().build(),
             CEL_OPTIONS,
             /* lateBoundFunctionNames= */ ImmutableSet.of(),
+            RUNTIME_EQUALITY,
             CelAsyncEvaluationOptions.defaultOptions(),
             /* asyncExecutor= */ null);
     CelAbstractSyntaxTree ast = compile(celCompiler, "[0].exists(x, [x+1].exists(x, x == .x))");
@@ -1487,6 +1518,7 @@ public final class ProgramPlannerTest {
             CEL_CONTAINER,
             CEL_OPTIONS,
             ImmutableSet.of(),
+            RUNTIME_EQUALITY,
             CelAsyncEvaluationOptions.defaultOptions(),
             /* asyncExecutor= */ null);
 
@@ -1529,6 +1561,7 @@ public final class ProgramPlannerTest {
             CEL_CONTAINER,
             CEL_OPTIONS,
             ImmutableSet.of(),
+            RUNTIME_EQUALITY,
             CelAsyncEvaluationOptions.defaultOptions(),
             /* asyncExecutor= */ null);
 
@@ -1564,6 +1597,7 @@ public final class ProgramPlannerTest {
             CEL_CONTAINER,
             CEL_OPTIONS,
             ImmutableSet.of(),
+            RUNTIME_EQUALITY,
             CelAsyncEvaluationOptions.defaultOptions(),
             /* asyncExecutor= */ null);
 
@@ -1961,6 +1995,7 @@ public final class ProgramPlannerTest {
             CEL_CONTAINER,
             CEL_OPTIONS,
             ImmutableSet.of(),
+            RUNTIME_EQUALITY,
             CelAsyncEvaluationOptions.defaultOptions(),
             /* asyncExecutor= */ null);
     Program program = planner.plan(compiler.compile("throw(1)").getAst());
@@ -1997,6 +2032,7 @@ public final class ProgramPlannerTest {
         CEL_CONTAINER,
         options,
         ImmutableSet.of("late_bound_func"),
+        RuntimeEquality.create(RuntimeHelpers.create(), options),
         CelAsyncEvaluationOptions.defaultOptions(),
         /* asyncExecutor= */ null);
   }

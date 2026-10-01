@@ -54,6 +54,7 @@ import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelEvaluationExceptionBuilder;
 import dev.cel.runtime.CelResolvedOverload;
 import dev.cel.runtime.DefaultDispatcher;
+import dev.cel.runtime.RuntimeEquality;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.NoSuchElementException;
@@ -85,6 +86,8 @@ public final class ProgramPlanner {
   @SuppressWarnings("Immutable")
   private final @Nullable ListeningExecutorService asyncExecutor;
 
+  private final RuntimeEquality runtimeEquality;
+
   /**
    * Plans a {@link PlannedProgram} from the provided parsed-only or type-checked {@link
    * CelAbstractSyntaxTree}.
@@ -107,7 +110,7 @@ public final class ProgramPlanner {
     }
 
     return PlannedProgram.create(
-        plannedInterpretable, errorMetadata, options, asyncOptions, asyncExecutor);
+        plannedInterpretable, errorMetadata, options, runtimeEquality, asyncOptions, asyncExecutor);
   }
 
   private PlannedInterpretable plan(CelExpr celExpr, PlannerContext ctx) {
@@ -323,7 +326,13 @@ public final class ProgramPlanner {
     }
 
     if (resolvedOverload.getDefinition() instanceof CelAsyncFunctionOverload) {
-      return EvalAsyncCall.create(expr, functionName);
+      return EvalAsyncCall.create(
+          expr,
+          functionName,
+          resolvedOverload,
+          (CelAsyncFunctionOverload) resolvedOverload.getDefinition(),
+          evaluatedArgs,
+          celValueConverter);
     }
 
     switch (argCount) {
@@ -722,6 +731,7 @@ public final class ProgramPlanner {
       CelContainer container,
       CelOptions options,
       ImmutableSet<String> lateBoundFunctionNames,
+      RuntimeEquality runtimeEquality,
       CelAsyncEvaluationOptions asyncOptions,
       @Nullable ListeningExecutorService asyncExecutor) {
     return new ProgramPlanner(
@@ -732,6 +742,7 @@ public final class ProgramPlanner {
         container,
         options,
         lateBoundFunctionNames,
+        runtimeEquality,
         asyncOptions,
         asyncExecutor);
   }
@@ -744,6 +755,7 @@ public final class ProgramPlanner {
       CelContainer container,
       CelOptions options,
       ImmutableSet<String> lateBoundFunctionNames,
+      RuntimeEquality runtimeEquality,
       CelAsyncEvaluationOptions asyncOptions,
       @Nullable ListeningExecutorService asyncExecutor) {
     this.typeProvider = typeProvider;
@@ -753,6 +765,7 @@ public final class ProgramPlanner {
     this.container = container;
     this.options = options;
     this.lateBoundFunctionNames = lateBoundFunctionNames;
+    this.runtimeEquality = checkNotNull(runtimeEquality);
     this.asyncOptions = checkNotNull(asyncOptions);
     this.asyncExecutor = asyncExecutor;
     this.attributeFactory =
