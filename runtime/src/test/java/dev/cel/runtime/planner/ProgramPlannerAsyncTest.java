@@ -82,11 +82,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -156,7 +159,16 @@ public final class ProgramPlannerAsyncTest {
                       "lateAdd_int_int", SimpleType.INT, SimpleType.INT, SimpleType.INT)),
               newFunctionDeclaration(
                   "lateBoundFunc",
-                  newGlobalOverload("lateBoundFunc_int", SimpleType.INT, SimpleType.INT)))
+                  newGlobalOverload("lateBoundFunc_int", SimpleType.INT, SimpleType.INT)),
+              newFunctionDeclaration(
+                  "asyncInc", newGlobalOverload("asyncInc_int", SimpleType.INT, SimpleType.INT)),
+              newFunctionDeclaration(
+                  "delayedRpc",
+                  newGlobalOverload(
+                      "delayedRpc_string_int",
+                      SimpleType.STRING,
+                      SimpleType.STRING,
+                      SimpleType.INT)))
           .build();
 
   private static final CelFunctionBinding ASYNC_SQUARE_INT =
@@ -2381,6 +2393,704 @@ public final class ProgramPlannerAsyncTest {
     assertThat((Iterable<?>) result).containsExactly(1L, 4L).inOrder();
   }
 
+  @Test
+  @SuppressWarnings("Immutable") // Test only
+  public void evalAsync_highConcurrency_limitsInFlightUnderHeavyLoad() throws Exception {
+    ListeningExecutorService pool = listeningDecorator(Executors.newFixedThreadPool(16));
+    try {
+      AtomicInteger currentInFlight = new AtomicInteger();
+      AtomicInteger maxObservedInFlight = new AtomicInteger();
+      AtomicInteger totalLaunches = new AtomicInteger();
+      Random random = new Random(42);
+      int totalCalls = 40;
+      StringBuilder exprBuilder = new StringBuilder("[");
+      for (int i = 0; i < totalCalls; i++) {
+        if (i > 0) {
+          exprBuilder.append(", ");
+        }
+        exprBuilder.append("asyncInc(").append(i).append(")");
+      }
+      exprBuilder.append("]");
+      CelAsyncEvaluationOptions options =
+          CelAsyncEvaluationOptions.builder()
+              .setMaxConcurrency(5)
+              .setDrainStrategy(CelAsyncDrainStrategy.drainReady(Duration.ofMillis(1)))
+              .build();
+      CelFunctionBinding asyncInc =
+          CelFunctionBinding.fromAsync(
+              "asyncInc_int",
+              Long.class,
+              (Long arg) ->
+                  pool.submit(
+                      () -> {
+                        totalLaunches.incrementAndGet();
+                        int active = currentInFlight.incrementAndGet();
+                        maxObservedInFlight.accumulateAndGet(active, Math::max);
+                        try {
+                          Thread.sleep(random.nextInt(4) + 1);
+                        } catch (InterruptedException e) {
+                          Thread.currentThread().interrupt();
+                        } finally {
+                          currentInFlight.decrementAndGet();
+                        }
+                        return arg + 1;
+                      }));
+      Program program =
+          plannerRuntimeBuilder()
+              .setAsyncExecutor(pool)
+              .setAsyncEvaluationOptions(options)
+              .addFunctionBindings(asyncInc)
+              .build()
+              .createProgram(CEL_COMPILER.compile(exprBuilder.toString()).getAst());
+
+      Object result = program.evalAsync().get(10, SECONDS);
+
+      ImmutableList<Long> expected =
+          LongStream.range(1, totalCalls + 1).boxed().collect(toImmutableList());
+      assertThat((List<?>) result).containsExactlyElementsIn(expected).inOrder();
+      assertThat(totalLaunches.get()).isEqualTo(totalCalls);
+      assertThat(maxObservedInFlight.get()).isAtLeast(1);
+      assertThat(maxObservedInFlight.get()).isAtMost(5);
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  @Test
+  @SuppressWarnings("Immutable") // Test only
+  public void evalAsync_highConcurrency_drainAllBatchesAllCompletionsUnderHeavyLoad()
+      throws Exception {
+    ListeningExecutorService pool = listeningDecorator(Executors.newFixedThreadPool(16));
+    try {
+      AtomicInteger currentInFlight = new AtomicInteger();
+      AtomicInteger maxObservedInFlight = new AtomicInteger();
+      AtomicInteger totalLaunches = new AtomicInteger();
+      Random random = new Random(42);
+      int totalCalls = 30;
+      StringBuilder exprBuilder = new StringBuilder("[");
+      for (int i = 0; i < totalCalls; i++) {
+        if (i > 0) {
+          exprBuilder.append(", ");
+        }
+        exprBuilder.append("asyncInc(").append(i).append(")");
+      }
+      exprBuilder.append("]");
+      CelAsyncEvaluationOptions options =
+          CelAsyncEvaluationOptions.builder()
+              .setMaxConcurrency(4)
+              .setDrainStrategy(CelAsyncDrainStrategy.drainAll())
+              .build();
+      CelFunctionBinding asyncInc =
+          CelFunctionBinding.fromAsync(
+              "asyncInc_int",
+              Long.class,
+              (Long arg) ->
+                  pool.submit(
+                      () -> {
+                        totalLaunches.incrementAndGet();
+                        int active = currentInFlight.incrementAndGet();
+                        maxObservedInFlight.accumulateAndGet(active, Math::max);
+                        try {
+                          Thread.sleep(random.nextInt(3) + 1);
+                        } catch (InterruptedException e) {
+                          Thread.currentThread().interrupt();
+                        } finally {
+                          currentInFlight.decrementAndGet();
+                        }
+                        return arg + 1;
+                      }));
+      Program program =
+          plannerRuntimeBuilder()
+              .setAsyncExecutor(pool)
+              .setAsyncEvaluationOptions(options)
+              .addFunctionBindings(asyncInc)
+              .build()
+              .createProgram(CEL_COMPILER.compile(exprBuilder.toString()).getAst());
+
+      Object result = program.evalAsync().get(10, SECONDS);
+
+      ImmutableList<Long> expected =
+          LongStream.range(1, totalCalls + 1).boxed().collect(toImmutableList());
+      assertThat((List<?>) result).containsExactlyElementsIn(expected).inOrder();
+      assertThat(totalLaunches.get()).isEqualTo(totalCalls);
+      assertThat(maxObservedInFlight.get()).isAtLeast(1);
+      assertThat(maxObservedInFlight.get()).isAtMost(4);
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  @Test
+  @SuppressWarnings("Immutable") // Test only
+  public void evalAsync_concurrentProgramInvocations_highLoadThreadSafety() throws Exception {
+    ListeningExecutorService pool = listeningDecorator(Executors.newFixedThreadPool(16));
+    try {
+      int threadCount = 20;
+      ExecutorService callerPool = Executors.newFixedThreadPool(threadCount);
+      try {
+        Random random = new Random(42);
+        CelFunctionBinding asyncSquareWithDelay =
+            CelFunctionBinding.fromAsync(
+                "asyncSquare_int",
+                Long.class,
+                (Long arg) ->
+                    pool.submit(
+                        () -> {
+                          try {
+                            Thread.sleep(random.nextInt(3) + 1);
+                          } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                          }
+                          return arg * arg;
+                        }));
+        Program program =
+            plannerRuntimeBuilder()
+                .setAsyncExecutor(pool)
+                .addFunctionBindings(asyncSquareWithDelay)
+                .build()
+                .createProgram(CEL_COMPILER.compile("asyncSquare(x) + 1").getAst());
+        CountDownLatch startLatch = new CountDownLatch(1);
+        List<Future<Long>> futures = new ArrayList<>();
+        for (int i = 0; i < threadCount; i++) {
+          long xVal = (long) (i + 1) * 3;
+          futures.add(
+              callerPool.submit(
+                  () -> {
+                    startLatch.await();
+                    Object res = program.evalAsync(ImmutableMap.of("x", xVal)).get(10, SECONDS);
+                    return (Long) res;
+                  }));
+        }
+
+        startLatch.countDown();
+
+        for (int i = 0; i < threadCount; i++) {
+          long xVal = (long) (i + 1) * 3;
+          long expected = (xVal * xVal) + 1;
+          assertThat(futures.get(i).get(10, SECONDS)).isEqualTo(expected);
+        }
+      } finally {
+        callerPool.shutdownNow();
+      }
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  @Test
+  @SuppressWarnings("Immutable") // Test only
+  public void evalAsync_staggeredDelaysWithDrainReady_evaluatesSuccessfully() throws Exception {
+    ListeningExecutorService pool = listeningDecorator(Executors.newFixedThreadPool(4));
+    try {
+      CelFunctionBinding delayedRpc =
+          CelFunctionBinding.fromAsync(
+              "delayedRpc_string_int",
+              String.class,
+              Long.class,
+              (String msg, Long delayMs) ->
+                  pool.submit(
+                      () -> {
+                        try {
+                          Thread.sleep(delayMs);
+                        } catch (InterruptedException e) {
+                          Thread.currentThread().interrupt();
+                        }
+                        return msg;
+                      }));
+      CelAsyncEvaluationOptions options =
+          CelAsyncEvaluationOptions.builder()
+              .setDrainStrategy(CelAsyncDrainStrategy.drainReady(Duration.ofMillis(30)))
+              .build();
+      Program program =
+          plannerRuntimeBuilder()
+              .setAsyncExecutor(pool)
+              .setAsyncEvaluationOptions(options)
+              .addFunctionBindings(delayedRpc)
+              .build()
+              .createProgram(
+                  CEL_COMPILER
+                      .compile("delayedRpc('a', 5) + delayedRpc('b', 15) + delayedRpc('c', 40)")
+                      .getAst());
+
+      Object result = program.evalAsync().get(10, SECONDS);
+
+      assertThat(result).isEqualTo("abc");
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  @Test
+  @SuppressWarnings("Immutable") // Test only
+  public void evalAsync_comprehension_outOfOrderCompletion_preservesElementOrdering()
+      throws Exception {
+    ListeningExecutorService pool = listeningDecorator(Executors.newFixedThreadPool(8));
+    try {
+      Random random = new Random(42);
+      int elementCount = 20;
+      ImmutableList<Long> inputList =
+          LongStream.range(0, elementCount).boxed().collect(toImmutableList());
+      CelFunctionBinding asyncIncWithDelay =
+          CelFunctionBinding.fromAsync(
+              "asyncInc_int",
+              Long.class,
+              (Long arg) ->
+                  pool.submit(
+                      () -> {
+                        try {
+                          Thread.sleep(random.nextInt(4) + 1);
+                        } catch (InterruptedException e) {
+                          Thread.currentThread().interrupt();
+                        }
+                        return arg + 1;
+                      }));
+      CelAsyncEvaluationOptions options =
+          CelAsyncEvaluationOptions.builder()
+              .setDrainStrategy(CelAsyncDrainStrategy.drainReady(Duration.ofMillis(1)))
+              .build();
+      Program program =
+          plannerRuntimeBuilder()
+              .setAsyncExecutor(pool)
+              .setAsyncEvaluationOptions(options)
+              .addFunctionBindings(asyncIncWithDelay)
+              .build()
+              .createProgram(CEL_COMPILER.compile("list_var.map(x, asyncInc(x))").getAst());
+
+      Object result = program.evalAsync(ImmutableMap.of("list_var", inputList)).get(10, SECONDS);
+
+      ImmutableList<Long> expected =
+          LongStream.range(1, elementCount + 1).boxed().collect(toImmutableList());
+      assertThat((List<?>) result).containsExactlyElementsIn(expected).inOrder();
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  @Test
+  @SuppressWarnings("Immutable") // Test only
+  public void evalAsync_comprehension_limitsInFlightUnderHeavyLoad() throws Exception {
+    ListeningExecutorService pool = listeningDecorator(Executors.newFixedThreadPool(16));
+    try {
+      AtomicInteger currentInFlight = new AtomicInteger();
+      AtomicInteger maxObservedInFlight = new AtomicInteger();
+      AtomicInteger totalLaunches = new AtomicInteger();
+      Random random = new Random(42);
+      int totalCalls = 30;
+      ImmutableList<Long> inputList =
+          LongStream.range(0, totalCalls).boxed().collect(toImmutableList());
+      CelAsyncEvaluationOptions options =
+          CelAsyncEvaluationOptions.builder()
+              .setMaxConcurrency(4)
+              .setDrainStrategy(CelAsyncDrainStrategy.drainReady(Duration.ofMillis(1)))
+              .build();
+      CelFunctionBinding asyncInc =
+          CelFunctionBinding.fromAsync(
+              "asyncInc_int",
+              Long.class,
+              (Long arg) ->
+                  pool.submit(
+                      () -> {
+                        totalLaunches.incrementAndGet();
+                        int active = currentInFlight.incrementAndGet();
+                        maxObservedInFlight.accumulateAndGet(active, Math::max);
+                        try {
+                          Thread.sleep(random.nextInt(3) + 1);
+                        } catch (InterruptedException e) {
+                          Thread.currentThread().interrupt();
+                        } finally {
+                          currentInFlight.decrementAndGet();
+                        }
+                        return arg + 1;
+                      }));
+      Program program =
+          plannerRuntimeBuilder()
+              .setAsyncExecutor(pool)
+              .setAsyncEvaluationOptions(options)
+              .addFunctionBindings(asyncInc)
+              .build()
+              .createProgram(CEL_COMPILER.compile("list_var.map(x, asyncInc(x))").getAst());
+
+      Object result = program.evalAsync(ImmutableMap.of("list_var", inputList)).get(10, SECONDS);
+
+      ImmutableList<Long> expected =
+          LongStream.range(1, totalCalls + 1).boxed().collect(toImmutableList());
+      assertThat((List<?>) result).containsExactlyElementsIn(expected).inOrder();
+      assertThat(totalLaunches.get()).isEqualTo(totalCalls);
+      assertThat(maxObservedInFlight.get()).isAtLeast(1);
+      assertThat(maxObservedInFlight.get()).isAtMost(4);
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  @Test
+  @SuppressWarnings("Immutable") // Test only
+  public void evalAsync_comprehension_shortCircuitCancelsInFlightTasks() throws Exception {
+    ListeningExecutorService pool = listeningDecorator(Executors.newFixedThreadPool(8));
+    try {
+      CopyOnWriteArrayList<SettableFuture<Object>> inFlightSiblings = new CopyOnWriteArrayList<>();
+      int totalCalls = 20;
+      ImmutableList<Long> inputList =
+          LongStream.range(0, totalCalls).boxed().collect(toImmutableList());
+      CelFunctionBinding asyncIsEven =
+          CelFunctionBinding.fromAsync(
+              "asyncIsEven_int",
+              Long.class,
+              (Long arg) -> {
+                if (arg == 2L) {
+                  return pool.submit(() -> true);
+                }
+                SettableFuture<Object> pendingFuture = SettableFuture.create();
+                inFlightSiblings.add(pendingFuture);
+                return pendingFuture;
+              });
+      Program program =
+          plannerRuntimeBuilder()
+              .setAsyncExecutor(pool)
+              .addFunctionBindings(asyncIsEven)
+              .build()
+              .createProgram(CEL_COMPILER.compile("list_var.exists(x, asyncIsEven(x))").getAst());
+
+      Object result = program.evalAsync(ImmutableMap.of("list_var", inputList)).get(5, SECONDS);
+
+      assertThat(result).isEqualTo(true);
+      assertThat(inFlightSiblings).hasSize(totalCalls - 1);
+      for (SettableFuture<Object> sibling : inFlightSiblings) {
+        assertThat(sibling.isCancelled()).isTrue();
+      }
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  @Test
+  @SuppressWarnings("Immutable") // Test only
+  public void evalAsync_concurrentProgramInvocations_comprehensionThreadSafety() throws Exception {
+    ListeningExecutorService pool = listeningDecorator(Executors.newFixedThreadPool(16));
+    try {
+      int threadCount = 20;
+      ExecutorService callerPool = Executors.newFixedThreadPool(threadCount);
+      try {
+        Random random = new Random(42);
+        CelFunctionBinding asyncSquareWithDelay =
+            CelFunctionBinding.fromAsync(
+                "asyncSquare_int",
+                Long.class,
+                (Long arg) ->
+                    pool.submit(
+                        () -> {
+                          try {
+                            Thread.sleep(random.nextInt(3) + 1);
+                          } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                          }
+                          return arg * arg;
+                        }));
+        Program program =
+            plannerRuntimeBuilder()
+                .setAsyncExecutor(pool)
+                .addFunctionBindings(asyncSquareWithDelay)
+                .build()
+                .createProgram(CEL_COMPILER.compile("list_var.map(x, asyncSquare(x))").getAst());
+        CountDownLatch startLatch = new CountDownLatch(1);
+        List<Future<List<?>>> futures = new ArrayList<>();
+        for (int i = 0; i < threadCount; i++) {
+          long base = (long) (i + 1);
+          ImmutableList<Long> inputList = ImmutableList.of(base, base + 1, base + 2);
+          futures.add(
+              callerPool.submit(
+                  () -> {
+                    startLatch.await();
+                    return (List<?>)
+                        program.evalAsync(ImmutableMap.of("list_var", inputList)).get(10, SECONDS);
+                  }));
+        }
+
+        startLatch.countDown();
+
+        for (int i = 0; i < threadCount; i++) {
+          long base = (long) (i + 1);
+          ImmutableList<Long> expected =
+              ImmutableList.of(base * base, (base + 1) * (base + 1), (base + 2) * (base + 2));
+          assertThat(futures.get(i).get(10, SECONDS)).containsExactlyElementsIn(expected).inOrder();
+        }
+      } finally {
+        callerPool.shutdownNow();
+      }
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  @Test
+  @SuppressWarnings("Immutable") // Test only
+  public void evalAsync_drainNoneWithMaxConcurrency_survivesCompletionStorm() throws Exception {
+    ListeningExecutorService pool = listeningDecorator(Executors.newFixedThreadPool(16));
+    try {
+      AtomicInteger currentInFlight = new AtomicInteger();
+      AtomicInteger maxObservedInFlight = new AtomicInteger();
+      AtomicInteger totalLaunches = new AtomicInteger();
+      Random random = new Random(42);
+      int totalCalls = 30;
+      ImmutableList<Long> inputList =
+          LongStream.range(0, totalCalls).boxed().collect(toImmutableList());
+      ImmutableList<Long> expected =
+          LongStream.range(1, totalCalls + 1).boxed().collect(toImmutableList());
+      CelAsyncEvaluationOptions options =
+          CelAsyncEvaluationOptions.builder()
+              .setMaxConcurrency(4)
+              .setDrainStrategy(CelAsyncDrainStrategy.drainNone())
+              .build();
+      CelFunctionBinding asyncInc =
+          CelFunctionBinding.fromAsync(
+              "asyncInc_int",
+              Long.class,
+              (Long arg) ->
+                  pool.submit(
+                      () -> {
+                        totalLaunches.incrementAndGet();
+                        int active = currentInFlight.incrementAndGet();
+                        maxObservedInFlight.accumulateAndGet(active, Math::max);
+                        try {
+                          Thread.sleep(random.nextInt(3) + 1);
+                        } catch (InterruptedException e) {
+                          Thread.currentThread().interrupt();
+                        } finally {
+                          currentInFlight.decrementAndGet();
+                        }
+                        return arg + 1;
+                      }));
+      Program program =
+          plannerRuntimeBuilder()
+              .setAsyncExecutor(pool)
+              .setAsyncEvaluationOptions(options)
+              .addFunctionBindings(asyncInc)
+              .build()
+              .createProgram(CEL_COMPILER.compile("list_var.map(x, asyncInc(x))").getAst());
+
+      Object result = program.evalAsync(ImmutableMap.of("list_var", inputList)).get(10, SECONDS);
+
+      assertThat((List<?>) result).containsExactlyElementsIn(expected).inOrder();
+      assertThat(totalLaunches.get()).isEqualTo(totalCalls);
+      assertThat(maxObservedInFlight.get()).isAtLeast(1);
+      assertThat(maxObservedInFlight.get()).isAtMost(4);
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  @Test
+  @SuppressWarnings("Immutable") // Test only
+  public void evalAsync_comprehensionShortCircuitWithMaxConcurrency_neverDispatchesQueuedTasks()
+      throws Exception {
+    ListeningExecutorService pool = listeningDecorator(Executors.newFixedThreadPool(8));
+    try {
+      AtomicInteger totalLaunches = new AtomicInteger();
+      CopyOnWriteArrayList<SettableFuture<Object>> launchedSiblings = new CopyOnWriteArrayList<>();
+      int totalCalls = 20;
+      ImmutableList<Long> inputList =
+          LongStream.range(0, totalCalls).boxed().collect(toImmutableList());
+      CelAsyncEvaluationOptions options =
+          CelAsyncEvaluationOptions.builder().setMaxConcurrency(3).build();
+      CelFunctionBinding asyncIsEven =
+          CelFunctionBinding.fromAsync(
+              "asyncIsEven_int",
+              Long.class,
+              (Long arg) -> {
+                totalLaunches.incrementAndGet();
+                if (arg == 2L) {
+                  return pool.submit(() -> true);
+                }
+                SettableFuture<Object> pendingFuture = SettableFuture.create();
+                launchedSiblings.add(pendingFuture);
+                return pendingFuture;
+              });
+      Program program =
+          plannerRuntimeBuilder()
+              .setAsyncExecutor(pool)
+              .setAsyncEvaluationOptions(options)
+              .addFunctionBindings(asyncIsEven)
+              .build()
+              .createProgram(CEL_COMPILER.compile("list_var.exists(x, asyncIsEven(x))").getAst());
+
+      Object result = program.evalAsync(ImmutableMap.of("list_var", inputList)).get(5, SECONDS);
+
+      assertThat(result).isEqualTo(true);
+      assertThat(totalLaunches.get()).isEqualTo(3);
+      assertThat(launchedSiblings).hasSize(2);
+      for (SettableFuture<Object> sibling : launchedSiblings) {
+        assertThat(sibling.isCancelled()).isTrue();
+      }
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  @Test
+  @SuppressWarnings("Immutable") // Test only
+  public void evalAsync_nestedComprehensionsWithDuplicateCalls_deduplicatesAndPreserves2dOrder()
+      throws Exception {
+    ListeningExecutorService pool = listeningDecorator(Executors.newFixedThreadPool(8));
+    try {
+      AtomicInteger totalLaunches = new AtomicInteger();
+      Random random = new Random(42);
+      CelAsyncEvaluationOptions options =
+          CelAsyncEvaluationOptions.builder()
+              .setMaxConcurrency(4)
+              .setDrainStrategy(CelAsyncDrainStrategy.drainReady(Duration.ofMillis(1)))
+              .build();
+      CelFunctionBinding asyncSquare =
+          CelFunctionBinding.fromAsync(
+              "asyncSquare_int",
+              Long.class,
+              (Long arg) ->
+                  pool.submit(
+                      () -> {
+                        totalLaunches.incrementAndGet();
+                        try {
+                          Thread.sleep(random.nextInt(3) + 1);
+                        } catch (InterruptedException e) {
+                          Thread.currentThread().interrupt();
+                        }
+                        return arg * arg;
+                      }));
+      Program program =
+          plannerRuntimeBuilder()
+              .setAsyncExecutor(pool)
+              .setAsyncEvaluationOptions(options)
+              .addFunctionBindings(asyncSquare)
+              .build()
+              .createProgram(
+                  CEL_COMPILER
+                      .compile("[1, 2, 3].map(x, [1, 2, 3].map(y, asyncSquare(x + y)))")
+                      .getAst());
+
+      Object result = program.evalAsync().get(10, SECONDS);
+
+      assertThat((List<?>) result)
+          .containsExactly(
+              ImmutableList.of(4L, 9L, 16L),
+              ImmutableList.of(9L, 16L, 25L),
+              ImmutableList.of(16L, 25L, 36L))
+          .inOrder();
+      assertThat(totalLaunches.get()).isEqualTo(5);
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  @Test
+  @SuppressWarnings("Immutable") // Test only
+  public void evalAsync_chainedAsyncCallsInComprehensionWithMaxConcurrency_completesAllWaves()
+      throws Exception {
+    ListeningExecutorService pool = listeningDecorator(Executors.newFixedThreadPool(8));
+    try {
+      AtomicInteger currentInFlight = new AtomicInteger();
+      AtomicInteger maxObservedInFlight = new AtomicInteger();
+      AtomicInteger totalLaunches = new AtomicInteger();
+      Random random = new Random(42);
+      int elementCount = 12;
+      ImmutableList<Long> inputList =
+          LongStream.rangeClosed(1, elementCount).boxed().collect(toImmutableList());
+      ImmutableList<Long> expected =
+          LongStream.rangeClosed(1, elementCount)
+              .map(x -> x * x + 1)
+              .boxed()
+              .collect(toImmutableList());
+      CelAsyncEvaluationOptions options =
+          CelAsyncEvaluationOptions.builder()
+              .setMaxConcurrency(3)
+              .setDrainStrategy(CelAsyncDrainStrategy.drainReady(Duration.ofMillis(1)))
+              .build();
+      CelFunctionBinding asyncSquare =
+          CelFunctionBinding.fromAsync(
+              "asyncSquare_int",
+              Long.class,
+              (Long arg) ->
+                  pool.submit(
+                      () -> {
+                        totalLaunches.incrementAndGet();
+                        int active = currentInFlight.incrementAndGet();
+                        maxObservedInFlight.accumulateAndGet(active, Math::max);
+                        try {
+                          Thread.sleep(random.nextInt(3) + 1);
+                        } catch (InterruptedException e) {
+                          Thread.currentThread().interrupt();
+                        } finally {
+                          currentInFlight.decrementAndGet();
+                        }
+                        return arg * arg;
+                      }));
+      CelFunctionBinding asyncInc =
+          CelFunctionBinding.fromAsync(
+              "asyncInc_int",
+              Long.class,
+              (Long arg) ->
+                  pool.submit(
+                      () -> {
+                        totalLaunches.incrementAndGet();
+                        int active = currentInFlight.incrementAndGet();
+                        maxObservedInFlight.accumulateAndGet(active, Math::max);
+                        try {
+                          Thread.sleep(random.nextInt(3) + 1);
+                        } catch (InterruptedException e) {
+                          Thread.currentThread().interrupt();
+                        } finally {
+                          currentInFlight.decrementAndGet();
+                        }
+                        return arg + 1;
+                      }));
+      Program program =
+          plannerRuntimeBuilder()
+              .setAsyncExecutor(pool)
+              .setAsyncEvaluationOptions(options)
+              .addFunctionBindings(asyncSquare, asyncInc)
+              .build()
+              .createProgram(
+                  CEL_COMPILER.compile("list_var.map(x, asyncInc(asyncSquare(x)))").getAst());
+
+      Object result = program.evalAsync(ImmutableMap.of("list_var", inputList)).get(10, SECONDS);
+
+      assertThat((List<?>) result).containsExactlyElementsIn(expected).inOrder();
+      assertThat(totalLaunches.get()).isEqualTo(elementCount * 2);
+      assertThat(maxObservedInFlight.get()).isAtLeast(1);
+      assertThat(maxObservedInFlight.get()).isAtMost(3);
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  @Test
+  @SuppressWarnings("Immutable") // Test only
+  public void evalAsync_comprehensionErrorAbsorptionRace_fastFailureAbsorbedBySlowShortCircuit()
+      throws Exception {
+    SettableFuture<Object> slowTrueFuture = SettableFuture.create();
+    SettableFuture<Object> pendingSiblingFuture = SettableFuture.create();
+    CelFunctionBinding asyncIsEven =
+        CelFunctionBinding.fromAsync(
+            "asyncIsEven_int",
+            Long.class,
+            (Long arg) -> {
+              if (arg == 1L) {
+                return immediateFailedFuture(new IllegalStateException("fast failure"));
+              }
+              if (arg == 2L) {
+                return slowTrueFuture;
+              }
+              return pendingSiblingFuture;
+            });
+    Program program = createProgram("[1, 2, 3].exists(x, asyncIsEven(x))", asyncIsEven);
+
+    ListenableFuture<Object> evalFuture = program.evalAsync();
+    boolean doneBeforeResolve = evalFuture.isDone();
+    slowTrueFuture.set(true);
+    Object result = evalFuture.get(5, SECONDS);
+
+    assertThat(doneBeforeResolve).isFalse();
+    assertThat(result).isEqualTo(true);
+    assertThat(pendingSiblingFuture.isCancelled()).isTrue();
+  }
+
   private CelRuntimeBuilder plannerRuntimeBuilder() {
     return CelRuntimeFactory.plannerRuntimeBuilder().setAsyncExecutor(executor);
   }
@@ -2536,7 +3246,7 @@ public final class ProgramPlannerAsyncTest {
 
     private final String expression;
 
-    @SuppressWarnings("Immutable")
+    @SuppressWarnings("Immutable") // Test only
     private final ImmutableMap<String, Object> variables;
 
     private final boolean expectedResult;
@@ -2562,10 +3272,10 @@ public final class ProgramPlannerAsyncTest {
 
     private final String expression;
 
-    @SuppressWarnings("Immutable")
+    @SuppressWarnings("Immutable") // Test only
     private final ImmutableMap<String, Object> variables;
 
-    @SuppressWarnings("Immutable")
+    @SuppressWarnings("Immutable") // Test only
     private final Object expectedElement;
 
     ComprehensionFilterTestCase(
