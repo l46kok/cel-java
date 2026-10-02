@@ -155,6 +155,8 @@ public abstract class SelectField {
       long typeCode,
       @Nullable Object defaultValue,
       String protoTypeName) {
+    checkArgument(
+        typeCode != CEL_MAP_TYPE_CODE, "Map fields must be created via createMap: %s", fieldName);
     return newInstance(
         fieldNumber, fieldName, typeCode, defaultValue, protoTypeName, /* mapEntrySpec= */ null);
   }

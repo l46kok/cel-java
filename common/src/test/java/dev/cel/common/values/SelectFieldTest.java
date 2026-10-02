@@ -153,6 +153,16 @@ public final class SelectFieldTest {
   }
 
   @Test
+  public void create_mapTypeCode_throwsIllegalArgumentException() {
+    IllegalArgumentException thrown =
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> SelectField.create(1L, "foo", SelectField.CEL_MAP_TYPE_CODE));
+
+    assertThat(thrown).hasMessageThat().contains("Map fields must be created via createMap: foo");
+  }
+
+  @Test
   public void createMap_threeArguments_success() {
     SelectField.MapEntrySpec mapEntrySpec = SelectField.MapEntrySpec.create(9, 9);
 

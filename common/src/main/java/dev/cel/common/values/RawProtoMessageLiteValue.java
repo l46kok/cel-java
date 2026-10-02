@@ -156,10 +156,6 @@ public abstract class RawProtoMessageLiteValue extends StructValue<String, RawPr
     }
 
     int typeCode = field.typeCode();
-    if (typeCode == SelectField.CEL_MAP_TYPE_CODE) {
-      throw new UnsupportedOperationException(
-          "Decoding unknown map field from wire bytes is unsupported: " + field.fieldName());
-    }
     if (typeCode == SelectField.NO_TYPE_CODE) {
       throw CelAttributeNotFoundException.forFieldResolution(field.fieldName());
     }

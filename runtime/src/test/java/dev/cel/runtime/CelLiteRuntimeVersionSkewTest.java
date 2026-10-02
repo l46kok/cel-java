@@ -16,7 +16,6 @@ package dev.cel.runtime;
 
 import static com.google.common.truth.Truth.assertThat;
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.junit.Assert.assertThrows;
 
 import com.google.api.expr.v1alpha1.CheckedExpr;
 import com.google.common.collect.ImmutableList;
@@ -512,14 +511,12 @@ public final class CelLiteRuntimeVersionSkewTest {
   }
 
   @Test
-  public void select_populatedUnknownMapField_throwsEvaluationException() {
+  public void select_populatedUnknownMapField_decodesMapFromWire() throws Exception {
     TestAllTypes msg = TestAllTypes.newBuilder().putMapInt32Int32(1, 2).build();
 
-    CelEvaluationException thrown =
-        assertThrows(CelEvaluationException.class, () -> eval("msg.map_int32_int32", msg));
+    Object result = eval("msg.map_int32_int32", msg);
 
-    assertThat(thrown).hasCauseThat().isInstanceOf(UnsupportedOperationException.class);
-    assertThat(thrown).hasCauseThat().hasMessageThat().contains("map_int32_int32");
+    assertThat(result).isEqualTo(ImmutableMap.of(1L, 2L));
   }
 
   @SuppressWarnings("ImmutableEnumChecker") // Test only
@@ -942,17 +939,6 @@ public final class CelLiteRuntimeVersionSkewTest {
             TestAllTypes.getDefaultInstance());
 
     assertThat(result).isEqualTo(-1L);
-  }
-
-  @Test
-  public void shortCircuiting_hasGuardOnPopulatedUnknownMap_skipsMapEvaluation() throws Exception {
-    // msg.map_int32_int32 is populated on POPULATED_SERVER_MESSAGE and would throw
-    // UnsupportedOperationException if selected, but short-circuiting avoids evaluating it.
-    Object result =
-        eval(
-            "!has(msg.map_int32_int32) ? size(msg.map_int32_int32) : 99", POPULATED_SERVER_MESSAGE);
-
-    assertThat(result).isEqualTo(99L);
   }
 
   @Test
@@ -1450,21 +1436,17 @@ public final class CelLiteRuntimeVersionSkewTest {
             .setOneofType(NestedTestAllTypes.newBuilder().setPayload(POPULATED_RENAMED_MESSAGE))
             .build();
 
-    // TODO: Restore assertion once SelectOptimizer emits MapEntrySpec in cl/990623531.
-    CelEvaluationException thrown =
-        assertThrows(
-            CelEvaluationException.class,
-            () ->
-                eval(
-                    "cel.bind(sub, msg.oneof_type,"
-                        + " has(sub.payload.map_string_string) &&"
-                        + " sub.payload.map_string_string['k'] == 'v' &&"
-                        + " has(sub.payload.map_string_string.k) &&"
-                        + " !has(sub.payload.map_string_string.missing) &&"
-                        + " sub.payload.map_int64_message[1].bb == 100)",
-                    msg));
+    Object result =
+        eval(
+            "cel.bind(sub, msg.oneof_type,"
+                + " has(sub.payload.map_string_string) &&"
+                + " sub.payload.map_string_string['k'] == 'v' &&"
+                + " has(sub.payload.map_string_string.k) &&"
+                + " !has(sub.payload.map_string_string.missing) &&"
+                + " sub.payload.map_int64_message[1].bb == 100)",
+            msg);
 
-    assertThat(thrown).hasCauseThat().isInstanceOf(UnsupportedOperationException.class);
+    assertThat(result).isEqualTo(true);
   }
 
   @Test
@@ -1495,20 +1477,16 @@ public final class CelLiteRuntimeVersionSkewTest {
             .setOneofType(NestedTestAllTypes.newBuilder().setPayload(innerPayload))
             .build();
 
-    // TODO: Restore assertion once SelectOptimizer emits MapEntrySpec in cl/990623531.
-    CelEvaluationException thrown =
-        assertThrows(
-            CelEvaluationException.class,
-            () ->
-                eval(
-                    "cel.bind(sub, msg.oneof_type,"
-                        + " size(sub.payload.map_string_string) == 3 &&"
-                        + " sub.payload.map_string_string['dup'] == 'second' &&"
-                        + " sub.payload.map_string_string[''] == 'val_for_default_key' &&"
-                        + " sub.payload.map_string_string['key_with_default_val'] == '')",
-                    msg));
+    Object result =
+        eval(
+            "cel.bind(sub, msg.oneof_type,"
+                + " size(sub.payload.map_string_string) == 3 &&"
+                + " sub.payload.map_string_string['dup'] == 'second' &&"
+                + " sub.payload.map_string_string[''] == 'val_for_default_key' &&"
+                + " sub.payload.map_string_string['key_with_default_val'] == '')",
+            msg);
 
-    assertThat(thrown).hasCauseThat().isInstanceOf(UnsupportedOperationException.class);
+    assertThat(result).isEqualTo(true);
   }
 
   @SuppressWarnings("ImmutableEnumChecker") // Test only
@@ -1688,21 +1666,6 @@ public final class CelLiteRuntimeVersionSkewTest {
                 + " msg.single_timestamp.getFullYear() == 1969 &&"
                 + " msg.single_timestamp.getMilliseconds() == 123",
             msg);
-
-    assertThat(result).isEqualTo(true);
-  }
-
-  @Test
-  public void comprehension_shortCircuitingPreventsEvaluatingPopulatedUnknownMap()
-      throws Exception {
-    // msg.map_int32_int32 is populated on POPULATED_SERVER_MESSAGE and throws
-    // UnsupportedOperationException if evaluated; short-circuiting on the first element (bb == 10)
-    // must avoid evaluating the map branch.
-    String expression =
-        "msg.repeated_nested_message.exists(x, x.bb == 10 || size(msg.map_int32_int32) > 0) &&"
-            + " !msg.repeated_nested_message.all(x, x.bb > 15 && size(msg.map_int32_int32) > 0)";
-
-    Object result = eval(expression, POPULATED_SERVER_MESSAGE);
 
     assertThat(result).isEqualTo(true);
   }
