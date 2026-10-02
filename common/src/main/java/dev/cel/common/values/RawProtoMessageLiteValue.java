@@ -378,15 +378,6 @@ public abstract class RawProtoMessageLiteValue extends StructValue<String, RawPr
   }
 
   static Object decodeWireValue(
-      Object raw, int typeCode, String protoTypeName, ProtoLiteCelValueConverter converter) {
-    return decodeWireValue(
-        raw,
-        FieldLiteDescriptor.Type.forNumber(typeCode).toWireFormatFieldType(),
-        protoTypeName,
-        converter);
-  }
-
-  static Object decodeWireValue(
       Object raw,
       WireFormat.FieldType fieldType,
       String protoTypeName,

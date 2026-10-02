@@ -72,10 +72,6 @@ public final class ProtoLiteCelValueConverter extends BaseProtoCelValueConverter
     return new ProtoLiteCelValueConverter(celLiteDescriptorPool);
   }
 
-  boolean hasDescriptor(String protoTypeName) {
-    return descriptorPool.findDescriptor(protoTypeName).isPresent();
-  }
-
   private static Object readPrimitiveField(
       CodedInputStream inputStream, FieldLiteDescriptor fieldDescriptor) throws IOException {
     switch (fieldDescriptor.getProtoFieldType()) {

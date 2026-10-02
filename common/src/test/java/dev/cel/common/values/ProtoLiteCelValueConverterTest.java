@@ -436,13 +436,4 @@ public class ProtoLiteCelValueConverterTest {
 
     assertThat(exception).hasMessageThat().contains("ANY_VALUE");
   }
-
-  @Test
-  public void hasDescriptor_returnsExpectedResult() {
-    assertThat(
-            PROTO_LITE_CEL_VALUE_CONVERTER.hasDescriptor(
-                "cel.expr.conformance.proto3.TestAllTypes"))
-        .isTrue();
-    assertThat(PROTO_LITE_CEL_VALUE_CONVERTER.hasDescriptor("unknown.Type")).isFalse();
-  }
 }

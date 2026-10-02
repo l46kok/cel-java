@@ -59,10 +59,6 @@ public final class RawProtoMessageLiteValueTest {
     return RawProtoMessageLiteValue.decodeWireValue(raw, fieldType, protoTypeName, EMPTY_CONVERTER);
   }
 
-  private static Object decodeWireValue(Object raw, int typeCode, String protoTypeName) {
-    return RawProtoMessageLiteValue.decodeWireValue(raw, typeCode, protoTypeName, EMPTY_CONVERTER);
-  }
-
   @Test
   public void create_accessorsAndType() {
     ByteString bytes = ByteString.copyFromUtf8("test");
@@ -582,13 +578,6 @@ public final class RawProtoMessageLiteValueTest {
     assertThrows(
         IllegalArgumentException.class,
         () -> decodeWireEntries(rawEntries, 999, "custom.Message", /* isRepeated= */ false));
-  }
-
-  @Test
-  public void decodeWireValue_invalidTypeCode_throws() {
-    assertThrows(IllegalArgumentException.class, () -> decodeWireValue(42L, 0, "custom.Message"));
-
-    assertThrows(IllegalArgumentException.class, () -> decodeWireValue(42L, 999, "custom.Message"));
   }
 
   @Test
