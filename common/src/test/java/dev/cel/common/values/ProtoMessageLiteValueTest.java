@@ -375,7 +375,8 @@ public final class ProtoMessageLiteValueTest {
             proto, "cel.expr.conformance.proto3.TestAllTypes", PROTO_LITE_CEL_VALUE_CONVERTER);
 
     Object result =
-        val.selectByFieldNumber(SelectField.create(61L, "renamed_map", -1, ImmutableMap.of()));
+        val.selectByFieldNumber(
+            SelectField.createMap(61L, "renamed_map", SelectField.MapEntrySpec.create(9, 9), ""));
 
     assertThat(result).isEqualTo(ImmutableMap.of("k", "v"));
   }
@@ -512,8 +513,7 @@ public final class ProtoMessageLiteValueTest {
             proto, "cel.expr.conformance.proto3.TestAllTypes", PROTO_LITE_CEL_VALUE_CONVERTER);
     ImmutableList<SelectField> fields =
         ImmutableList.of(
-            SelectField.create(
-                61L, "map_string_string", SelectField.CEL_MAP_TYPE_CODE, ImmutableMap.of()));
+            SelectField.createMap(61L, "map_string_string", SelectField.MapEntrySpec.create(9, 9)));
 
     Object result = OptimizedSelectTraversal.qualify(val, fields);
 
@@ -531,7 +531,7 @@ public final class ProtoMessageLiteValueTest {
             proto, "cel.expr.conformance.proto3.TestAllTypes", PROTO_LITE_CEL_VALUE_CONVERTER);
     ImmutableList<SelectField> fields =
         ImmutableList.of(
-            SelectField.create(21L, "single_nested_message", 11, null),
+            SelectField.create(21L, "single_nested_message", 11),
             SelectField.create(1L, "bb", 5, 0));
 
     Object result = OptimizedSelectTraversal.qualify(val, fields);
