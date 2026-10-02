@@ -38,6 +38,8 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -47,6 +49,8 @@ import org.jspecify.annotations.Nullable;
 @ThreadSafe
 // CEL-Internal-4
 final class AsyncCallStateTracker {
+  private static final Logger logger = Logger.getLogger(AsyncCallStateTracker.class.getName());
+
   private final AtomicLong callIdGenerator = new AtomicLong(1);
   private final ConcurrentMap<Integer, CopyOnWriteArrayList<AsyncCallRecord>> recordsByBucket =
       new ConcurrentHashMap<>();
@@ -277,6 +281,15 @@ final class AsyncCallStateTracker {
       if (observer != null) {
         observer.onCallFinished(record, result, error);
       }
+    } catch (RuntimeException e) {
+      // Log observer callback exceptions on completion so that post-completion monitoring
+      // failures do not corrupt call state, abort sibling dispatches, or crash executor threads.
+      logger.log(
+          Level.WARNING,
+          String.format(
+              "CelAsyncObserver.onCallFinished threw an unhandled exception for function '%s'",
+              record.functionName()),
+          e);
     } finally {
       coordinator.callCompleted(record);
     }

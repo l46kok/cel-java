@@ -777,7 +777,7 @@ public final class ProgramPlannerAsyncTest {
           @Override
           public void onCallFinished(
               CelAsyncCall call, @Nullable Object result, @Nullable Throwable error) {
-            throw new AssertionError("observer finish error");
+            throw new RuntimeException("observer finish error");
           }
         };
     Program program =
@@ -1646,6 +1646,14 @@ public final class ProgramPlannerAsyncTest {
     SettableFuture<Object> inFlightSibling = SettableFuture.create();
     SettableFuture<Object> call1Future = SettableFuture.create();
     CountDownLatch siblingStarted = new CountDownLatch(1);
+    CountDownLatch siblingCancelled = new CountDownLatch(1);
+    inFlightSibling.addListener(
+        () -> {
+          if (inFlightSibling.isCancelled()) {
+            siblingCancelled.countDown();
+          }
+        },
+        directExecutor());
     CelAsyncEvaluationOptions options =
         CelAsyncEvaluationOptions.builder().setMaxIterations(1).build();
     Program program =
@@ -1674,6 +1682,7 @@ public final class ProgramPlannerAsyncTest {
         .hasCauseThat()
         .hasMessageThat()
         .contains("Exceeded maximum async evaluation iterations: 1");
+    assertThat(siblingCancelled.await(5, SECONDS)).isTrue();
     assertThat(inFlightSibling.isCancelled()).isTrue();
   }
 
@@ -2171,6 +2180,15 @@ public final class ProgramPlannerAsyncTest {
       throws Exception {
     CelAbstractSyntaxTree ast = CEL_COMPILER.compile("list_var.all(x, asyncIsEven(x))").getAst();
     SettableFuture<Object> inFlightFirstElement = SettableFuture.create();
+    CountDownLatch firstStarted = new CountDownLatch(1);
+    CountDownLatch firstCancelled = new CountDownLatch(1);
+    inFlightFirstElement.addListener(
+        () -> {
+          if (inFlightFirstElement.isCancelled()) {
+            firstCancelled.countDown();
+          }
+        },
+        directExecutor());
     CelRuntime runtime =
         plannerRuntimeBuilder()
             .addFunctionBindings(
@@ -2179,7 +2197,13 @@ public final class ProgramPlannerAsyncTest {
                     Long.class,
                     (Long arg) -> {
                       if (arg == 1L) {
+                        firstStarted.countDown();
                         return inFlightFirstElement;
+                      }
+                      try {
+                        firstStarted.await(5, SECONDS);
+                      } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
                       }
                       return immediateFuture(false);
                     }))
@@ -2191,6 +2215,7 @@ public final class ProgramPlannerAsyncTest {
     Object result = evalFuture.get(5, SECONDS);
 
     assertThat(result).isEqualTo(false);
+    assertThat(firstCancelled.await(5, SECONDS)).isTrue();
     assertThat(inFlightFirstElement.isCancelled()).isTrue();
   }
 
@@ -2730,6 +2755,8 @@ public final class ProgramPlannerAsyncTest {
     try {
       CopyOnWriteArrayList<SettableFuture<Object>> inFlightSiblings = new CopyOnWriteArrayList<>();
       int totalCalls = 20;
+      CountDownLatch siblingsStarted = new CountDownLatch(totalCalls - 1);
+      CountDownLatch siblingsCancelled = new CountDownLatch(totalCalls - 1);
       ImmutableList<Long> inputList =
           LongStream.range(0, totalCalls).boxed().collect(toImmutableList());
       CelFunctionBinding asyncIsEven =
@@ -2738,10 +2765,22 @@ public final class ProgramPlannerAsyncTest {
               Long.class,
               (Long arg) -> {
                 if (arg == 2L) {
-                  return pool.submit(() -> true);
+                  return pool.submit(
+                      () -> {
+                        siblingsStarted.await(5, SECONDS);
+                        return true;
+                      });
                 }
                 SettableFuture<Object> pendingFuture = SettableFuture.create();
+                pendingFuture.addListener(
+                    () -> {
+                      if (pendingFuture.isCancelled()) {
+                        siblingsCancelled.countDown();
+                      }
+                    },
+                    directExecutor());
                 inFlightSiblings.add(pendingFuture);
+                siblingsStarted.countDown();
                 return pendingFuture;
               });
       Program program =
@@ -2754,6 +2793,7 @@ public final class ProgramPlannerAsyncTest {
       Object result = program.evalAsync(ImmutableMap.of("list_var", inputList)).get(5, SECONDS);
 
       assertThat(result).isEqualTo(true);
+      assertThat(siblingsCancelled.await(5, SECONDS)).isTrue();
       assertThat(inFlightSiblings).hasSize(totalCalls - 1);
       for (SettableFuture<Object> sibling : inFlightSiblings) {
         assertThat(sibling.isCancelled()).isTrue();
@@ -2888,6 +2928,8 @@ public final class ProgramPlannerAsyncTest {
       AtomicInteger totalLaunches = new AtomicInteger();
       CopyOnWriteArrayList<SettableFuture<Object>> launchedSiblings = new CopyOnWriteArrayList<>();
       int totalCalls = 20;
+      CountDownLatch siblingsStarted = new CountDownLatch(2);
+      CountDownLatch siblingsCancelled = new CountDownLatch(2);
       ImmutableList<Long> inputList =
           LongStream.range(0, totalCalls).boxed().collect(toImmutableList());
       CelAsyncEvaluationOptions options =
@@ -2899,10 +2941,22 @@ public final class ProgramPlannerAsyncTest {
               (Long arg) -> {
                 totalLaunches.incrementAndGet();
                 if (arg == 2L) {
-                  return pool.submit(() -> true);
+                  return pool.submit(
+                      () -> {
+                        siblingsStarted.await(5, SECONDS);
+                        return true;
+                      });
                 }
                 SettableFuture<Object> pendingFuture = SettableFuture.create();
+                pendingFuture.addListener(
+                    () -> {
+                      if (pendingFuture.isCancelled()) {
+                        siblingsCancelled.countDown();
+                      }
+                    },
+                    directExecutor());
                 launchedSiblings.add(pendingFuture);
+                siblingsStarted.countDown();
                 return pendingFuture;
               });
       Program program =
@@ -2916,6 +2970,7 @@ public final class ProgramPlannerAsyncTest {
       Object result = program.evalAsync(ImmutableMap.of("list_var", inputList)).get(5, SECONDS);
 
       assertThat(result).isEqualTo(true);
+      assertThat(siblingsCancelled.await(5, SECONDS)).isTrue();
       assertThat(totalLaunches.get()).isEqualTo(3);
       assertThat(launchedSiblings).hasSize(2);
       for (SettableFuture<Object> sibling : launchedSiblings) {
@@ -3066,11 +3121,21 @@ public final class ProgramPlannerAsyncTest {
       throws Exception {
     SettableFuture<Object> slowTrueFuture = SettableFuture.create();
     SettableFuture<Object> pendingSiblingFuture = SettableFuture.create();
+    CountDownLatch allCallsDispatched = new CountDownLatch(3);
+    CountDownLatch siblingCancelled = new CountDownLatch(1);
+    pendingSiblingFuture.addListener(
+        () -> {
+          if (pendingSiblingFuture.isCancelled()) {
+            siblingCancelled.countDown();
+          }
+        },
+        directExecutor());
     CelFunctionBinding asyncIsEven =
         CelFunctionBinding.fromAsync(
             "asyncIsEven_int",
             Long.class,
             (Long arg) -> {
+              allCallsDispatched.countDown();
               if (arg == 1L) {
                 return immediateFailedFuture(new IllegalStateException("fast failure"));
               }
@@ -3082,12 +3147,15 @@ public final class ProgramPlannerAsyncTest {
     Program program = createProgram("[1, 2, 3].exists(x, asyncIsEven(x))", asyncIsEven);
 
     ListenableFuture<Object> evalFuture = program.evalAsync();
+    boolean dispatched = allCallsDispatched.await(5, SECONDS);
     boolean doneBeforeResolve = evalFuture.isDone();
     slowTrueFuture.set(true);
     Object result = evalFuture.get(5, SECONDS);
 
+    assertThat(dispatched).isTrue();
     assertThat(doneBeforeResolve).isFalse();
     assertThat(result).isEqualTo(true);
+    assertThat(siblingCancelled.await(5, SECONDS)).isTrue();
     assertThat(pendingSiblingFuture.isCancelled()).isTrue();
   }
 
