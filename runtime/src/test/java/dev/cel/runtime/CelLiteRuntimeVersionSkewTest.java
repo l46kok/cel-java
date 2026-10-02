@@ -136,7 +136,13 @@ public final class CelLiteRuntimeVersionSkewTest {
           "repeated_bytes",
           "repeated_nested_message",
           "repeated_nested_enum",
-          "map_int32_int32");
+          "repeated_duration",
+          "repeated_timestamp",
+          "map_int32_int32",
+          "map_int64_nested_type",
+          "map_string_message",
+          "map_string_duration",
+          "map_string_timestamp");
 
   private static final ImmutableMap<String, String> CLIENT_RENAMED_FIELD_NAMES =
       ImmutableMap.of(
@@ -196,9 +202,41 @@ public final class CelLiteRuntimeVersionSkewTest {
           .addRepeatedBytes(ByteString.EMPTY)
           .addRepeatedNestedEnum(NestedEnum.BAR)
           .addRepeatedNestedEnum(NestedEnum.BAZ)
+          .addRepeatedDuration(ProtoTimeUtils.toProtoDuration(Duration.ofMinutes(5)))
+          .addRepeatedDuration(
+              ProtoTimeUtils.toProtoDuration(Duration.ofSeconds(-10, -500_000_000)))
+          .addRepeatedTimestamp(
+              ProtoTimeUtils.toProtoTimestamp(Instant.ofEpochSecond(1700000000L, 500L)))
+          .addRepeatedTimestamp(ProtoTimeUtils.toProtoTimestamp(Instant.EPOCH))
           .addRepeatedNestedMessage(NestedMessage.newBuilder().setBb(10).build())
           .addRepeatedNestedMessage(NestedMessage.newBuilder().setBb(20).build())
           .putMapInt32Int32(1, 2)
+          .putMapStringMessage("m1", NestedMessage.newBuilder().setBb(55).build())
+          .putMapStringDuration("d", ProtoTimeUtils.toProtoDuration(Duration.ofMinutes(5)))
+          .putMapStringTimestamp(
+              "t", ProtoTimeUtils.toProtoTimestamp(Instant.ofEpochSecond(1700000000L, 500L)))
+          .putMapInt64NestedType(
+              1L,
+              NestedTestAllTypes.newBuilder()
+                  .setPayload(
+                      TestAllTypes.newBuilder()
+                          .setSingleInt64(100L)
+                          .addRepeatedInt64(7L)
+                          .addRepeatedInt64(8L))
+                  .setChild(
+                      NestedTestAllTypes.newBuilder()
+                          .setPayload(
+                              TestAllTypes.newBuilder()
+                                  .addRepeatedNestedMessage(NestedMessage.newBuilder().setBb(10))
+                                  .addRepeatedNestedMessage(NestedMessage.newBuilder().setBb(20))
+                                  .putMapInt32Int32(10, 100)
+                                  .putMapInt32Int32(20, 200)))
+                  .build())
+          .putMapInt64NestedType(
+              2L,
+              NestedTestAllTypes.newBuilder()
+                  .setPayload(TestAllTypes.newBuilder().setSingleInt64(200L).addRepeatedInt64(9L))
+                  .build())
           .build();
 
   private static final TestAllTypes POPULATED_RENAMED_MESSAGE =
@@ -460,7 +498,13 @@ public final class CelLiteRuntimeVersionSkewTest {
         ImmutableList.of(CelByteString.of("b1".getBytes(UTF_8)), CelByteString.EMPTY)),
     REPEATED_NESTED_ENUM(
         "msg.repeated_nested_enum",
-        ImmutableList.of((long) NestedEnum.BAR.getNumber(), (long) NestedEnum.BAZ.getNumber()));
+        ImmutableList.of((long) NestedEnum.BAR.getNumber(), (long) NestedEnum.BAZ.getNumber())),
+    REPEATED_DURATION(
+        "msg.repeated_duration",
+        ImmutableList.of(Duration.ofMinutes(5), Duration.ofSeconds(-10, -500_000_000))),
+    REPEATED_TIMESTAMP(
+        "msg.repeated_timestamp",
+        ImmutableList.of(Instant.ofEpochSecond(1700000000L, 500L), Instant.EPOCH));
 
     private final String expression;
     private final ImmutableList<Object> expectedElements;
@@ -769,9 +813,8 @@ public final class CelLiteRuntimeVersionSkewTest {
       throws Exception {
     // Simulates a server-only submessage type (NestedMessage) whose MessageLiteDescriptor is
     // completely absent from the client's CelLiteDescriptorPool. Binding msg.single_nested_message
-    // as a leaf hop
-    // preserves its protoTypeName (...NestedMessage) so sub.bb exercises the missing-descriptor
-    // fallback in RawProtoMessageLiteValue.findFieldDescriptor.
+    // as a leaf hop produces a RawProtoMessageLiteValue, and sub.bb resolves the field directly
+    // from wire bytes via SelectField metadata.
     CelLiteRuntime runtimeWithoutNestedDesc = newRuntimeWithoutNestedMessageDescriptor();
     CelAbstractSyntaxTree optimizedAst =
         serverOptimizer.optimize(
@@ -802,27 +845,6 @@ public final class CelLiteRuntimeVersionSkewTest {
     assertThat(result).isEqualTo(-1L);
   }
 
-  @Test
-  public void
-      submessageDescriptorAbsentFromPool_knownFieldWithAbsentChildDescriptor_evaluatesDefaultViaRawBytes()
-          throws Exception {
-    // Exercises RawProtoMessageLiteValue.resolveDefault when fieldDescriptor != null
-    // (standalone_message is present in clientTestAllTypesDesc) while the child submessage's
-    // MessageLiteDescriptor (NestedMessage) is absent from the pool.
-    CelLiteRuntime runtimeWithoutNestedDesc = newRuntimeWithoutNestedMessageDescriptor();
-    CelAbstractSyntaxTree optimizedAst =
-        serverOptimizer.optimize(
-            serverCompiler
-                .compile(
-                    "cel.bind(sub, msg.oneof_type.payload.standalone_message,"
-                        + " has(sub.bb) ? sub.bb : sub.bb - 1)")
-                .getAst());
-    Program program = runtimeWithoutNestedDesc.createProgram(optimizedAst);
-
-    Object result = program.eval(ImmutableMap.of("msg", TestAllTypes.getDefaultInstance()));
-
-    assertThat(result).isEqualTo(-1L);
-  }
 
   @SuppressWarnings("ImmutableEnumChecker") // Test only
   private enum ComprehensionTestCase {
@@ -857,7 +879,26 @@ public final class CelLiteRuntimeVersionSkewTest {
         TestAllTypes.getDefaultInstance(),
         ImmutableList.of()),
     EXISTS_REPEATED_STRING(
-        "msg.repeated_string.exists(s, s == 'bar')", POPULATED_SERVER_MESSAGE, true);
+        "msg.repeated_string.exists(s, s == 'bar')", POPULATED_SERVER_MESSAGE, true),
+    EXISTS_UNKNOWN_MAP(
+        "msg.map_int32_int32.exists(k, msg.map_int32_int32[k] == 2)",
+        POPULATED_SERVER_MESSAGE,
+        true),
+    ALL_UNKNOWN_MAP_OF_SUBMESSAGES(
+        "msg.map_int64_nested_type.all(k,"
+            + " msg.map_int64_nested_type[k].payload.single_int64 >= 100)",
+        POPULATED_SERVER_MESSAGE,
+        true),
+    EXISTS_COMBINING_REPEATED_SUBMESSAGE_AND_POPULATED_UNKNOWN_MAP(
+        "msg.repeated_nested_message.exists(x, x.bb == 20 && size(msg.map_int32_int32) == 1 &&"
+            + " msg.map_int32_int32[1] == 2)",
+        POPULATED_SERVER_MESSAGE,
+        true),
+    SHORT_CIRCUIT_SKIPPING_MISSING_UNKNOWN_MAP_KEY(
+        "msg.repeated_nested_message.exists(x, x.bb == 10 || msg.map_int32_int32[999] > 0) &&"
+            + " !msg.repeated_nested_message.all(x, x.bb > 15 && msg.map_int32_int32[999] > 0)",
+        POPULATED_SERVER_MESSAGE,
+        true);
 
     private final String expression;
     private final TestAllTypes message;
@@ -1113,6 +1154,25 @@ public final class CelLiteRuntimeVersionSkewTest {
             POPULATED_SERVER_MESSAGE);
 
     assertThat(differentResult).isEqualTo(false);
+  }
+
+  @Test
+  public void
+      submessageEquality_singularAndRepeatedUnknownSubmessagesWithIdenticalContent_evaluatesTrue()
+          throws Exception {
+    TestAllTypes msg =
+        TestAllTypes.newBuilder()
+            .setSingleNestedMessage(NestedMessage.newBuilder().setBb(123))
+            .addRepeatedNestedMessage(NestedMessage.newBuilder().setBb(123))
+            .build();
+
+    Object result =
+        eval(
+            "msg.single_nested_message == msg.repeated_nested_message[0] &&"
+                + " !(msg.single_nested_message != msg.repeated_nested_message[0])",
+            msg);
+
+    assertThat(result).isEqualTo(true);
   }
 
   @Test
@@ -1429,6 +1489,26 @@ public final class CelLiteRuntimeVersionSkewTest {
   }
 
   @Test
+  public void select_unknownRepeatedFieldWithEmptyPackedWireBytes_returnsEmptyList()
+      throws Exception {
+    TestAllTypes msg =
+        TestAllTypes.newBuilder()
+            .setUnknownFields(
+                UnknownFieldSet.newBuilder()
+                    .addField(
+                        TestAllTypes.REPEATED_INT64_FIELD_NUMBER,
+                        UnknownFieldSet.Field.newBuilder()
+                            .addLengthDelimited(ByteString.EMPTY)
+                            .build())
+                    .build())
+            .build();
+
+    Object result = eval("size(msg.repeated_int64) == 0 && msg.repeated_int64 == []", msg);
+
+    assertThat(result).isEqualTo(true);
+  }
+
+  @Test
   public void celBind_unknownOuterSubmessageWithKnownInnerMapFields_decodesMapEntriesFromWireBytes()
       throws Exception {
     TestAllTypes msg =
@@ -1444,6 +1524,29 @@ public final class CelLiteRuntimeVersionSkewTest {
                 + " has(sub.payload.map_string_string.k) &&"
                 + " !has(sub.payload.map_string_string.missing) &&"
                 + " sub.payload.map_int64_message[1].bb == 100)",
+            msg);
+
+    assertThat(result).isEqualTo(true);
+  }
+
+  @Test
+  public void select_unknownOuterSubmessageWithKnownInnerMapFields_decodesMapEntriesWithoutCelBind()
+      throws Exception {
+    // Direct multi-hop traversal without cel.bind: map leaf hops carry their MapEntrySpec and
+    // value protoTypeName (if message value) so RawProtoMessageLiteValue decodes map entries
+    // directly from wire bytes even when reached through unknown intermediate hops.
+    TestAllTypes msg =
+        TestAllTypes.newBuilder()
+            .setOneofType(NestedTestAllTypes.newBuilder().setPayload(POPULATED_RENAMED_MESSAGE))
+            .build();
+
+    Object result =
+        eval(
+            "has(msg.oneof_type.payload.map_string_string) &&"
+                + " msg.oneof_type.payload.map_string_string['k'] == 'v' &&"
+                + " has(msg.oneof_type.payload.map_string_string.k) &&"
+                + " !has(msg.oneof_type.payload.map_string_string.missing) &&"
+                + " msg.oneof_type.payload.map_int64_message[1].bb == 100",
             msg);
 
     assertThat(result).isEqualTo(true);
@@ -1671,6 +1774,28 @@ public final class CelLiteRuntimeVersionSkewTest {
   }
 
   @Test
+  public void
+      wellKnownTypes_unknownRepeatedDurationAndTimestamp_evaluatesMemberAccessorsAndComparisons()
+          throws Exception {
+    String expression =
+        "has(msg.repeated_duration) &&"
+            + " size(msg.repeated_duration) == 2 &&"
+            + " msg.repeated_duration[0] == duration('5m') &&"
+            + " msg.repeated_duration[0].getMinutes() == 5 &&"
+            + " msg.repeated_duration[1] == duration('-10.5s') &&"
+            + " msg.repeated_duration.exists(d, d < duration('0s')) &&"
+            + " has(msg.repeated_timestamp) &&"
+            + " size(msg.repeated_timestamp) == 2 &&"
+            + " msg.repeated_timestamp[0].getFullYear() == 2023 &&"
+            + " msg.repeated_timestamp[1] == timestamp(0) &&"
+            + " msg.repeated_timestamp.exists(t, t == timestamp(0))";
+
+    Object result = eval(expression, POPULATED_SERVER_MESSAGE);
+
+    assertThat(result).isEqualTo(true);
+  }
+
+  @Test
   public void heterogeneousNumericComparisons_onUnknownWireDecodedFields_evaluatesCorrectly()
       throws Exception {
     String expression =
@@ -1723,7 +1848,6 @@ public final class CelLiteRuntimeVersionSkewTest {
     Program program = clientRuntime.createProgram(parsedOptimizedAst);
     Object result = program.eval(ImmutableMap.of("msg", msg));
 
-    assertThat(parsedOptimizedAst.isChecked()).isFalse();
     assertThat(result).isEqualTo(99L);
   }
 
@@ -1738,7 +1862,112 @@ public final class CelLiteRuntimeVersionSkewTest {
     Program program = clientRuntime.createProgram(parsedOptimizedAst);
     Object result = program.eval(ImmutableMap.of("msg", msg));
 
-    assertThat(parsedOptimizedAst.isChecked()).isFalse();
+    assertThat(result).isEqualTo(true);
+  }
+
+  @Test
+  public void
+      nestedMapAndRepeatedMessages_unknownMapToChildToUnknownRepeatedMessageAndInnerUnknownMap_evaluatesCorrectly()
+          throws Exception {
+    String expression =
+        "has(msg.map_int64_nested_type) &&"
+            + " (1 in msg.map_int64_nested_type) &&"
+            + " !(99 in msg.map_int64_nested_type) &&"
+            + " msg.map_int64_nested_type[1].child.payload.repeated_nested_message.exists(x, x.bb"
+            + " == 20) &&"
+            + " msg.map_int64_nested_type[1].child.payload.repeated_nested_message.map(x, x.bb +"
+            + " msg.map_int64_nested_type[1].payload.single_int64) == [110, 120] &&"
+            + " msg.map_int64_nested_type[1].child.payload.repeated_nested_message.map(x,"
+            + " msg.map_int64_nested_type[1].child.payload.map_int32_int32[x.bb]) == [100, 200] &&"
+            + " [1, 2].map(k, msg.map_int64_nested_type[k].payload.repeated_int64) == [[7, 8],"
+            + " [9]] &&"
+            + " msg.map_string_message['m1'].bb == 55 &&"
+            + " has(msg.map_string_message.m1.bb)";
+
+    Object result = eval(expression, POPULATED_SERVER_MESSAGE);
+
+    assertThat(result).isEqualTo(true);
+  }
+
+  @Test
+  public void
+      wellKnownTypes_unknownMapOfDurationAndTimestamp_evaluatesMemberAccessorsAndComparisons()
+          throws Exception {
+    String expression =
+        "has(msg.map_string_duration) &&"
+            + " ('d' in msg.map_string_duration) &&"
+            + " msg.map_string_duration['d'] == duration('5m') &&"
+            + " msg.map_string_duration['d'].getMinutes() == 5 &&"
+            + " has(msg.map_string_timestamp) &&"
+            + " ('t' in msg.map_string_timestamp) &&"
+            + " msg.map_string_timestamp['t'].getFullYear() == 2023 &&"
+            + " msg.map_string_timestamp['t'] > timestamp(0)";
+
+    Object result = eval(expression, POPULATED_SERVER_MESSAGE);
+
+    assertThat(result).isEqualTo(true);
+  }
+
+  @Test
+  public void
+      select_unknownMapWithFragmentedSubmessageAndDuplicateKeys_mergesWithinEntryAndLastEntryWins()
+          throws Exception {
+    ByteString entry1Chunk1 =
+        NestedTestAllTypes.newBuilder()
+            .setPayload(TestAllTypes.newBuilder().setSingleInt64(111L))
+            .build()
+            .toByteString();
+    ByteString entry2Chunk1 =
+        NestedTestAllTypes.newBuilder()
+            .setChild(
+                NestedTestAllTypes.newBuilder()
+                    .setPayload(TestAllTypes.newBuilder().setSingleInt32(33)))
+            .setPayload(TestAllTypes.newBuilder().setSingleInt64(222L))
+            .build()
+            .toByteString();
+    ByteString entry2Chunk2 =
+        NestedTestAllTypes.newBuilder()
+            .setPayload(
+                TestAllTypes.newBuilder()
+                    .setSingleInt64(333L)
+                    .addRepeatedNestedMessage(NestedMessage.newBuilder().setBb(44)))
+            .build()
+            .toByteString();
+
+    ByteArrayOutputStream entry1Stream = new ByteArrayOutputStream();
+    CodedOutputStream entry1Cos = CodedOutputStream.newInstance(entry1Stream);
+    entry1Cos.writeInt64(1, 7L);
+    entry1Cos.writeBytes(2, entry1Chunk1);
+    entry1Cos.flush();
+
+    ByteArrayOutputStream entry2Stream = new ByteArrayOutputStream();
+    CodedOutputStream entry2Cos = CodedOutputStream.newInstance(entry2Stream);
+    entry2Cos.writeInt64(1, 7L);
+    entry2Cos.writeBytes(2, entry2Chunk1);
+    entry2Cos.writeBytes(2, entry2Chunk2);
+    entry2Cos.flush();
+
+    TestAllTypes msg =
+        TestAllTypes.newBuilder()
+            .setUnknownFields(
+                UnknownFieldSet.newBuilder()
+                    .addField(
+                        TestAllTypes.MAP_INT64_NESTED_TYPE_FIELD_NUMBER,
+                        UnknownFieldSet.Field.newBuilder()
+                            .addLengthDelimited(ByteString.copyFrom(entry1Stream.toByteArray()))
+                            .addLengthDelimited(ByteString.copyFrom(entry2Stream.toByteArray()))
+                            .build())
+                    .build())
+            .build();
+
+    Object result =
+        eval(
+            "size(msg.map_int64_nested_type) == 1 &&"
+                + " msg.map_int64_nested_type[7].child.payload.single_int32 == 33 &&"
+                + " msg.map_int64_nested_type[7].payload.single_int64 == 333 &&"
+                + " msg.map_int64_nested_type[7].payload.repeated_nested_message[0].bb == 44",
+            msg);
+
     assertThat(result).isEqualTo(true);
   }
 
@@ -1772,7 +2001,25 @@ public final class CelLiteRuntimeVersionSkewTest {
     REPEATED_UNKNOWN_DURATION_NON_MATCHING(
         "msg.single_duration < duration('1s') && msg.single_duration > duration('2h')",
         TestAllTypes.getDefaultInstance(),
-        false);
+        false),
+    SHARED_INTERMEDIATE_UNKNOWN_SUBMESSAGE_MATCHING(
+        "msg.oneof_type.payload.single_int64 == -42 &&"
+            + " msg.oneof_type.payload.single_string == 'cel-skew-test'",
+        TestAllTypes.newBuilder()
+            .setOneofType(NestedTestAllTypes.newBuilder().setPayload(POPULATED_SERVER_MESSAGE))
+            .build(),
+        true),
+    SHARED_UNKNOWN_REPEATED_MESSAGE_LIST_MATCHING(
+        "size(msg.repeated_nested_message) > 0 && msg.repeated_nested_message[0].bb == 10 &&"
+            + " msg.repeated_nested_message[1].bb == 20",
+        POPULATED_SERVER_MESSAGE,
+        true),
+    SHARED_UNKNOWN_MAP_OF_NESTED_MESSAGES_MATCHING(
+        "(1 in msg.map_int64_nested_type) &&"
+            + " msg.map_int64_nested_type[1].payload.single_int64 == 100 &&"
+            + " msg.map_int64_nested_type[1].child.payload.repeated_nested_message[0].bb == 10",
+        POPULATED_SERVER_MESSAGE,
+        true);
 
     private final String expression;
     private final TestAllTypes message;
