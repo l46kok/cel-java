@@ -254,11 +254,11 @@ public final class TestRunnerLibrary {
       @Nullable CelCoverageIndex celCoverageIndex)
       throws Exception {
     Cel cel = celTestContext.cel();
-    Program program = cel.createProgram(ast);
     ExprValue exprValue = null;
     CelEvaluationException error = null;
     Object evaluationResult = null;
     try {
+      Program program = cel.createProgram(ast);
       evaluationResult = getEvaluationResult(testCase, celTestContext, program, celCoverageIndex);
       exprValue = toExprValue(evaluationResult, ast.getResultType());
     } catch (CelEvaluationException e) {

@@ -1927,7 +1927,7 @@ public final class CelStringExtensionsTest extends CelExtensionTestBase {
             .addLibraries(CelStringCompilerLibrary.strings(0))
             .build();
     CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
+        CelRuntimeFactory.plannerRuntimeBuilder()
             .addFunctionBindings(CelStringRuntimeLibrary.strings(0).newFunctionBindings())
             .build();
 
@@ -1945,7 +1945,7 @@ public final class CelStringExtensionsTest extends CelExtensionTestBase {
                 CelStringCompilerLibrary.strings(CelStringCompilerLibrary.Function.LOWER_ASCII))
             .build();
     CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
+        CelRuntimeFactory.plannerRuntimeBuilder()
             .addFunctionBindings(
                 CelStringRuntimeLibrary.strings(CelStringRuntimeLibrary.Function.LOWER_ASCII)
                     .newFunctionBindings())

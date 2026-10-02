@@ -50,13 +50,13 @@ import org.junit.runner.RunWith;
 @RunWith(TestParameterInjector.class)
 public class CelEnvironmentExporterTest {
 
-  public static final CelOptions CEL_OPTIONS =
-      CelOptions.newBuilder().enableHeterogeneousNumericComparisons(true).build();
+  private static final CelOptions CEL_OPTIONS =
+      CelOptions.current().enableHeterogeneousNumericComparisons(true).build();
 
   @Test
   public void extensions_latest() {
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.plannerCelBuilder()
             .addCompilerLibraries(CelExtensions.math(CEL_OPTIONS, 2))
             .build();
 
@@ -70,7 +70,7 @@ public class CelEnvironmentExporterTest {
   @Test
   public void extensions_earlierVersion() {
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.plannerCelBuilder()
             .addCompilerLibraries(CelExtensions.math(CEL_OPTIONS, 1))
             .build();
 
@@ -88,7 +88,7 @@ public class CelEnvironmentExporterTest {
     CelEnvironment environment = CelEnvironmentYamlParser.newInstance().parse(yamlFileContent);
 
     Cel standardCel =
-        CelFactory.standardCelBuilder()
+        CelFactory.plannerCelBuilder()
             .addCompilerLibraries(CelExtensions.math(CEL_OPTIONS, 2))
             .build();
     Cel extendedCel = environment.extend(standardCel, CEL_OPTIONS);
@@ -123,7 +123,7 @@ public class CelEnvironmentExporterTest {
     CelEnvironment environment = CelEnvironmentYamlParser.newInstance().parse(yamlFileContent);
 
     Cel standardCel =
-        CelFactory.standardCelBuilder()
+        CelFactory.plannerCelBuilder()
             .addCompilerLibraries(CelExtensions.math(CEL_OPTIONS, 2))
             .build();
     Cel extendedCel = environment.extend(standardCel, CEL_OPTIONS);
@@ -171,7 +171,7 @@ public class CelEnvironmentExporterTest {
   @Test
   public void customFunctions() {
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.plannerCelBuilder()
             .addCompilerLibraries(CelExtensions.math(CEL_OPTIONS, 1))
             .addFunctionDeclarations(
                 CelFunctionDecl.newFunctionDeclaration(
@@ -296,7 +296,7 @@ public class CelEnvironmentExporterTest {
   @Test
   public void customVariables() {
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.plannerCelBuilder()
             .addVarDeclarations(
                 CelVarDecl.newVarDeclaration("x", SimpleType.INT),
                 CelVarDecl.newVarDeclaration("y", OpaqueType.create("foo.Bar")))
@@ -321,7 +321,7 @@ public class CelEnvironmentExporterTest {
   @Test
   public void container() {
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.plannerCelBuilder()
             .setContainer(
                 CelContainer.newBuilder()
                     .setName("cntnr")
@@ -342,7 +342,7 @@ public class CelEnvironmentExporterTest {
   @Test
   public void options() {
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.plannerCelBuilder()
             .setOptions(
                 CelOptions.current()
                     .maxExpressionCodePointSize(100)

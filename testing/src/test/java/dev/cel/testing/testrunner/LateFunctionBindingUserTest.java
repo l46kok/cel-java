@@ -14,6 +14,7 @@
 
 package dev.cel.testing.testrunner;
 
+import dev.cel.bundle.CelFactory;
 import dev.cel.runtime.CelFunctionBinding;
 import dev.cel.runtime.CelLateFunctionBindings;
 import org.junit.runner.RunWith;
@@ -26,6 +27,7 @@ public class LateFunctionBindingUserTest extends CelUserTestTemplate {
   public LateFunctionBindingUserTest() {
     super(
         CelTestContext.newBuilder()
+            .setCel(CelFactory.plannerCelBuilder().addLateBoundFunctions("foo", "bar").build())
             .setCelLateFunctionBindings(
                 CelLateFunctionBindings.from(
                     CelFunctionBinding.from("foo_id", String.class, (String a) -> a.equals("foo")),

@@ -30,7 +30,7 @@ public class CoverageTest extends CelUserTestTemplate {
     super(
         CelTestContext.newBuilder()
             .setCel(
-                CelFactory.standardCelBuilder()
+                CelFactory.plannerCelBuilder()
                     .addVar("x", SimpleType.INT)
                     .addVar("y", SimpleType.INT)
                     .build())

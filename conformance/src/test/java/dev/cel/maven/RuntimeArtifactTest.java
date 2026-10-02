@@ -22,7 +22,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.protobuf.TextFormat;
 import com.google.testing.junit.testparameterinjector.TestParameterInjector;
 import dev.cel.common.CelAbstractSyntaxTree;
-import dev.cel.common.CelOptions;
 import dev.cel.common.CelProtoAbstractSyntaxTree;
 import dev.cel.expr.conformance.proto3.TestAllTypes;
 import dev.cel.runtime.CelEvaluationException;
@@ -373,9 +372,7 @@ public class RuntimeArtifactTest {
   @Test
   public void eval() throws Exception {
     CelRuntime runtime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
-            .setOptions(CelOptions.DEFAULT)
-            .setStandardEnvironmentEnabled(false)
+        CelRuntimeFactory.plannerRuntimeBuilder()
             .addFunctionBindings(
                 CelFunctionBinding.fromOverloads(
                     "getThree",
@@ -400,7 +397,7 @@ public class RuntimeArtifactTest {
   @Test
   public void eval_error() throws Exception {
     CelRuntime runtime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
+        CelRuntimeFactory.plannerRuntimeBuilder()
             .addMessageTypes(TestAllTypes.getDescriptor())
             .build();
     CheckedExpr checkedExpr = TextFormat.parse(CHECKED_EXPR, CheckedExpr.class);

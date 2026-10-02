@@ -62,7 +62,7 @@ public final class CelAsyncRuntimeImplTest {
               return attr.toString();
             });
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.legacyCelBuilder()
             .setOptions(CelOptions.current().enableUnknownTracking(true).build())
             .addMessageTypes(TestAllTypes.getDescriptor())
             .addVar("com.google.var1", SimpleType.STRING)
@@ -113,7 +113,7 @@ public final class CelAsyncRuntimeImplTest {
               return attr.toString();
             });
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.legacyCelBuilder()
             .setOptions(CelOptions.current().enableUnknownTracking(true).build())
             .addMessageTypes(TestAllTypes.getDescriptor())
             .addVar("com.google.var1", SimpleType.BOOL)
@@ -161,7 +161,7 @@ public final class CelAsyncRuntimeImplTest {
     SettableFuture<Object> var3 = SettableFuture.create();
 
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.legacyCelBuilder()
             .setOptions(CelOptions.current().enableUnknownTracking(true).build())
             .addMessageTypes(TestAllTypes.getDescriptor())
             .addVar("com.google.var1", SimpleType.STRING)
@@ -213,7 +213,7 @@ public final class CelAsyncRuntimeImplTest {
     SettableFuture<Object> var3 = SettableFuture.create();
 
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.legacyCelBuilder()
             .setOptions(CelOptions.current().enableUnknownTracking(true).build())
             .addMessageTypes(TestAllTypes.getDescriptor())
             .addVar("com.google.var1", SimpleType.STRING)
@@ -259,12 +259,11 @@ public final class CelAsyncRuntimeImplTest {
 
   @Test
   public void asyncProgram_concurrency(
-      @TestParameter(valuesProvider = RepeatedTestProvider.class) int testRunIndex)
-      throws Exception {
+      @TestParameter(valuesProvider = RepeatedTestProvider.class) int unused) throws Exception {
     Duration taskDelay = Duration.ofMillis(500);
     // Arrange
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.legacyCelBuilder()
             .setOptions(CelOptions.current().enableUnknownTracking(true).build())
             .addMessageTypes(TestAllTypes.getDescriptor())
             .addVar("com.google.var1", SimpleType.STRING)
@@ -317,7 +316,7 @@ public final class CelAsyncRuntimeImplTest {
   public void asyncProgram_elementResolver() throws Exception {
     // Arrange
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.legacyCelBuilder()
             .setOptions(CelOptions.current().enableUnknownTracking(true).build())
             .addMessageTypes(TestAllTypes.getDescriptor())
             .addVar(
@@ -366,7 +365,7 @@ public final class CelAsyncRuntimeImplTest {
   public void asyncProgram_thrownExceptionPropagatesImmediately() throws Exception {
     // Arrange
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.legacyCelBuilder()
             .setOptions(CelOptions.current().enableUnknownTracking(true).build())
             .addMessageTypes(TestAllTypes.getDescriptor())
             .addVar("com.google.var1", SimpleType.STRING)
@@ -422,7 +421,7 @@ public final class CelAsyncRuntimeImplTest {
   public void asyncProgram_returnedExceptionPropagatesToEvaluator() throws Exception {
     // Arrange
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.legacyCelBuilder()
             .setOptions(CelOptions.current().enableUnknownTracking(true).build())
             .addMessageTypes(TestAllTypes.getDescriptor())
             .addVar("com.google.var1", SimpleType.STRING)
@@ -477,7 +476,7 @@ public final class CelAsyncRuntimeImplTest {
   public void asyncProgram_returnedExceptionPropagatesToEvaluatorIsPruneable() throws Exception {
     // Arrange
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.legacyCelBuilder()
             .setOptions(CelOptions.current().enableUnknownTracking(true).build())
             .addMessageTypes(TestAllTypes.getDescriptor())
             .addVar("com.google.var1", SimpleType.STRING)

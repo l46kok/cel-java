@@ -39,7 +39,7 @@ import org.junit.runners.model.Statement;
 public final class PolicyConformanceTest extends Statement {
 
   private static final Cel CEL =
-      CelFactory.standardCelBuilder()
+      CelFactory.plannerCelBuilder()
           .addFunctionBindings(
               CelFunctionBinding.from(
                   "locationCode_string",

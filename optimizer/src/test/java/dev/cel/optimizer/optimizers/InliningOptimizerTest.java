@@ -45,7 +45,7 @@ import org.junit.runner.RunWith;
 public class InliningOptimizerTest {
 
   private static final Cel CEL =
-      CelFactory.standardCelBuilder()
+      CelFactory.plannerCelBuilder()
           .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
           .setContainer(CelContainer.ofName("google.expr.proto3.test"))
           .addFileTypes(TestAllTypes.getDescriptor().getFile())
@@ -58,7 +58,11 @@ public class InliningOptimizerTest {
               "child",
               StructTypeReference.create(TestAllTypes.NestedMessage.getDescriptor().getFullName()))
           .addVar("shadowed_ident", SimpleType.INT)
-          .setOptions(CelOptions.current().populateMacroCalls(true).build())
+          .setOptions(
+              CelOptions.current()
+                  .populateMacroCalls(true)
+                  .enableHeterogeneousNumericComparisons(true)
+                  .build())
           .build();
 
   @Test

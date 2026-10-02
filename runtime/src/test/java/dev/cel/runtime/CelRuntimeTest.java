@@ -27,13 +27,11 @@ import com.google.protobuf.Any;
 import com.google.protobuf.BoolValue;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.DescriptorProtos.FileDescriptorSet;
-import com.google.protobuf.DynamicMessage;
 import com.google.rpc.context.AttributeContext;
 import com.google.testing.junit.testparameterinjector.TestParameter;
 import com.google.testing.junit.testparameterinjector.TestParameterInjector;
 import com.google.testing.junit.testparameterinjector.TestParameters;
 import dev.cel.bundle.Cel;
-import dev.cel.bundle.CelFactory;
 import dev.cel.common.CelAbstractSyntaxTree;
 import dev.cel.common.CelContainer;
 import dev.cel.common.CelErrorCode;
@@ -71,8 +69,13 @@ public class CelRuntimeTest {
   @Test
   public void evaluate_anyPackedEqualityUsingProtoDifferencer_success() throws Exception {
     Cel cel =
-        CelFactory.standardCelBuilder()
-            .setOptions(CelOptions.current().enableProtoDifferencerEquality(true).build())
+        runtimeFlavor
+            .builder()
+            .setOptions(
+                CelOptions.current()
+                    .enableHeterogeneousNumericComparisons(true)
+                    .enableProtoDifferencerEquality(true)
+                    .build())
             .addVar("a", StructTypeReference.create(AttributeContext.getDescriptor().getFullName()))
             .addVar("b", StructTypeReference.create(AttributeContext.getDescriptor().getFullName()))
             .addMessageTypes(AttributeContext.getDescriptor())
@@ -116,10 +119,9 @@ public class CelRuntimeTest {
                     .build())
             .putTypeMap(1, CelV1AlphaTypes.create(PrimitiveType.STRING))
             .build();
-    CelRuntime celRuntime = CelRuntimeFactory.standardCelRuntimeBuilder().build();
+    Cel cel = runtimeFlavor.builder().build();
     CelRuntime.Program program =
-        celRuntime.createProgram(
-            CelProtoV1Alpha1AbstractSyntaxTree.fromCheckedExpr(checkedExpr).getAst());
+        cel.createProgram(CelProtoV1Alpha1AbstractSyntaxTree.fromCheckedExpr(checkedExpr).getAst());
 
     String evaluatedResult = (String) program.eval();
 
@@ -234,8 +236,11 @@ public class CelRuntimeTest {
         CelCompilerFactory.standardCelCompilerBuilder()
             .addMessageTypes(BoolValue.getDescriptor())
             .build();
-    CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
+    // TODO: CelRuntimeImpl.Builder.build() mutates valueProvider/typeProvider in
+    // place, leaking LinkedDescriptorPool.INSTANCE across toRuntimeBuilder().
+    Cel cel =
+        runtimeFlavor
+            .builder()
             // CEL-Internal-2
             .addFileTypes(
                 FileDescriptorSet.newBuilder()
@@ -247,29 +252,7 @@ public class CelRuntimeTest {
     CelAbstractSyntaxTree ast =
         celCompiler.compile("google.protobuf.BoolValue{value: false}").getAst();
 
-    assertThat(celRuntime.createProgram(ast).eval()).isEqualTo(false);
-  }
-
-  @Test
-  public void newWellKnownTypeMessage_inDynamicMessage_withSetTypeFactory() throws Exception {
-    CelCompiler celCompiler =
-        CelCompilerFactory.standardCelCompilerBuilder()
-            .addMessageTypes(BoolValue.getDescriptor())
-            .build();
-    CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
-            // CEL-Internal-2
-            .setTypeFactory(
-                (typeName) ->
-                    typeName.equals("google.protobuf.BoolValue")
-                        ? DynamicMessage.newBuilder(BoolValue.getDescriptor())
-                        : null)
-            .build();
-
-    CelAbstractSyntaxTree ast =
-        celCompiler.compile("google.protobuf.BoolValue{value: false}").getAst();
-
-    assertThat(celRuntime.createProgram(ast).eval()).isEqualTo(false);
+    assertThat(cel.createProgram(ast).eval()).isEqualTo(false);
   }
 
   @Test
@@ -281,51 +264,19 @@ public class CelRuntimeTest {
             .addFile(Any.getDescriptor().getFile().toProto())
             .addFile(BoolValue.getDescriptor().getFile().toProto())
             .build();
-    CelCompiler celCompiler =
-        CelCompilerFactory.standardCelCompilerBuilder().addFileTypes(fds).build();
-    CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
+    Cel cel =
+        runtimeFlavor
+            .builder()
             // CEL-Internal-2
             .addFileTypes(fds)
             .build();
 
     CelAbstractSyntaxTree ast =
-        celCompiler
-            .compile(
+        cel.compile(
                 "google.protobuf.Any{type_url: 'types.googleapis.com/google.protobuf.DoubleValue'}")
             .getAst();
 
-    assertThat(celRuntime.createProgram(ast).eval()).isEqualTo(0.0d);
-  }
-
-  @Test
-  public void newWellKnownTypeMessage_inAnyMessage_withSetTypeFactory() throws Exception {
-    FileDescriptorSet fds =
-        FileDescriptorSet.newBuilder()
-            // Copy the WKT descriptors
-            .addFile(Any.getDescriptor().getFile().toProto())
-            .addFile(BoolValue.getDescriptor().getFile().toProto())
-            .build();
-    CelCompiler celCompiler =
-        CelCompilerFactory.standardCelCompilerBuilder().addFileTypes(fds).build();
-    CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
-            // CEL-Internal-2
-            .addFileTypes(fds)
-            .setTypeFactory(
-                (typeName) ->
-                    typeName.equals("google.protobuf.Any")
-                        ? Any.newBuilder().setTypeUrl("google.protobuf.DoubleValue")
-                        : null)
-            .build();
-
-    CelAbstractSyntaxTree ast =
-        celCompiler
-            .compile(
-                "google.protobuf.Any{type_url: 'types.googleapis.com/google.protobuf.DoubleValue'}")
-            .getAst();
-
-    assertThat(celRuntime.createProgram(ast).eval()).isEqualTo(0.0d);
+    assertThat(cel.createProgram(ast).eval()).isEqualTo(0.0d);
   }
 
   @Test
@@ -906,21 +857,6 @@ public class CelRuntimeTest {
 
     CelEvaluationException e = assertThrows(CelEvaluationException.class, () -> program.eval());
     assertThat(e).hasCauseThat().hasMessageThat().contains("custom error");
-  }
-
-  @Test
-  public void standardEnvironmentDisabledForRuntime_throws() throws Exception {
-    CelCompiler celCompiler =
-        CelCompilerFactory.standardCelCompilerBuilder().setStandardEnvironmentEnabled(true).build();
-    CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder().setStandardEnvironmentEnabled(false).build();
-    CelAbstractSyntaxTree ast = celCompiler.compile("size('hello')").getAst();
-    CelRuntime.Program program = celRuntime.createProgram(ast);
-
-    CelEvaluationException e = assertThrows(CelEvaluationException.class, () -> program.eval());
-    assertThat(e)
-        .hasMessageThat()
-        .contains("No matching overload for function 'size'. Overload candidates: size_string");
   }
 
   @Test

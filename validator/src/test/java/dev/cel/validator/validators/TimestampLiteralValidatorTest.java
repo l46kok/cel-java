@@ -24,6 +24,7 @@ import com.google.testing.junit.testparameterinjector.TestParameterInjector;
 import com.google.testing.junit.testparameterinjector.TestParameters;
 import dev.cel.bundle.Cel;
 import dev.cel.bundle.CelFactory;
+import dev.cel.checker.CelStandardDeclarations;
 import dev.cel.common.CelAbstractSyntaxTree;
 import dev.cel.common.CelIssue.Severity;
 import dev.cel.common.CelOptions;
@@ -32,6 +33,7 @@ import dev.cel.common.internal.ProtoTimeUtils;
 import dev.cel.common.types.SimpleType;
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelFunctionBinding;
+import dev.cel.runtime.CelStandardFunctions;
 import dev.cel.validator.CelValidator;
 import dev.cel.validator.CelValidatorFactory;
 import java.text.ParseException;
@@ -41,9 +43,10 @@ import org.junit.runner.RunWith;
 
 @RunWith(TestParameterInjector.class)
 public class TimestampLiteralValidatorTest {
-  private static final CelOptions CEL_OPTIONS = CelOptions.current().build();
+  private static final CelOptions CEL_OPTIONS =
+      CelOptions.current().enableHeterogeneousNumericComparisons(true).build();
 
-  private static final Cel CEL = CelFactory.standardCelBuilder().setOptions(CEL_OPTIONS).build();
+  private static final Cel CEL = CelFactory.plannerCelBuilder().setOptions(CEL_OPTIONS).build();
 
   private static final CelValidator CEL_VALIDATOR =
       CelValidatorFactory.standardCelValidatorBuilder(CEL)
@@ -81,7 +84,7 @@ public class TimestampLiteralValidatorTest {
   @Test
   public void timestamp_withVariable_noOp() throws Exception {
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.plannerCelBuilder()
             .addVar("str_var", SimpleType.STRING)
             .setOptions(CEL_OPTIONS)
             .build();
@@ -105,7 +108,7 @@ public class TimestampLiteralValidatorTest {
   @Test
   public void timestamp_withFunction_noOp() throws Exception {
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.plannerCelBuilder()
             .addFunctionDeclarations(
                 newFunctionDeclaration(
                     "testFunc",
@@ -160,8 +163,10 @@ public class TimestampLiteralValidatorTest {
   @Test
   public void timestamp_unexpectedResultType_throws() throws Exception {
     Cel cel =
-        CelFactory.standardCelBuilder()
-            .setStandardEnvironmentEnabled(false)
+        CelFactory.plannerCelBuilder()
+            .setStandardDeclarations(
+                CelStandardDeclarations.newBuilder().includeFunctions().build())
+            .setStandardFunctions(CelStandardFunctions.newBuilder().includeFunctions().build())
             .addFunctionDeclarations(
                 newFunctionDeclaration(
                     "timestamp",
@@ -183,7 +188,7 @@ public class TimestampLiteralValidatorTest {
     assertThat(result.getAllIssues().get(0).toDisplayString(ast.getSource()))
         .isEqualTo(
             "ERROR: <input>:1:11: timestamp validation failed. Reason: Expected"
-                + " java.time.Instant type but got java.lang.Integer instead\n"
+                + " java.time.Instant type but got java.lang.Long instead\n"
                 + " | timestamp(0)\n"
                 + " | ..........^");
   }
@@ -203,8 +208,8 @@ public class TimestampLiteralValidatorTest {
   @Test
   public void env_withSetResultType_success() throws Exception {
     Cel cel =
-        CelFactory.standardCelBuilder()
-            .setOptions(CelOptions.current().build())
+        CelFactory.plannerCelBuilder()
+            .setOptions(CEL_OPTIONS)
             .setResultType(SimpleType.BOOL)
             .build();
     CelValidator validator =

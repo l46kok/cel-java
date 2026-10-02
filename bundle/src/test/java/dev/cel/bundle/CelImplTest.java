@@ -109,8 +109,8 @@ import dev.cel.runtime.CelEvaluationExceptionBuilder;
 import dev.cel.runtime.CelFunctionBinding;
 import dev.cel.runtime.CelRuntime;
 import dev.cel.runtime.CelRuntime.Program;
+import dev.cel.runtime.CelRuntimeBuilder;
 import dev.cel.runtime.CelRuntimeFactory;
-import dev.cel.runtime.CelRuntimeLegacyImpl;
 import dev.cel.runtime.CelStandardFunctions;
 import dev.cel.runtime.CelUnknownSet;
 import dev.cel.runtime.CelVariableResolver;
@@ -197,17 +197,13 @@ public final class CelImplTest {
                           .setTestOnly(true)))
           .build();
 
-  private CelBuilder standardCelBuilderWithMacros() {
-    return CelFactory.standardCelBuilder().setStandardMacros(CelStandardMacro.STANDARD_MACROS);
-  }
-
   @Test
   public void build_badFileDescriptorSet() {
     IllegalArgumentException e =
         Assert.assertThrows(
             IllegalArgumentException.class,
             () ->
-                standardCelBuilderWithMacros()
+                plannerCelBuilderWithMacros()
                     .setContainer(CelContainer.ofName("cel.expr.conformance.proto2"))
                     .addFileTypes(
                         FileDescriptorSet.newBuilder()
@@ -219,13 +215,13 @@ public final class CelImplTest {
 
   @Test
   public void parse() throws Exception {
-    Cel cel = standardCelBuilderWithMacros().build();
+    Cel cel = plannerCelBuilderWithMacros().build();
     assertValidationResult(cel.parse("true && !false"), PARSED_EXPR);
   }
 
   @Test
   public void check() throws Exception {
-    Cel cel = standardCelBuilderWithMacros().setResultType(SimpleType.BOOL).build();
+    Cel cel = plannerCelBuilderWithMacros().setResultType(SimpleType.BOOL).build();
     CelValidationResult parseResult = cel.parse("true && !false");
     assertValidationResult(parseResult, PARSED_EXPR);
     CelValidationResult checkResult = cel.check(parseResult.getAst());
@@ -234,7 +230,7 @@ public final class CelImplTest {
 
   @Test
   public void compile(@TestParameter boolean useProtoResultType) throws Exception {
-    CelBuilder celBuilder = standardCelBuilderWithMacros();
+    CelBuilder celBuilder = plannerCelBuilderWithMacros();
     if (useProtoResultType) {
       celBuilder.setProtoResultType(CelProtoTypes.BOOL);
     } else {
@@ -246,7 +242,7 @@ public final class CelImplTest {
 
   @Test
   public void compile_resultTypeCheckFailure(@TestParameter boolean useProtoResultType) {
-    CelBuilder celBuilder = standardCelBuilderWithMacros();
+    CelBuilder celBuilder = plannerCelBuilderWithMacros();
     if (useProtoResultType) {
       celBuilder.setProtoResultType(CelProtoTypes.STRING);
     } else {
@@ -265,7 +261,7 @@ public final class CelImplTest {
     ProtoMessageTypeProvider celTypeProvider =
         new ProtoMessageTypeProvider(ImmutableList.of(AttributeContext.getDescriptor()));
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             .setContainer(CelContainer.ofName("google"))
             .setTypeProvider(celTypeProvider)
             .addMessageTypes(com.google.type.Expr.getDescriptor())
@@ -286,7 +282,7 @@ public final class CelImplTest {
             ImmutableList.of(
                 AttributeContext.getDescriptor(), com.google.type.Expr.getDescriptor()));
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             .setContainer(CelContainer.ofName("google"))
             .setTypeProvider(celTypeProvider)
             .addVar("condition", StructTypeReference.create("google.type.Expr"))
@@ -299,7 +295,6 @@ public final class CelImplTest {
 
   @Test
   public void compile_customTypesWithAliasingCombinedProviders() throws Exception {
-
     // The custom type provider sets up an alias from "Condition" to "google.type.Expr".
     // However, the first type resolution from the alias to the qualified type name won't be
     // sufficient as future checks will expect the resolved alias to also be a type.
@@ -314,7 +309,7 @@ public final class CelImplTest {
     // The custom type factory is then necessary to ensure that the Condition type listed
     // in the AST can be resolved to the appropriate message builder instance.
     Cel cel =
-        standardCelBuilderWithMacros()
+        legacyCelBuilderWithMacros()
             .setTypeProvider(customTypeProvider)
             .addMessageTypes(com.google.type.Expr.getDescriptor())
             .setTypeFactory(
@@ -331,7 +326,6 @@ public final class CelImplTest {
 
   @Test
   public void compile_customTypesWithAliasingSelfContainedProvider() throws Exception {
-
     // The custom type provider sets up an alias from "Condition" to "google.type.Expr".
     TypeProvider customTypeProvider =
         aliasingProvider(
@@ -348,7 +342,7 @@ public final class CelImplTest {
     // The custom type factory is then necessary to ensure that the Condition type listed
     // in the AST can be resolved to the appropriate message builder instance.
     Cel cel =
-        standardCelBuilderWithMacros()
+        legacyCelBuilderWithMacros()
             .setTypeProvider(customTypeProvider)
             .setTypeFactory(
                 (typeName) ->
@@ -373,7 +367,7 @@ public final class CelImplTest {
             .build();
     CelAbstractSyntaxTree ast = celCompiler.compile("input.expression").getAst();
     CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
+        CelRuntimeFactory.legacyCelRuntimeBuilder()
             // CEL-Internal-2
             .setTypeFactory(
                 (typeName) ->
@@ -403,7 +397,7 @@ public final class CelImplTest {
     CelAbstractSyntaxTree ast = celCompiler.compile("input").getAst();
 
     CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
+        CelRuntimeFactory.legacyCelRuntimeBuilder()
             // CEL-Internal-2
             .setTypeFactory(
                 (typeName) ->
@@ -429,7 +423,7 @@ public final class CelImplTest {
     // Arrange
     int threadCount = 10;
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             .setContainer(CelContainer.ofName("google.rpc.context.AttributeContext"))
             .addFileTypes(
                 Any.getDescriptor().getFile(),
@@ -462,7 +456,7 @@ public final class CelImplTest {
 
   @Test
   public void compile_syntaxFailure() throws Exception {
-    Cel cel = standardCelBuilderWithMacros().build();
+    Cel cel = plannerCelBuilderWithMacros().build();
     CelValidationResult result = cel.compile("|| false");
     assertThat(result.hasError()).isTrue();
     assertThat(result.getErrors())
@@ -483,7 +477,7 @@ public final class CelImplTest {
 
   @Test
   public void compile_typeCheckFailure() {
-    Cel cel = standardCelBuilderWithMacros().build();
+    Cel cel = plannerCelBuilderWithMacros().build();
     CelValidationResult syntaxErrorResult = cel.compile("variable");
     assertThat(syntaxErrorResult.hasError()).isTrue();
     assertThat(syntaxErrorResult.getErrors())
@@ -502,8 +496,12 @@ public final class CelImplTest {
   @Test
   public void compile_withOptionalTypes() throws Exception {
     Cel cel =
-        CelFactory.standardCelBuilder()
-            .setOptions(CelOptions.current().enableOptionalSyntax(true).build())
+        CelFactory.plannerCelBuilder()
+            .setOptions(
+                CelOptions.current()
+                    .enableHeterogeneousNumericComparisons(true)
+                    .enableOptionalSyntax(true)
+                    .build())
             .addVar("a", OptionalType.create(SimpleType.STRING))
             .build();
 
@@ -517,7 +515,7 @@ public final class CelImplTest {
   @Test
   public void compile_overlappingVarsFailure() {
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             .addDeclarations(
                 Decl.newBuilder()
                     .setName("variable")
@@ -540,7 +538,7 @@ public final class CelImplTest {
 
   @Test
   public void program() throws Exception {
-    Cel cel = standardCelBuilderWithMacros().setResultType(SimpleType.BOOL).build();
+    Cel cel = plannerCelBuilderWithMacros().setResultType(SimpleType.BOOL).build();
     CelRuntime.Program program = cel.createProgram(cel.compile("true && !false").getAst());
     assertThat(program.eval()).isEqualTo(true);
   }
@@ -548,7 +546,7 @@ public final class CelImplTest {
   @Test
   public void program_withVars() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             .addDeclarations(
                 Decl.newBuilder()
                     .setName("variable")
@@ -564,7 +562,7 @@ public final class CelImplTest {
   @Test
   public void program_withProtoVars() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             .addMessageTypes(AttributeContext.getDescriptor())
             .addProtoTypeMasks(
                 ProtoTypeMask.of(
@@ -590,7 +588,7 @@ public final class CelImplTest {
   @Test
   public void program_withAllFieldsHidden_emptyMessageConstructionSuccess() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             .addMessageTypes(AttributeContext.getDescriptor())
             .setContainer(CelContainer.ofName("google.rpc.context.AttributeContext"))
             .addProtoTypeMasks(
@@ -604,7 +602,7 @@ public final class CelImplTest {
   @Test
   public void compile_withAllFieldsHidden_selectHiddenField_throws() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             .addMessageTypes(AttributeContext.getDescriptor())
             .setContainer(CelContainer.ofName("google.rpc.context.AttributeContext"))
             .addProtoTypeMasks(
@@ -621,7 +619,7 @@ public final class CelImplTest {
   @Test
   public void compile_withAllFieldsHidden_selectHiddenFieldOnVar_throws() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             .addMessageTypes(AttributeContext.getDescriptor())
             .setContainer(CelContainer.ofName("google.rpc.context.AttributeContext"))
             .addProtoTypeMasks(
@@ -637,7 +635,7 @@ public final class CelImplTest {
   @Test
   public void program_withNestedRestrictedProtoVars() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             .addMessageTypes(AttributeContext.getDescriptor())
             .addProtoTypeMasks(
                 ProtoTypeMask.of(
@@ -656,7 +654,7 @@ public final class CelImplTest {
   @Test
   public void program_withFunctions() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             .addDeclarations(
                 ImmutableList.of(
                     Decl.newBuilder()
@@ -713,7 +711,7 @@ public final class CelImplTest {
   @Test
   public void program_withThrowingFunction() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             .addDeclarations(
                 Decl.newBuilder()
                     .setName("throws")
@@ -741,7 +739,7 @@ public final class CelImplTest {
   @Test
   public void program_withThrowingFunctionShortcircuited() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             .addDeclarations(
                 Decl.newBuilder()
                     .setName("throws")
@@ -775,7 +773,7 @@ public final class CelImplTest {
             .addMessageTypes(Expr.getDescriptor())
             .setResultType(SimpleType.BOOL)
             .build();
-    CelRuntime celRuntime = CelRuntimeFactory.standardCelRuntimeBuilder().build();
+    CelRuntime celRuntime = CelRuntimeFactory.plannerRuntimeBuilder().build();
     CelRuntime.Program program =
         celRuntime.createProgram(celCompiler.compile("test.id == 2").getAst());
 
@@ -788,11 +786,10 @@ public final class CelImplTest {
   @Test
   public void program_messageConstruction() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             .setContainer(CelContainer.ofName("google.type"))
             .addMessageTypes(com.google.type.Expr.getDescriptor())
             .setResultType(StructTypeReference.create("google.type.Expr"))
-            .setStandardEnvironmentEnabled(false)
             .build();
     CelRuntime.Program program =
         cel.createProgram(cel.compile("type.Expr{expression: \"'hello'\"}").getAst());
@@ -803,7 +800,7 @@ public final class CelImplTest {
   @Test
   public void program_duplicateTypeDescriptor() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             .addMessageTypes(Timestamp.getDescriptor())
             .addMessageTypes(ImmutableList.of(Timestamp.getDescriptor()))
             .setContainer(CelContainer.ofName("google"))
@@ -818,7 +815,7 @@ public final class CelImplTest {
   @Test
   public void program_hermeticDescriptors_wellKnownProtobuf() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             // CEL-Internal-2
             .addMessageTypes(Timestamp.getDescriptor())
             .setContainer(CelContainer.ofName("google"))
@@ -833,7 +830,7 @@ public final class CelImplTest {
   public void program_partialMessageTypes() throws Exception {
     String packageName = CheckedExpr.getDescriptor().getFile().getPackage();
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             .addFileTypes(CheckedExpr.getDescriptor().getFile())
             // Disabling the resolution of type dependencies can be risky as message types which
             // are expected to be available in an imported file may not be present if the type
@@ -842,7 +839,11 @@ public final class CelImplTest {
             // In this test 'Expr' is defined in syntax.proto, but the descriptor provided is
             // defined in checked.proto. Because the `Expr` type is referenced within a message
             // field of the CheckedExpr, it is available for use.
-            .setOptions(CelOptions.current().resolveTypeDependencies(false).build())
+            .setOptions(
+                CelOptions.current()
+                    .enableHeterogeneousNumericComparisons(true)
+                    .resolveTypeDependencies(false)
+                    .build())
             .setContainer(CelContainer.ofName(packageName))
             .setResultType(StructTypeReference.create(packageName + ".Expr"))
             .build();
@@ -854,12 +855,16 @@ public final class CelImplTest {
   public void program_partialMessageTypeFailure() {
     String packageName = CheckedExpr.getDescriptor().getFile().getPackage();
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             .addFileTypes(CheckedExpr.getDescriptor().getFile())
             // In this test 'ParsedExpr' is defined in syntax.proto, but the descriptor provided is
             // defined in checked.proto. Because the `ParsedExpr` type is not referenced, it is not
             // available for use within CEL when deep type resolution is disabled.
-            .setOptions(CelOptions.current().resolveTypeDependencies(false).build())
+            .setOptions(
+                CelOptions.current()
+                    .enableHeterogeneousNumericComparisons(true)
+                    .resolveTypeDependencies(false)
+                    .build())
             .setContainer(CelContainer.ofName(packageName))
             .setResultType(StructTypeReference.create(packageName + ".ParsedExpr"))
             .build();
@@ -873,12 +878,16 @@ public final class CelImplTest {
   public void program_deepTypeResolution() throws Exception {
     String packageName = CheckedExpr.getDescriptor().getFile().getPackage();
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             .addFileTypes(CheckedExpr.getDescriptor().getFile())
             // In this test 'ParsedExpr' is defined in syntax.proto, but the descriptor provided is
             // defined in checked.proto. Because deep type dependency resolution is enabled, the
             // `ParsedExpr` may be used within CEL.
-            .setOptions(CelOptions.current().resolveTypeDependencies(true).build())
+            .setOptions(
+                CelOptions.current()
+                    .enableHeterogeneousNumericComparisons(true)
+                    .resolveTypeDependencies(true)
+                    .build())
             .setContainer(CelContainer.ofName(packageName))
             .setResultType(StructTypeReference.create(packageName + ".ParsedExpr"))
             .build();
@@ -899,9 +908,13 @@ public final class CelImplTest {
     CelAbstractSyntaxTree ast = celCompiler.compile("ParsedExpr{}").getAst();
 
     CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
+        CelRuntimeFactory.plannerRuntimeBuilder()
             .addFileTypes(CheckedExpr.getDescriptor().getFile())
-            .setOptions(CelOptions.current().resolveTypeDependencies(true).build())
+            .setOptions(
+                CelOptions.current()
+                    .enableHeterogeneousNumericComparisons(true)
+                    .resolveTypeDependencies(true)
+                    .build())
             // CEL-Internal-2
             .build();
     CelRuntime.Program program = celRuntime.createProgram(ast);
@@ -927,8 +940,9 @@ public final class CelImplTest {
     // 'ParsedExpr' is transitively available for use because deep type resolution is enabled.
     CelAbstractSyntaxTree ast = celCompiler.compile("ParsedExpr{}").getAst();
 
+    // TODO: Planner runtime ignores CelOptions.resolveTypeDependencies(false).
     CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
+        CelRuntimeFactory.legacyCelRuntimeBuilder()
             .addFileTypes(CheckedExpr.getDescriptor().getFile())
             .setOptions(CelOptions.current().resolveTypeDependencies(false).build())
             // CEL-Internal-2
@@ -949,7 +963,7 @@ public final class CelImplTest {
   @SuppressWarnings("deprecation") // Test for existing deprecated method setTypeProvider
   public void program_typeProvider() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             .setTypeProvider(
                 new DescriptorTypeProvider(ImmutableList.of(Timestamp.getDescriptor())))
             .setContainer(CelContainer.ofName("google"))
@@ -963,7 +977,7 @@ public final class CelImplTest {
   @Test
   public void program_protoActivation() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             .addMessageTypes(AttributeContext.getDescriptor())
             .addDeclarations(
                 Decl.newBuilder()
@@ -989,10 +1003,13 @@ public final class CelImplTest {
   public void program_enumTypeDirectResolution(@TestParameter boolean resolveTypeDependencies)
       throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             .addFileTypes(StandaloneGlobalEnum.getDescriptor().getFile())
             .setOptions(
-                CelOptions.current().resolveTypeDependencies(resolveTypeDependencies).build())
+                CelOptions.current()
+                    .enableHeterogeneousNumericComparisons(true)
+                    .resolveTypeDependencies(resolveTypeDependencies)
+                    .build())
             .setContainer(
                 CelContainer.ofName("dev.cel.testing.testdata.proto3.StandaloneGlobalEnum"))
             .setResultType(SimpleType.BOOL)
@@ -1011,9 +1028,12 @@ public final class CelImplTest {
   public void program_enumTypeReferenceResolution(@TestParameter boolean resolveTypeDependencies)
       throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             .setOptions(
-                CelOptions.current().resolveTypeDependencies(resolveTypeDependencies).build())
+                CelOptions.current()
+                    .enableHeterogeneousNumericComparisons(true)
+                    .resolveTypeDependencies(resolveTypeDependencies)
+                    .build())
             .addMessageTypes(Struct.getDescriptor())
             .setResultType(StructTypeReference.create("google.protobuf.NullValue"))
             .setContainer(CelContainer.ofName("google.protobuf"))
@@ -1030,8 +1050,12 @@ public final class CelImplTest {
   @Test
   public void program_enumTypeTransitiveResolution() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
-            .setOptions(CelOptions.current().resolveTypeDependencies(true).build())
+        plannerCelBuilderWithMacros()
+            .setOptions(
+                CelOptions.current()
+                    .enableHeterogeneousNumericComparisons(true)
+                    .resolveTypeDependencies(true)
+                    .build())
             .addMessageTypes(Proto2ExtensionScopedMessage.getDescriptor())
             .setResultType(StructTypeReference.create("google.protobuf.NullValue"))
             .setContainer(CelContainer.ofName("google.protobuf"))
@@ -1049,7 +1073,7 @@ public final class CelImplTest {
   @Test
   public void compile_enumTypeIsEquivalentToInt() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             .addFileTypes(StandaloneGlobalEnum.getDescriptor().getFile())
             .addVar("enumVar", EnumType.create("enum", ImmutableMap.of("FOO", 0, "BAR", 1)))
             .setResultType(SimpleType.BOOL)
@@ -1063,8 +1087,12 @@ public final class CelImplTest {
   @Test
   public void compile_enumTypeTransitiveResolutionFailure() {
     Cel cel =
-        standardCelBuilderWithMacros()
-            .setOptions(CelOptions.current().resolveTypeDependencies(false).build())
+        plannerCelBuilderWithMacros()
+            .setOptions(
+                CelOptions.current()
+                    .enableHeterogeneousNumericComparisons(true)
+                    .resolveTypeDependencies(false)
+                    .build())
             .addMessageTypes(Proto2ExtensionScopedMessage.getDescriptor())
             .setResultType(StructTypeReference.create("google.protobuf.NullValue"))
             .setContainer(CelContainer.ofName("google.protobuf"))
@@ -1099,7 +1127,7 @@ public final class CelImplTest {
     FileDescriptor enumFileDescriptor =
         FileDescriptor.buildFrom(enumFileDescriptorProto, new FileDescriptor[] {});
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             .setContainer(CelContainer.ofName("dev.cel.testing.testdata"))
             .addFileTypes(enumFileDescriptor)
             .addFileTypes(StandaloneGlobalEnum.getDescriptor().getFile())
@@ -1112,7 +1140,7 @@ public final class CelImplTest {
   @Test
   public void program_customVarResolver() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             .addDeclarations(
                 Decl.newBuilder()
                     .setName("variable")
@@ -1130,18 +1158,18 @@ public final class CelImplTest {
 
   @Test
   public void program_wrongTypeComprehensionThrows() throws Exception {
-    Cel cel = standardCelBuilderWithMacros().setResultType(SimpleType.BOOL).build();
+    Cel cel = plannerCelBuilderWithMacros().setResultType(SimpleType.BOOL).build();
     CelRuntime.Program program =
         cel.createProgram(cel.compile("dyn(42).exists(x, x != 'foo')").getAst());
 
     CelEvaluationException e = assertThrows(CelEvaluationException.class, program::eval);
 
-    assertThat(e).hasMessageThat().contains("expected a list or a map");
+    assertThat(e).hasMessageThat().contains("Unexpected iter_range type: class java.lang.Long");
   }
 
   @Test
   public void program_stringFormatInjection_throwsEvaluationException() throws Exception {
-    Cel cel = standardCelBuilderWithMacros().build();
+    Cel cel = plannerCelBuilderWithMacros().build();
     CelRuntime.Program program = cel.createProgram(cel.compile("{}['%2000222222s']").getAst());
 
     CelEvaluationException e = assertThrows(CelEvaluationException.class, program::eval);
@@ -1150,7 +1178,7 @@ public final class CelImplTest {
 
   @Test
   public void program_emptyTypeProviderConfig() throws Exception {
-    Cel cel = standardCelBuilderWithMacros().build();
+    Cel cel = plannerCelBuilderWithMacros().build();
     assertThat(cel.createProgram(cel.compile("true && !false").getAst()).eval()).isEqualTo(true);
   }
 
@@ -1158,7 +1186,7 @@ public final class CelImplTest {
   public void program_messageTypeAddedAsVarWithoutDescriptor_throwsHumanReadableError() {
     String packageName = CheckedExpr.getDescriptor().getFile().getPackage();
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             .addVar("parsedExprVar", CelProtoMessageTypes.createMessage(ParsedExpr.getDescriptor()))
             .build();
     CelValidationException exception =
@@ -1176,7 +1204,7 @@ public final class CelImplTest {
 
   @Test
   public void setOptions() throws Exception {
-    Cel cel = standardCelBuilderWithMacros().build();
+    Cel cel = plannerCelBuilderWithMacros().build();
     CelValidationResult result = cel.parse("!!!true");
     assertThat(result.hasError()).isFalse();
     assertThat(CelProtoAbstractSyntaxTree.fromCelAst(result.getAst()).toParsedExpr().getExpr())
@@ -1184,8 +1212,12 @@ public final class CelImplTest {
         .isEqualTo(NOT_EXPR);
 
     cel =
-        standardCelBuilderWithMacros()
-            .setOptions(CelOptions.newBuilder().retainRepeatedUnaryOperators(true).build())
+        plannerCelBuilderWithMacros()
+            .setOptions(
+                CelOptions.current()
+                    .enableHeterogeneousNumericComparisons(true)
+                    .retainRepeatedUnaryOperators(true)
+                    .build())
             .build();
     result = cel.parse("!!!true");
     assertThat(result.hasError()).isFalse();
@@ -1196,7 +1228,7 @@ public final class CelImplTest {
 
   @Test
   public void setStandardMacros() throws Exception {
-    Cel cel = standardCelBuilderWithMacros().setStandardMacros(CelStandardMacro.HAS).build();
+    Cel cel = plannerCelBuilderWithMacros().setStandardMacros(CelStandardMacro.HAS).build();
     assertValidationResult(cel.parse("has(a.b)"), PARSED_HAS_EXPR);
   }
 
@@ -1223,14 +1255,10 @@ public final class CelImplTest {
         .isEqualTo(checkedExpr);
   }
 
-  private CelVariableResolver fromMap(ImmutableMap<String, ?> m) {
-    return (String s) -> Optional.ofNullable(m.get(s));
-  }
-
   @Test
   public void programAdvanceEvaluation_unknownsBasic() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        legacyCelBuilderWithMacros()
             .setOptions(CelOptions.current().enableUnknownTracking(true).build())
             .addVar("a", SimpleType.BOOL)
             .addVar("b", SimpleType.BOOL)
@@ -1258,7 +1286,7 @@ public final class CelImplTest {
   @Test
   public void programAdvanceEvaluation_attributesIgnoredIfDisabled() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        legacyCelBuilderWithMacros()
             .setOptions(CelOptions.current().enableUnknownTracking(false).build())
             .addVar("a", SimpleType.BOOL)
             .addVar("b", SimpleType.BOOL)
@@ -1281,7 +1309,7 @@ public final class CelImplTest {
   @Test
   public void programAdvanceEvaluation_logicOperatorTypeMismatchThrows() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        legacyCelBuilderWithMacros()
             .setOptions(CelOptions.current().enableUnknownTracking(true).build())
             .addVar("a", SimpleType.BOOL)
             .addFunctionBindings()
@@ -1303,7 +1331,7 @@ public final class CelImplTest {
   @Test
   public void programAdvanceEvaluation_unknownsCollection() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        legacyCelBuilderWithMacros()
             .setOptions(CelOptions.current().enableUnknownTracking(true).build())
             .addVar("a", SimpleType.BOOL)
             .addVar("b", SimpleType.BOOL)
@@ -1334,7 +1362,7 @@ public final class CelImplTest {
   @Test
   public void programAdvanceEvaluation_unknownsNamespaceSupport() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        legacyCelBuilderWithMacros()
             .setOptions(CelOptions.current().enableUnknownTracking(true).build())
             .addVar("com.google.a", SimpleType.BOOL)
             .addVar("com.google.b", SimpleType.BOOL)
@@ -1363,7 +1391,7 @@ public final class CelImplTest {
   @Test
   public void programAdvanceEvaluation_unknownsIterativeEvalExample() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        legacyCelBuilderWithMacros()
             .setOptions(CelOptions.current().enableUnknownTracking(true).build())
             .addVar("com.google.a", SimpleType.BOOL)
             .addVar("com.google.b", SimpleType.BOOL)
@@ -1390,7 +1418,7 @@ public final class CelImplTest {
   @Test
   public void programAdvanceEvaluation_nestedSelect() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        legacyCelBuilderWithMacros()
             .setOptions(CelOptions.current().enableUnknownTracking(true).build())
             .addVar("com", MapType.create(SimpleType.STRING, SimpleType.DYN))
             .addFunctionBindings()
@@ -1410,7 +1438,7 @@ public final class CelImplTest {
   @Test
   public void programAdvanceEvaluation_argumentMergeErrorPriority() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        legacyCelBuilderWithMacros()
             .setOptions(CelOptions.current().enableUnknownTracking(true).build())
             .addVar("unk", SimpleType.BOOL)
             .addDeclarations(
@@ -1451,7 +1479,7 @@ public final class CelImplTest {
   @Test
   public void programAdvanceEvaluation_argumentMergeUnknowns() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        legacyCelBuilderWithMacros()
             .setOptions(CelOptions.current().enableUnknownTracking(true).build())
             .addVar("unk.a", SimpleType.BOOL)
             .addVar("unk.b", SimpleType.BOOL)
@@ -1494,7 +1522,7 @@ public final class CelImplTest {
   @Test
   public void programAdvanceEvaluation_mapSelectUnknowns() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        legacyCelBuilderWithMacros()
             .setOptions(CelOptions.current().enableUnknownTracking(true).build())
             .addVar("unk", MapType.create(SimpleType.STRING, SimpleType.BOOL))
             .setContainer(CelContainer.ofName(""))
@@ -1520,7 +1548,7 @@ public final class CelImplTest {
   @Test
   public void programAdvanceEvaluation_mapIndexUnknowns() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        legacyCelBuilderWithMacros()
             .setOptions(CelOptions.current().enableUnknownTracking(true).build())
             .addVar("unk", MapType.create(SimpleType.STRING, SimpleType.BOOL))
             .setContainer(CelContainer.ofName(""))
@@ -1549,7 +1577,7 @@ public final class CelImplTest {
   @Test
   public void programAdvanceEvaluation_listIndexUnknowns() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        legacyCelBuilderWithMacros()
             .setOptions(CelOptions.current().enableUnknownTracking(true).build())
             .addVar("unk", ListType.create(SimpleType.BOOL))
             .setContainer(CelContainer.ofName(""))
@@ -1578,7 +1606,7 @@ public final class CelImplTest {
   @Test
   public void programAdvanceEvaluation_indexOnUnknownContainer() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        legacyCelBuilderWithMacros()
             .setOptions(CelOptions.current().enableUnknownTracking(true).build())
             .addVar("unk", ListType.create(SimpleType.BOOL))
             .setContainer(CelContainer.ofName(""))
@@ -1600,7 +1628,7 @@ public final class CelImplTest {
   @Test
   public void programAdvanceEvaluation_unsupportedIndexIgnored() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        legacyCelBuilderWithMacros()
             .setOptions(CelOptions.current().enableUnknownTracking(true).build())
             .addVar("unk", MapType.create(SimpleType.STRING, SimpleType.BOOL))
             .setContainer(CelContainer.ofName(""))
@@ -1637,7 +1665,7 @@ public final class CelImplTest {
   @Test
   public void programAdvanceEvaluation_listIndexMacroTracking() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        legacyCelBuilderWithMacros()
             .setOptions(CelOptions.current().enableUnknownTracking(true).build())
             .addVar("testList", ListType.create(SimpleType.BOOL))
             .setContainer(CelContainer.ofName(""))
@@ -1670,7 +1698,7 @@ public final class CelImplTest {
   @Test
   public void programAdvanceEvaluation_mapIndexMacroTracking() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        legacyCelBuilderWithMacros()
             .setOptions(CelOptions.current().enableUnknownTracking(true).build())
             .addVar("testMap", MapType.create(SimpleType.STRING, SimpleType.BOOL))
             .setContainer(CelContainer.ofName(""))
@@ -1718,7 +1746,7 @@ public final class CelImplTest {
   @Test
   public void programAdvanceEvaluation_boolOperatorMergeUnknownPriority() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        legacyCelBuilderWithMacros()
             .setOptions(CelOptions.current().enableUnknownTracking(true).build())
             .addVarDeclarations(
                 CelVarDecl.newVarDeclaration("unk", SimpleType.BOOL),
@@ -1742,7 +1770,7 @@ public final class CelImplTest {
   @Test
   public void programAdvanceEvaluation_partialUnknownMapEntryPropagates() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        legacyCelBuilderWithMacros()
             .setOptions(CelOptions.current().enableUnknownTracking(true).build())
             .addVarDeclarations(
                 ImmutableList.of(
@@ -1775,7 +1803,7 @@ public final class CelImplTest {
   @Test
   public void programAdvanceEvaluation_partialUnknownListElementPropagates() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        legacyCelBuilderWithMacros()
             .setOptions(CelOptions.current().enableUnknownTracking(true).build())
             .addVar("partialList1", ListType.create(SimpleType.INT))
             .addVar("partialList2", ListType.create(SimpleType.INT))
@@ -1804,7 +1832,7 @@ public final class CelImplTest {
   @Test
   public void programAdvanceEvaluation_partialUnknownMessageFieldPropagates() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        legacyCelBuilderWithMacros()
             .setOptions(CelOptions.current().enableUnknownTracking(true).build())
             .addMessageTypes(TestAllTypes.getDescriptor())
             .addVar(
@@ -1869,7 +1897,7 @@ public final class CelImplTest {
           }
         };
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.plannerCelBuilder()
             .addVar("x", SimpleType.INT)
             .addFunctionDeclarations(
                 newFunctionDeclaration(
@@ -1892,7 +1920,7 @@ public final class CelImplTest {
   @SuppressWarnings("unchecked") // test only
   public void program_functionParamWithWellKnownType() throws Exception {
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.plannerCelBuilder()
             .addFunctionDeclarations(
                 newFunctionDeclaration(
                     "hasStringValue",
@@ -1921,7 +1949,7 @@ public final class CelImplTest {
   @Test
   public void program_nativeTypeUnknownsEnabled_asIdentifiers() throws Exception {
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.legacyCelBuilder()
             .addVar("x", SimpleType.BOOL)
             .addVar("y", SimpleType.BOOL)
             .setOptions(CelOptions.current().build())
@@ -1937,7 +1965,7 @@ public final class CelImplTest {
   @Test
   public void program_nativeTypeUnknownsEnabled_asCallArguments() throws Exception {
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.legacyCelBuilder()
             .addVar("x", SimpleType.BOOL)
             .addFunctionDeclarations(
                 newFunctionDeclaration(
@@ -1954,8 +1982,9 @@ public final class CelImplTest {
 
   @Test
   public void program_comprehensionDisabled_throws() throws Exception {
+    // TODO: Planner ExecutionFrame ignores CelOptions.enableComprehension(false).
     Cel cel =
-        standardCelBuilderWithMacros()
+        legacyCelBuilderWithMacros()
             .setOptions(CelOptions.current().enableComprehension(false).build())
             .build();
     CelAbstractSyntaxTree ast = cel.compile("['foo', 'bar'].map(x, x)").getAst();
@@ -1969,8 +1998,12 @@ public final class CelImplTest {
   @Test
   public void program_regexProgramSizeUnderLimit_success() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
-            .setOptions(CelOptions.current().maxRegexProgramSize(7).build())
+        plannerCelBuilderWithMacros()
+            .setOptions(
+                CelOptions.current()
+                    .enableHeterogeneousNumericComparisons(true)
+                    .maxRegexProgramSize(7)
+                    .build())
             .build();
     // See
     // https://github.com/google/re2j/blob/84237cbbd0fbd637c6eb6856717c1e248daae729/javatests/com/google/re2j/PatternTest.java#L175 for program size
@@ -1982,8 +2015,12 @@ public final class CelImplTest {
   @Test
   public void program_regexProgramSizeExceedsLimit_throws() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
-            .setOptions(CelOptions.current().maxRegexProgramSize(6).build())
+        plannerCelBuilderWithMacros()
+            .setOptions(
+                CelOptions.current()
+                    .enableHeterogeneousNumericComparisons(true)
+                    .maxRegexProgramSize(6)
+                    .build())
             .build();
     // See
     // https://github.com/google/re2j/blob/84237cbbd0fbd637c6eb6856717c1e248daae729/javatests/com/google/re2j/PatternTest.java#L175 for program size
@@ -2004,7 +2041,7 @@ public final class CelImplTest {
   public void program_evaluateCanonicalTypesToNativeTypesDisabled_producesProtoValues()
       throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        legacyCelBuilderWithMacros()
             .setOptions(CelOptions.current().evaluateCanonicalTypesToNativeValues(false).build())
             .build();
     CelAbstractSyntaxTree ast = cel.compile("[null, {b'abc': null}]").getAst();
@@ -2020,7 +2057,7 @@ public final class CelImplTest {
   public void program_evaluateCanonicalTypesToNativeTypesDisabled_producesBytesProto()
       throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        legacyCelBuilderWithMacros()
             .addMessageTypes(TestAllTypes.getDescriptor())
             .setContainer(CelContainer.ofName("cel.expr.conformance.proto3"))
             .setOptions(CelOptions.current().evaluateCanonicalTypesToNativeValues(false).build())
@@ -2067,7 +2104,7 @@ public final class CelImplTest {
             ExtensionRegistry.getEmptyRegistry());
     // Setup CEL environment with the same descriptors obtained from FDS
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             .addMessageTypes(descriptors)
             // CEL-Internal-2
             .setContainer(CelContainer.ofName("cel.expr.conformance.proto3"))
@@ -2083,7 +2120,7 @@ public final class CelImplTest {
 
   @Test
   public void toBuilder_isImmutable() {
-    CelBuilder celBuilder = CelFactory.standardCelBuilder();
+    CelBuilder celBuilder = CelFactory.plannerCelBuilder();
     CelImpl celImpl = (CelImpl) celBuilder.build();
 
     CelImpl.Builder newCelBuilder = (CelImpl.Builder) celImpl.toCelBuilder();
@@ -2092,8 +2129,7 @@ public final class CelImplTest {
         (CelCheckerLegacyImpl.Builder) celImpl.toCheckerBuilder();
     CelCompilerImpl.Builder newCompilerBuilder =
         (CelCompilerImpl.Builder) celImpl.toCompilerBuilder();
-    CelRuntimeLegacyImpl.Builder newRuntimeBuilder =
-        (CelRuntimeLegacyImpl.Builder) celImpl.toRuntimeBuilder();
+    CelRuntimeBuilder newRuntimeBuilder = celImpl.toRuntimeBuilder();
 
     assertThat(newCelBuilder).isNotEqualTo(celBuilder);
     assertThat(newParserBuilder).isNotEqualTo(celImpl.toParserBuilder());
@@ -2198,12 +2234,20 @@ public final class CelImplTest {
         CelCompilerFactory.standardCelCompilerBuilder()
             .addVar("file", StructTypeReference.create(SingleFile.getDescriptor().getFullName()))
             .addMessageTypes(SingleFile.getDescriptor())
-            .setOptions(CelOptions.current().enableJsonFieldNames(true).build())
+            .setOptions(
+                CelOptions.current()
+                    .enableHeterogeneousNumericComparisons(true)
+                    .enableJsonFieldNames(true)
+                    .build())
             .build();
     CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
+        CelRuntimeFactory.plannerRuntimeBuilder()
             .addMessageTypes(SingleFile.getDescriptor())
-            .setOptions(CelOptions.current().enableJsonFieldNames(false).build())
+            .setOptions(
+                CelOptions.current()
+                    .enableHeterogeneousNumericComparisons(true)
+                    .enableJsonFieldNames(false)
+                    .build())
             .build();
     CelAbstractSyntaxTree ast = celCompiler.compile("file.int64CamelCaseJsonName").getAst();
 
@@ -2224,10 +2268,14 @@ public final class CelImplTest {
   @Test
   public void compile_withJsonFieldName_astTagged() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             .addVar("file", StructTypeReference.create(SingleFile.getDescriptor().getFullName()))
             .addMessageTypes(SingleFile.getDescriptor())
-            .setOptions(CelOptions.current().enableJsonFieldNames(true).build())
+            .setOptions(
+                CelOptions.current()
+                    .enableHeterogeneousNumericComparisons(true)
+                    .enableJsonFieldNames(true)
+                    .build())
             .build();
     CelAbstractSyntaxTree ast = cel.compile("file.int64CamelCaseJsonName").getAst();
 
@@ -2240,10 +2288,14 @@ public final class CelImplTest {
   @Test
   public void compile_withJsonFieldName_protoFieldNameComparison_throws() throws Exception {
     Cel cel =
-        standardCelBuilderWithMacros()
+        plannerCelBuilderWithMacros()
             .addVar("file", StructTypeReference.create(SingleFile.getDescriptor().getFullName()))
             .addMessageTypes(SingleFile.getDescriptor())
-            .setOptions(CelOptions.current().enableJsonFieldNames(true).build())
+            .setOptions(
+                CelOptions.current()
+                    .enableHeterogeneousNumericComparisons(true)
+                    .enableJsonFieldNames(true)
+                    .build())
             .build();
 
     CelValidationException e =
@@ -2251,6 +2303,59 @@ public final class CelImplTest {
             CelValidationException.class,
             () -> cel.compile("file.camelCased == file.snake_cased").getAst());
     assertThat(e).hasMessageThat().contains("undefined field 'snake_cased'");
+  }
+
+  @Test
+  public void plannerCelBuilder_setStandardDeclarationsAndFunctions_subsetsEnvironment()
+      throws Exception {
+    Cel cel =
+        CelFactory.plannerCelBuilder()
+            .setStandardDeclarations(
+                CelStandardDeclarations.newBuilder()
+                    .includeFunctions(CelStandardDeclarations.StandardFunction.ADD)
+                    .build())
+            .setStandardFunctions(
+                CelStandardFunctions.newBuilder()
+                    .includeFunctions(CelStandardFunctions.StandardFunction.ADD)
+                    .build())
+            .build();
+
+    CelAbstractSyntaxTree ast = cel.compile("1 + 1").getAst();
+    assertThat(cel.createProgram(ast).eval()).isEqualTo(2L);
+
+    CelValidationException validationException =
+        assertThrows(CelValidationException.class, () -> cel.compile("1 - 1").getAst());
+    assertThat(validationException).hasMessageThat().contains("undeclared reference to '_-_'");
+  }
+
+  private static CelBuilder plannerCelBuilderWithMacros() {
+    return CelFactory.plannerCelBuilder().setStandardMacros(CelStandardMacro.STANDARD_MACROS);
+  }
+
+  private static CelBuilder legacyCelBuilderWithMacros() {
+    return CelFactory.legacyCelBuilder().setStandardMacros(CelStandardMacro.STANDARD_MACROS);
+  }
+
+  private static CelVariableResolver fromMap(ImmutableMap<String, ?> m) {
+    return (String s) -> Optional.ofNullable(m.get(s));
+  }
+
+  private static Cel setupEnv(CelBuilder celBuilder) {
+    ExtensionRegistry extensionRegistry = ExtensionRegistry.newInstance();
+    SingleFileExtensionsProto.registerAllExtensions(extensionRegistry);
+    return celBuilder
+        .addVar("file", StructTypeReference.create(SingleFile.getDescriptor().getFullName()))
+        .addMessageTypes(SingleFile.getDescriptor())
+        .addFileTypes(SingleFileExtensionsProto.getDescriptor())
+        .addCompilerLibraries(CelExtensions.protos())
+        .setExtensionRegistry(extensionRegistry)
+        .setOptions(
+            CelOptions.current()
+                .enableJsonFieldNames(true)
+                .enableHeterogeneousNumericComparisons(true)
+                .enableQuotedIdentifierSyntax(true)
+                .build())
+        .build();
   }
 
   private static TypeProvider aliasingProvider(ImmutableMap<String, Type> typeAliases) {
@@ -2277,46 +2382,5 @@ public final class CelImplTest {
         return null;
       }
     };
-  }
-
-  private static Cel setupEnv(CelBuilder celBuilder) {
-    ExtensionRegistry extensionRegistry = ExtensionRegistry.newInstance();
-    SingleFileExtensionsProto.registerAllExtensions(extensionRegistry);
-    return celBuilder
-        .addVar("file", StructTypeReference.create(SingleFile.getDescriptor().getFullName()))
-        .addMessageTypes(SingleFile.getDescriptor())
-        .addFileTypes(SingleFileExtensionsProto.getDescriptor())
-        .addCompilerLibraries(CelExtensions.protos())
-        .setExtensionRegistry(extensionRegistry)
-        .setOptions(
-            CelOptions.current()
-                .enableJsonFieldNames(true)
-                .enableHeterogeneousNumericComparisons(true)
-                .enableQuotedIdentifierSyntax(true)
-                .build())
-        .build();
-  }
-
-  @Test
-  public void plannerCelBuilder_setStandardDeclarationsAndFunctions_subsetsEnvironment()
-      throws Exception {
-    Cel cel =
-        CelFactory.plannerCelBuilder()
-            .setStandardDeclarations(
-                CelStandardDeclarations.newBuilder()
-                    .includeFunctions(CelStandardDeclarations.StandardFunction.ADD)
-                    .build())
-            .setStandardFunctions(
-                CelStandardFunctions.newBuilder()
-                    .includeFunctions(CelStandardFunctions.StandardFunction.ADD)
-                    .build())
-            .build();
-
-    CelAbstractSyntaxTree ast = cel.compile("1 + 1").getAst();
-    assertThat(cel.createProgram(ast).eval()).isEqualTo(2L);
-
-    CelValidationException validationException =
-        assertThrows(CelValidationException.class, () -> cel.compile("1 - 1").getAst());
-    assertThat(validationException).hasMessageThat().contains("undeclared reference to '_-_'");
   }
 }

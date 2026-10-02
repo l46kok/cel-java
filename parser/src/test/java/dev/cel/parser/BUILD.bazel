@@ -39,7 +39,6 @@ java_library(
         "//parser:lite_parser_factory",
         "//parser:macro",
         "//parser:parser_builder",
-        "//parser:parser_factory",
         "//parser:pratt_parser",
         "//parser:unparser",
         "//parser:unparser_visitor",

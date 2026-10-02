@@ -39,7 +39,7 @@ public class CustomVariableBindingUserTest extends CelUserTestTemplate {
 
     return CelTestContext.newBuilder()
         .setCel(
-            CelFactory.standardCelBuilder()
+            CelFactory.plannerCelBuilder()
                 .addMessageTypes(TestAllTypes.getDescriptor())
                 .addFileTypes(TestAllTypesExtensions.getDescriptor())
                 .setExtensionRegistry(registry)

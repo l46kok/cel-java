@@ -33,6 +33,8 @@ java_library(
         "//common:cel_descriptor_util",
         "//common:cel_descriptors",
         "//common:cel_exception",
+        "//common:cel_function_decl",
+        "//common:cel_overload_decl",
         "//common:cel_source",
         "//common:compiler_common",
         "//common:container",
@@ -168,7 +170,7 @@ java_library(
     deps = [
         ":abstract_planner_interpreter_test",
         "//common:cel_ast",
-        "//common:compiler_common",
+        "//common:cel_validation_exception",
         "//common:container",
         "//common:options",
         "//common/types:type_providers",

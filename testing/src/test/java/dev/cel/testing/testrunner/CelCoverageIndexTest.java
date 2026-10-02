@@ -40,7 +40,7 @@ public final class CelCoverageIndexTest {
   @Test
   public void getCoverageReport_fullCoverage() throws Exception {
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.plannerCelBuilder()
             .addVar("x", SimpleType.INT)
             .addVar("y", SimpleType.INT)
             .build();
@@ -69,7 +69,7 @@ public final class CelCoverageIndexTest {
   @Test
   public void getCoverageReport_partialCoverage_shortCircuit() throws Exception {
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.plannerCelBuilder()
             .addVar("x", SimpleType.INT)
             .addVar("y", SimpleType.INT)
             .build();
@@ -98,7 +98,7 @@ public final class CelCoverageIndexTest {
 
   @Test
   public void getCoverageReport_comprehension_generatesDotGraph() throws Exception {
-    Cel cel = CelFactory.standardCelBuilder().build();
+    Cel cel = CelFactory.plannerCelBuilder().build();
     CelCompiler compiler =
         cel.toCompilerBuilder()
             .setOptions(CelOptions.newBuilder().populateMacroCalls(true).build())
@@ -130,7 +130,7 @@ public final class CelCoverageIndexTest {
   @Test
   public void getCoverageReport_fullCoverage_writesToUndeclaredOutputs() throws Exception {
     // Setup for a more complex graph to write.
-    Cel cel = CelFactory.standardCelBuilder().build();
+    Cel cel = CelFactory.plannerCelBuilder().build();
     CelCompiler compiler =
         cel.toCompilerBuilder()
             .setOptions(CelOptions.newBuilder().populateMacroCalls(true).build())
@@ -157,7 +157,7 @@ public final class CelCoverageIndexTest {
 
   @Test
   public void getCoverageReport_fullCoverage_multipleEvaluations() throws Exception {
-    Cel cel = CelFactory.standardCelBuilder().addVar("x", SimpleType.INT).build();
+    Cel cel = CelFactory.plannerCelBuilder().addVar("x", SimpleType.INT).build();
     CelAbstractSyntaxTree ast = cel.compile("x > 1").getAst();
     CelRuntime.Program program = cel.createProgram(ast);
     CelCoverageIndex coverageIndex = new CelCoverageIndex();

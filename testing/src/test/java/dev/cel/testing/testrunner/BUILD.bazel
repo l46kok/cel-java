@@ -39,6 +39,7 @@ java_library(
     name = "late_function_binding_user_test",
     srcs = ["LateFunctionBindingUserTest.java"],
     deps = [
+        "//bundle:cel",
         "//runtime",
         "//runtime:function_binding",
         "//testing/testrunner:cel_test_context",

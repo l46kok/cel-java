@@ -26,6 +26,6 @@ import org.junit.runners.Parameterized;
 public class EnvConfigUserTest extends CelUserTestTemplate {
 
   public EnvConfigUserTest() {
-    super(CelTestContext.newBuilder().setCel(CelFactory.standardCelBuilder().build()).build());
+    super(CelTestContext.newBuilder().setCel(CelFactory.plannerCelBuilder().build()).build());
   }
 }

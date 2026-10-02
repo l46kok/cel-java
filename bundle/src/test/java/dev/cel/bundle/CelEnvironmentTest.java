@@ -41,6 +41,9 @@ import org.junit.runner.RunWith;
 @RunWith(TestParameterInjector.class)
 public class CelEnvironmentTest {
 
+  private static final CelOptions CEL_OPTIONS =
+      CelOptions.current().enableHeterogeneousNumericComparisons(true).build();
+
   @Test
   public void newBuilder_defaults() {
     CelEnvironment environment = CelEnvironment.newBuilder().build();
@@ -90,7 +93,7 @@ public class CelEnvironmentTest {
     CelEnvironment environment =
         CelEnvironment.newBuilder().addExtensions(extensionConfigs).build();
 
-    Cel cel = environment.extend(CelFactory.standardCelBuilder().build(), CelOptions.DEFAULT);
+    Cel cel = environment.extend(CelFactory.plannerCelBuilder().build(), CEL_OPTIONS);
     CelAbstractSyntaxTree ast =
         cel.compile(
                 "cel.bind(x, 10, math.greatest([1,x])) < int(' 11  '.trim()) &&"
@@ -116,7 +119,7 @@ public class CelEnvironmentTest {
 
     Cel cel =
         environment.extend(
-            CelFactory.standardCelBuilder()
+            CelFactory.plannerCelBuilder()
                 .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
                 .build(),
             CelOptions.DEFAULT);
@@ -140,10 +143,10 @@ public class CelEnvironmentTest {
 
     Cel cel =
         environment.extend(
-            CelFactory.standardCelBuilder()
+            CelFactory.plannerCelBuilder()
                 .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
                 .build(),
-            CelOptions.DEFAULT);
+            CEL_OPTIONS);
     CelOptions checkerOptions = cel.toCheckerBuilder().options();
     assertThat(checkerOptions.maxExpressionCodePointSize()).isEqualTo(20);
     assertThat(checkerOptions.maxParseErrorRecoveryLimit()).isEqualTo(10);
@@ -169,10 +172,10 @@ public class CelEnvironmentTest {
 
     Cel cel =
         environment.extend(
-            CelFactory.legacyCelBuilder()
+            CelFactory.plannerCelBuilder()
                 .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
                 .build(),
-            CelOptions.DEFAULT);
+            CEL_OPTIONS);
     CelOptions checkerOptions = cel.toCheckerBuilder().options();
     assertThat(checkerOptions.maxParseExpressionNodeCount()).isEqualTo(2);
 
@@ -193,10 +196,10 @@ public class CelEnvironmentTest {
             IllegalArgumentException.class,
             () ->
                 environment.extend(
-                    CelFactory.standardCelBuilder()
+                    CelFactory.plannerCelBuilder()
                         .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
                         .build(),
-                    CelOptions.DEFAULT));
+                    CEL_OPTIONS));
     assertThat(e).hasMessageThat().contains("Unknown feature flag: unknown.feature");
   }
 
@@ -212,10 +215,10 @@ public class CelEnvironmentTest {
             IllegalArgumentException.class,
             () ->
                 environment.extend(
-                    CelFactory.standardCelBuilder()
+                    CelFactory.plannerCelBuilder()
                         .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
                         .build(),
-                    CelOptions.DEFAULT));
+                    CEL_OPTIONS));
     assertThat(e).hasMessageThat().contains("Unknown limit: unknown.limit");
   }
 
@@ -224,7 +227,7 @@ public class CelEnvironmentTest {
     CelEnvironment environment =
         CelEnvironment.newBuilder().addExtensions(ExtensionConfig.of("math", 1)).build();
 
-    Cel cel = environment.extend(CelFactory.standardCelBuilder().build(), CelOptions.DEFAULT);
+    Cel cel = environment.extend(CelFactory.plannerCelBuilder().build(), CEL_OPTIONS);
     CelAbstractSyntaxTree ast1 = cel.compile("math.abs(-4)").getAst();
     assertThat(cel.createProgram(ast1).eval()).isEqualTo(4);
 
@@ -244,7 +247,7 @@ public class CelEnvironmentTest {
     CelEnvironment environment =
         CelEnvironment.newBuilder().addExtensions(ExtensionConfig.latest("math")).build();
 
-    Cel cel = environment.extend(CelFactory.standardCelBuilder().build(), CelOptions.DEFAULT);
+    Cel cel = environment.extend(CelFactory.plannerCelBuilder().build(), CEL_OPTIONS);
     CelAbstractSyntaxTree ast = cel.compile("math.sqrt(4)").getAst();
     double result = (double) cel.createProgram(ast).eval();
     assertThat(result).isEqualTo(2.0);
@@ -259,7 +262,7 @@ public class CelEnvironmentTest {
             assertThrows(
                 CelEnvironmentException.class,
                 () -> {
-                  environment.extend(CelFactory.standardCelBuilder().build(), CelOptions.DEFAULT);
+                  environment.extend(CelFactory.plannerCelBuilder().build(), CEL_OPTIONS);
                 }))
         .hasMessageThat()
         .contains("Unsupported 'math' extension version -5");

@@ -51,7 +51,7 @@ public class DefaultResultMatcherTest {
     IllegalArgumentException thrown =
         assertThrows(
             IllegalArgumentException.class,
-            () -> MATCHER.match(params, CelFactory.standardCelBuilder().build()));
+            () -> MATCHER.match(params, CelFactory.plannerCelBuilder().build()));
 
     assertThat(thrown)
         .hasMessageThat()
@@ -73,7 +73,7 @@ public class DefaultResultMatcherTest {
     AssertionError thrown =
         assertThrows(
             AssertionError.class,
-            () -> MATCHER.match(params, CelFactory.standardCelBuilder().build()));
+            () -> MATCHER.match(params, CelFactory.plannerCelBuilder().build()));
 
     assertThat(thrown).hasMessageThat().contains("Error: evaluation error");
   }
@@ -97,7 +97,7 @@ public class DefaultResultMatcherTest {
     AssertionError thrown =
         assertThrows(
             AssertionError.class,
-            () -> MATCHER.match(params, CelFactory.standardCelBuilder().build()));
+            () -> MATCHER.match(params, CelFactory.plannerCelBuilder().build()));
 
     assertThat(thrown).hasMessageThat().contains("Error: evaluation error");
   }
@@ -119,7 +119,7 @@ public class DefaultResultMatcherTest {
     AssertionError thrown =
         assertThrows(
             AssertionError.class,
-            () -> MATCHER.match(params, CelFactory.standardCelBuilder().build()));
+            () -> MATCHER.match(params, CelFactory.plannerCelBuilder().build()));
 
     assertThat(thrown)
         .hasMessageThat()

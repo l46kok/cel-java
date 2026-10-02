@@ -122,6 +122,8 @@ public class CelMathExtensionsTest {
   @TestParameters("{expr: 'math.greatest(14u, 15.0)', expectedResult: 15.0}")
   @TestParameters("{expr: 'math.greatest(1, 1.797693e308)', expectedResult: 1.797693e308}")
   @TestParameters("{expr: 'math.greatest(1.797693e308, 1)', expectedResult: 1.797693e308}")
+  @TestParameters("{expr: 'math.greatest(1u, 1.797693e308)', expectedResult: 1.797693e308}")
+  @TestParameters("{expr: 'math.greatest(1.797693e308, 1u)', expectedResult: 1.797693e308}")
   @TestParameters("{expr: 'math.greatest(-1.797693e308, 1.0)', expectedResult: 1.0}")
   @TestParameters("{expr: 'math.greatest(1.0, -1.797693e308)', expectedResult: 1.0}")
   @TestParameters("{expr: 'math.greatest(1.0, 1.0, 1.0)', expectedResult: 1.0}")
@@ -130,6 +132,7 @@ public class CelMathExtensionsTest {
   @TestParameters("{expr: 'math.greatest(-1.0, 1.0, 0)', expectedResult: 1.0}")
   @TestParameters("{expr: 'math.greatest(dyn(1.0), 1.0, 1.0)', expectedResult: 1}")
   @TestParameters("{expr: 'math.greatest(5.0, 1.0, 3u)', expectedResult: 5.0}")
+  @TestParameters("{expr: 'math.greatest(5.0, 1.0, dyn(3u))', expectedResult: 5.0}")
   @TestParameters("{expr: 'math.greatest(5.4, 10.0, 3u, -5.0, 3.5)', expectedResult: 10}")
   @TestParameters(
       "{expr: 'math.greatest(5.4, 10, 3u, -5.0, 1.797693e308)', expectedResult:" + " 1.797693e308}")
@@ -141,44 +144,6 @@ public class CelMathExtensionsTest {
           + " 10.0}")
   public void greatest_doubleResult_success(String expr, double expectedResult) throws Exception {
     Object result = eval(expr);
-
-    assertThat(result).isEqualTo(expectedResult);
-  }
-
-  @Test
-  @TestParameters("{expr: 'math.greatest(1.0, 1u)', expectedResult: '1.0'}")
-  @TestParameters("{expr: 'math.greatest(15.0, 14u)', expectedResult: '15.0'}")
-  @TestParameters("{expr: 'math.greatest(14u, 15.0)', expectedResult: '15.0'}")
-  @TestParameters("{expr: 'math.greatest(1u, 1.797693e308)', expectedResult: '1.797693e308'}")
-  @TestParameters("{expr: 'math.greatest(1.797693e308, 1u)', expectedResult: '1.797693e308'}")
-  @TestParameters("{expr: 'math.greatest(-1.797693e308, 1.0)', expectedResult: '1.0'}")
-  @TestParameters("{expr: 'math.greatest(5.0, 1.0, 3u)', expectedResult: '5.0'}")
-  @TestParameters("{expr: 'math.greatest(5.0, 1.0, dyn(3u))', expectedResult: '5.0'}")
-  @TestParameters("{expr: 'math.greatest(5.4, 10.0, 3u, -5.0, 3.5)', expectedResult: '10'}")
-  @TestParameters(
-      "{expr: 'math.greatest(5.4, 10, 3u, -5.0, 1.797693e308)', expectedResult: '1.797693e308'}")
-  @TestParameters(
-      "{expr: 'math.greatest(1.797693e308, 10, 3u, -5.0, 0)', expectedResult: '1.797693e308'}")
-  @TestParameters("{expr: 'math.greatest([5.4, 10.0, 3u, -5.0, 3.5])', expectedResult: '10'}")
-  @TestParameters(
-      "{expr: 'math.greatest([dyn(5.4), dyn(10.0), dyn(3u), dyn(-5.0), dyn(3.5)])', expectedResult:"
-          + " '10.0'}")
-  public void greatest_doubleResult_withUnsignedLongsEnabled_success(
-      String expr, double expectedResult) throws Exception {
-    CelOptions celOptions = CelOptions.DEFAULT;
-    CelCompiler celCompiler =
-        CelCompilerFactory.standardCelCompilerBuilder()
-            .setOptions(celOptions)
-            .addLibraries(CelExtensions.math())
-            .build();
-    CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
-            .setOptions(celOptions)
-            .addLibraries(CelExtensions.math())
-            .build();
-
-    CelAbstractSyntaxTree ast = celCompiler.compile(expr).getAst();
-    double result = (double) celRuntime.createProgram(ast).eval();
 
     assertThat(result).isEqualTo(expectedResult);
   }
@@ -216,20 +181,7 @@ public class CelMathExtensionsTest {
           + " '10'}")
   public void greatest_unsignedLongResult_withUnsignedLongType_success(
       String expr, String expectedResult) throws Exception {
-    CelOptions celOptions = CelOptions.DEFAULT;
-    CelCompiler celCompiler =
-        CelCompilerFactory.standardCelCompilerBuilder()
-            .setOptions(celOptions)
-            .addLibraries(CelExtensions.math())
-            .build();
-    CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
-            .setOptions(celOptions)
-            .addLibraries(CelExtensions.math())
-            .build();
-
-    CelAbstractSyntaxTree ast = celCompiler.compile(expr).getAst();
-    UnsignedLong result = (UnsignedLong) celRuntime.createProgram(ast).eval();
+    UnsignedLong result = (UnsignedLong) eval(expr);
 
     assertThat(result).isEqualTo(UnsignedLong.valueOf(expectedResult));
   }
@@ -386,6 +338,8 @@ public class CelMathExtensionsTest {
   @TestParameters("{expr: 'math.least(14u, 13.0)', expectedResult: 13.0}")
   @TestParameters("{expr: 'math.least(1, -1.797693e308)', expectedResult: -1.797693e308}")
   @TestParameters("{expr: 'math.least(-1.797693e308, 1)', expectedResult: -1.797693e308}")
+  @TestParameters("{expr: 'math.least(1u, -1.797693e308)', expectedResult: -1.797693e308}")
+  @TestParameters("{expr: 'math.least(-1.797693e308, 1u)', expectedResult: -1.797693e308}")
   @TestParameters("{expr: 'math.least(1.797693e308, 1.0)', expectedResult: 1.0}")
   @TestParameters("{expr: 'math.least(1.0, 1.797693e308)', expectedResult: 1.0}")
   @TestParameters("{expr: 'math.least(1.0, 1.0, 1.0)', expectedResult: 1.0}")
@@ -394,6 +348,7 @@ public class CelMathExtensionsTest {
   @TestParameters("{expr: 'math.least(-1.0, 1.0, 0)', expectedResult: -1.0}")
   @TestParameters("{expr: 'math.least(dyn(1.0), 1.0, 1.0)', expectedResult: 1.0}")
   @TestParameters("{expr: 'math.least(5.0, 1.0, 3u)', expectedResult: 1.0}")
+  @TestParameters("{expr: 'math.least(5.0, 1.0, dyn(3u))', expectedResult: 1.0}")
   @TestParameters("{expr: 'math.least(5.4, 10.0, 3u, -5.0, 3.5)', expectedResult: -5.0}")
   @TestParameters(
       "{expr: 'math.least(5.4, 10, 3u, -5.0, -1.797693e308)', expectedResult: -1.797693e308}")
@@ -405,44 +360,6 @@ public class CelMathExtensionsTest {
           + " -5.0}")
   public void least_doubleResult_success(String expr, double expectedResult) throws Exception {
     Object result = eval(expr);
-
-    assertThat(result).isEqualTo(expectedResult);
-  }
-
-  @Test
-  @TestParameters("{expr: 'math.least(1.0, 1u)', expectedResult: '1.0'}")
-  @TestParameters("{expr: 'math.least(13.0, 14u)', expectedResult: '13.0'}")
-  @TestParameters("{expr: 'math.least(14u, 13.0)', expectedResult: '13.0'}")
-  @TestParameters("{expr: 'math.least(1u, -1.797693e308)', expectedResult: '-1.797693e308'}")
-  @TestParameters("{expr: 'math.least(-1.797693e308, 1u)', expectedResult: '-1.797693e308'}")
-  @TestParameters("{expr: 'math.least(1.797693e308, 1.0)', expectedResult: '1.0'}")
-  @TestParameters("{expr: 'math.least(5.0, 1.0, 3u)', expectedResult: '1.0'}")
-  @TestParameters("{expr: 'math.least(5.0, 1.0, dyn(3u))', expectedResult: '1.0'}")
-  @TestParameters("{expr: 'math.least(5.4, 10.0, 3u, -5.0, 3.5)', expectedResult: '-5.0'}")
-  @TestParameters(
-      "{expr: 'math.least(5.4, 10, 3u, -5.0, -1.797693e308)', expectedResult: '-1.797693e308'}")
-  @TestParameters(
-      "{expr: 'math.least(-1.797693e308, 10, 3u, -5.0, 0)', expectedResult: '-1.797693e308'}")
-  @TestParameters("{expr: 'math.least([5.4, 10.0, 3u, -5.0, 3.5])', expectedResult: '-5.0'}")
-  @TestParameters(
-      "{expr: 'math.least([dyn(5.4), dyn(10.0), dyn(3u), dyn(-5.0), dyn(3.5)])', expectedResult:"
-          + " '-5.0'}")
-  public void least_doubleResult_withUnsignedLongsEnabled_success(
-      String expr, double expectedResult) throws Exception {
-    CelOptions celOptions = CelOptions.current().enableUnsignedLongs(true).build();
-    CelCompiler celCompiler =
-        CelCompilerFactory.standardCelCompilerBuilder()
-            .setOptions(celOptions)
-            .addLibraries(CelExtensions.math())
-            .build();
-    CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
-            .setOptions(celOptions)
-            .addLibraries(CelExtensions.math())
-            .build();
-
-    CelAbstractSyntaxTree ast = celCompiler.compile(expr).getAst();
-    double result = (double) celRuntime.createProgram(ast).eval();
 
     assertThat(result).isEqualTo(expectedResult);
   }
@@ -485,20 +402,7 @@ public class CelMathExtensionsTest {
           + " '3'}")
   public void least_unsignedLongResult_withUnsignedLongType_success(
       String expr, String expectedResult) throws Exception {
-    CelOptions celOptions = CelOptions.current().build();
-    CelCompiler celCompiler =
-        CelCompilerFactory.standardCelCompilerBuilder()
-            .setOptions(celOptions)
-            .addLibraries(CelExtensions.math())
-            .build();
-    CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
-            .setOptions(celOptions)
-            .addLibraries(CelExtensions.math())
-            .build();
-
-    CelAbstractSyntaxTree ast = celCompiler.compile(expr).getAst();
-    UnsignedLong result = (UnsignedLong) celRuntime.createProgram(ast).eval();
+    UnsignedLong result = (UnsignedLong) eval(expr);
 
     assertThat(result).isEqualTo(UnsignedLong.valueOf(expectedResult));
   }
@@ -1132,7 +1036,7 @@ public class CelMathExtensionsTest {
             .addLibraries(CelMathCompilerLibrary.math(0))
             .build();
     CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
+        CelRuntimeFactory.plannerRuntimeBuilder()
             .addFunctionBindings(CelMathRuntimeLibrary.math(0).newFunctionBindings())
             .build();
 
@@ -1151,7 +1055,7 @@ public class CelMathExtensionsTest {
             .addLibraries(CelMathCompilerLibrary.math(CelMathCompilerLibrary.Function.MAX))
             .build();
     CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
+        CelRuntimeFactory.plannerRuntimeBuilder()
             .addFunctionBindings(
                 CelMathRuntimeLibrary.math(CelMathRuntimeLibrary.Function.MAX)
                     .newFunctionBindings())

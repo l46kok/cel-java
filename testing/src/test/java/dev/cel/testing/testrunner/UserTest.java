@@ -31,7 +31,7 @@ public class UserTest extends CelUserTestTemplate {
     super(
         CelTestContext.newBuilder()
             .setCel(
-                CelFactory.standardCelBuilder()
+                CelFactory.plannerCelBuilder()
                     .addVar("resource", MapType.create(SimpleType.STRING, SimpleType.ANY))
                     .build())
             .build());

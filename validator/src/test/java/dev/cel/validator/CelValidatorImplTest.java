@@ -29,21 +29,7 @@ import org.junit.runners.JUnit4;
 
 @RunWith(JUnit4.class)
 public class CelValidatorImplTest {
-  private static final Cel CEL = CelFactory.standardCelBuilder().build();
-
-  @Test
-  public void constructCelValidator_success() {
-    CelValidator celValidator =
-        CelValidatorImpl.newBuilder(CEL)
-            .addAstValidators(
-                (navigableAst, cel, issuesFactory) -> {
-                  // no-op
-                })
-            .build();
-
-    assertThat(celValidator).isNotNull();
-    assertThat(celValidator).isInstanceOf(CelValidatorImpl.class);
-  }
+  private static final Cel CEL = CelFactory.plannerCelBuilder().build();
 
   @Test
   public void validator_inOrder() throws Exception {

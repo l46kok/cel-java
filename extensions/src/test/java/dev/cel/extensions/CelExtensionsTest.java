@@ -19,11 +19,11 @@ import static org.junit.Assert.assertThrows;
 
 import dev.cel.bundle.Cel;
 import dev.cel.bundle.CelFactory;
+import dev.cel.common.CelAbstractSyntaxTree;
 import dev.cel.common.CelOptions;
 import dev.cel.common.CelValidationException;
 import dev.cel.extensions.CelStringExtensions.Function;
 import dev.cel.runtime.CelEvaluationException;
-import dev.cel.runtime.CelRuntime;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -34,7 +34,7 @@ public class CelExtensionsTest {
   @Test
   public void addAllStringExtensions_success() throws Exception {
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.plannerCelBuilder()
             .addCompilerLibraries(CelExtensions.strings())
             .addRuntimeLibraries(CelExtensions.strings())
             .build();
@@ -55,7 +55,7 @@ public class CelExtensionsTest {
   public void addSubsetOfStringExtensions_success() throws Exception {
     CelStringExtensions extensions = CelExtensions.strings(Function.SUBSTRING, Function.CHAR_AT);
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.plannerCelBuilder()
             .addCompilerLibraries(extensions)
             .addRuntimeLibraries(extensions)
             .build();
@@ -71,7 +71,7 @@ public class CelExtensionsTest {
 
   @Test
   public void addStringExtensionsForRuntimeOnly_throwsValidationException() {
-    Cel cel = CelFactory.standardCelBuilder().addRuntimeLibraries(CelExtensions.strings()).build();
+    Cel cel = CelFactory.plannerCelBuilder().addRuntimeLibraries(CelExtensions.strings()).build();
 
     CelValidationException exception =
         assertThrows(
@@ -82,10 +82,11 @@ public class CelExtensionsTest {
 
   @Test
   public void addStringExtensionsForCompilerOnly_throwsEvaluationException() throws Exception {
-    Cel cel = CelFactory.standardCelBuilder().addCompilerLibraries(CelExtensions.strings()).build();
+    Cel cel = CelFactory.plannerCelBuilder().addCompilerLibraries(CelExtensions.strings()).build();
+    CelAbstractSyntaxTree ast = cel.compile("'abcd'.substring(1, 3)").getAst();
 
-    CelRuntime.Program program = cel.createProgram(cel.compile("'abcd'.substring(1, 3)").getAst());
-    CelEvaluationException exception = assertThrows(CelEvaluationException.class, program::eval);
+    CelEvaluationException exception =
+        assertThrows(CelEvaluationException.class, () -> cel.createProgram(ast));
 
     assertThat(exception)
         .hasMessageThat()
@@ -97,7 +98,7 @@ public class CelExtensionsTest {
   @Test
   public void addAllMathExtensions_success() throws Exception {
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.plannerCelBuilder()
             .addCompilerLibraries(CelExtensions.math())
             .addRuntimeLibraries(CelExtensions.math())
             .build();
@@ -112,7 +113,7 @@ public class CelExtensionsTest {
   @Test
   public void addSubsetOfMathExtensions_success() throws Exception {
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.plannerCelBuilder()
             .addCompilerLibraries(CelExtensions.math(CelMathExtensions.Function.MAX))
             .addRuntimeLibraries(CelExtensions.math(CelMathExtensions.Function.MAX))
             .build();
@@ -127,7 +128,7 @@ public class CelExtensionsTest {
   @Test
   public void addEncoderExtension_success() throws Exception {
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.plannerCelBuilder()
             .addCompilerLibraries(CelExtensions.encoders(CelOptions.DEFAULT))
             .addRuntimeLibraries(CelExtensions.encoders(CelOptions.DEFAULT))
             .build();

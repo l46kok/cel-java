@@ -37,7 +37,7 @@ import org.junit.runner.RunWith;
 public class ComprehensionNestingLimitValidatorTest {
 
   private static final Cel CEL =
-      CelFactory.standardCelBuilder()
+      CelFactory.plannerCelBuilder()
           .addCompilerLibraries(
               CelExtensions.optional(), CelExtensions.comprehensions(), CelExtensions.bindings())
           .addRuntimeLibraries(CelExtensions.optional(), CelExtensions.comprehensions())

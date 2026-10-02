@@ -24,6 +24,7 @@ import com.google.testing.junit.testparameterinjector.TestParameterInjector;
 import com.google.testing.junit.testparameterinjector.TestParameters;
 import dev.cel.bundle.Cel;
 import dev.cel.bundle.CelFactory;
+import dev.cel.checker.CelStandardDeclarations;
 import dev.cel.common.CelAbstractSyntaxTree;
 import dev.cel.common.CelIssue.Severity;
 import dev.cel.common.CelValidationResult;
@@ -31,6 +32,7 @@ import dev.cel.common.internal.ProtoTimeUtils;
 import dev.cel.common.types.SimpleType;
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelFunctionBinding;
+import dev.cel.runtime.CelStandardFunctions;
 import dev.cel.validator.CelValidator;
 import dev.cel.validator.CelValidatorFactory;
 import java.text.ParseException;
@@ -40,7 +42,7 @@ import org.junit.runner.RunWith;
 
 @RunWith(TestParameterInjector.class)
 public class DurationLiteralValidatorTest {
-  private static final Cel CEL = CelFactory.standardCelBuilder().build();
+  private static final Cel CEL = CelFactory.plannerCelBuilder().build();
 
   private static final CelValidator CEL_VALIDATOR =
       CelValidatorFactory.standardCelValidatorBuilder(CEL)
@@ -76,7 +78,7 @@ public class DurationLiteralValidatorTest {
 
   @Test
   public void duration_withVariable_noOp() throws Exception {
-    Cel cel = CelFactory.standardCelBuilder().addVar("str_var", SimpleType.STRING).build();
+    Cel cel = CelFactory.plannerCelBuilder().addVar("str_var", SimpleType.STRING).build();
     CelAbstractSyntaxTree ast = cel.compile("duration(str_var)").getAst();
 
     CelValidationResult result = CEL_VALIDATOR.validate(ast);
@@ -97,7 +99,7 @@ public class DurationLiteralValidatorTest {
   @Test
   public void duration_withFunction_noOp() throws Exception {
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.plannerCelBuilder()
             .addFunctionDeclarations(
                 newFunctionDeclaration(
                     "testFunc",
@@ -151,8 +153,10 @@ public class DurationLiteralValidatorTest {
   @Test
   public void duration_unexpectedResultType_throws() throws Exception {
     Cel cel =
-        CelFactory.standardCelBuilder()
-            .setStandardEnvironmentEnabled(false)
+        CelFactory.plannerCelBuilder()
+            .setStandardDeclarations(
+                CelStandardDeclarations.newBuilder().includeFunctions().build())
+            .setStandardFunctions(CelStandardFunctions.newBuilder().includeFunctions().build())
             .addFunctionDeclarations(
                 newFunctionDeclaration(
                     "duration",
@@ -174,7 +178,7 @@ public class DurationLiteralValidatorTest {
     assertThat(result.getAllIssues().get(0).toDisplayString(ast.getSource()))
         .isEqualTo(
             "ERROR: <input>:1:10: duration validation failed. Reason: Expected"
-                + " java.time.Duration type but got java.lang.Integer instead\n"
+                + " java.time.Duration type but got java.lang.Long instead\n"
                 + " | duration('1h')\n"
                 + " | .........^");
   }

@@ -33,7 +33,7 @@ public class ContextPbUserTest extends CelUserTestTemplate {
     super(
         CelTestContext.newBuilder()
             .setCel(
-                CelFactory.standardCelBuilder()
+                CelFactory.plannerCelBuilder()
                     .addFileTypes(TestAllTypes.getDescriptor().getFile())
                     .addProtoTypeMasks(
                         ProtoTypeMask.ofAllFields(TestAllTypes.getDescriptor().getFullName())

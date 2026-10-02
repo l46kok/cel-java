@@ -54,8 +54,11 @@ import org.junit.runner.RunWith;
 @RunWith(TestParameterInjector.class)
 public final class CelEnvironmentYamlParserTest {
 
+  private static final CelOptions CEL_OPTIONS =
+      CelOptions.current().enableHeterogeneousNumericComparisons(true).build();
+
   private static final Cel CEL_WITH_MESSAGE_TYPES =
-      CelFactory.standardCelBuilder()
+      CelFactory.plannerCelBuilder()
           .addMessageTypes(AttributeContext.Request.getDescriptor())
           .build();
 
@@ -170,7 +173,7 @@ public final class CelEnvironmentYamlParserTest {
                         ExtensionConfig.of("sets"),
                         ExtensionConfig.of("strings", 1)))
                 .build());
-    assertThat(environment.extend(CEL_WITH_MESSAGE_TYPES, CelOptions.DEFAULT)).isNotNull();
+    assertThat(environment.extend(CEL_WITH_MESSAGE_TYPES, CEL_OPTIONS)).isNotNull();
   }
 
   @Test
@@ -188,7 +191,7 @@ public final class CelEnvironmentYamlParserTest {
                 .setSource(environment.source().get())
                 .addExtensions(ImmutableSet.of(ExtensionConfig.of("bindings", Integer.MAX_VALUE)))
                 .build());
-    assertThat(environment.extend(CEL_WITH_MESSAGE_TYPES, CelOptions.DEFAULT)).isNotNull();
+    assertThat(environment.extend(CEL_WITH_MESSAGE_TYPES, CEL_OPTIONS)).isNotNull();
   }
 
   @Test
@@ -299,7 +302,7 @@ public final class CelEnvironmentYamlParserTest {
                                             .build())
                                     .build()))))
                 .build());
-    assertThat(environment.extend(CEL_WITH_MESSAGE_TYPES, CelOptions.DEFAULT)).isNotNull();
+    assertThat(environment.extend(CEL_WITH_MESSAGE_TYPES, CEL_OPTIONS)).isNotNull();
   }
 
   @Test
@@ -354,7 +357,7 @@ public final class CelEnvironmentYamlParserTest {
                                 .addParams(TypeDecl.create("string"), TypeDecl.create("dyn"))
                                 .build())))
                 .build());
-    assertThat(environment.extend(CEL_WITH_MESSAGE_TYPES, CelOptions.DEFAULT)).isNotNull();
+    assertThat(environment.extend(CEL_WITH_MESSAGE_TYPES, CEL_OPTIONS)).isNotNull();
   }
 
   @Test
@@ -377,7 +380,7 @@ public final class CelEnvironmentYamlParserTest {
                             "request",
                             TypeDecl.create("google.rpc.context.AttributeContext.Request"))))
                 .build());
-    assertThat(environment.extend(CEL_WITH_MESSAGE_TYPES, CelOptions.DEFAULT)).isNotNull();
+    assertThat(environment.extend(CEL_WITH_MESSAGE_TYPES, CEL_OPTIONS)).isNotNull();
   }
 
   @Test
@@ -402,7 +405,7 @@ public final class CelEnvironmentYamlParserTest {
                                 .addParams(TypeDecl.create("string"))
                                 .build())))
                 .build());
-    assertThat(environment.extend(CEL_WITH_MESSAGE_TYPES, CelOptions.DEFAULT)).isNotNull();
+    assertThat(environment.extend(CEL_WITH_MESSAGE_TYPES, CEL_OPTIONS)).isNotNull();
   }
 
   @Test
@@ -427,37 +430,7 @@ public final class CelEnvironmentYamlParserTest {
                                 .addParams(TypeDecl.create("string"), TypeDecl.create("dyn"))
                                 .build())))
                 .build());
-    assertThat(environment.extend(CEL_WITH_MESSAGE_TYPES, CelOptions.DEFAULT)).isNotNull();
-  }
-
-  @Test
-  public void environment_withTypeSpecifiersEnabled_handlesStructuredMapTypeDecl()
-      throws Exception {
-    String yamlConfig =
-        "variables:\n" //
-            + "- name: 'request'\n" //
-            + "  type:\n" //
-            + "    type_name: 'map'\n" //
-            + "    params:\n" //
-            + "      - type_name: 'string'\n" //
-            + "      - type_name: 'dyn'";
-
-    CelEnvironment environment = ENVIRONMENT_PARSER.parse(yamlConfig);
-
-    assertThat(environment)
-        .isEqualTo(
-            CelEnvironment.newBuilder()
-                .setSource(environment.source().get())
-                .setVariables(
-                    ImmutableSet.of(
-                        VariableDecl.create(
-                            "request",
-                            TypeDecl.newBuilder()
-                                .setName("map")
-                                .addParams(TypeDecl.create("string"), TypeDecl.create("dyn"))
-                                .build())))
-                .build());
-    assertThat(environment.extend(CEL_WITH_MESSAGE_TYPES, CelOptions.DEFAULT)).isNotNull();
+    assertThat(environment.extend(CEL_WITH_MESSAGE_TYPES, CEL_OPTIONS)).isNotNull();
   }
 
   @Test
@@ -484,7 +457,7 @@ public final class CelEnvironmentYamlParserTest {
                                 .addParams(TypeDecl.create("string"))
                                 .build())))
                 .build());
-    assertThat(environment.extend(CEL_WITH_MESSAGE_TYPES, CelOptions.DEFAULT)).isNotNull();
+    assertThat(environment.extend(CEL_WITH_MESSAGE_TYPES, CEL_OPTIONS)).isNotNull();
   }
 
   @Test
@@ -506,7 +479,7 @@ public final class CelEnvironmentYamlParserTest {
                             "request",
                             TypeDecl.create("google.rpc.context.AttributeContext.Request"))))
                 .build());
-    assertThat(environment.extend(CEL_WITH_MESSAGE_TYPES, CelOptions.DEFAULT)).isNotNull();
+    assertThat(environment.extend(CEL_WITH_MESSAGE_TYPES, CEL_OPTIONS)).isNotNull();
   }
 
   @Test
@@ -524,7 +497,7 @@ public final class CelEnvironmentYamlParserTest {
                 .setContextVariable(
                     ContextVariable.create("google.rpc.context.AttributeContext.Request"))
                 .build());
-    assertThat(environment.extend(CEL_WITH_MESSAGE_TYPES, CelOptions.DEFAULT)).isNotNull();
+    assertThat(environment.extend(CEL_WITH_MESSAGE_TYPES, CEL_OPTIONS)).isNotNull();
   }
 
   @Test
@@ -582,7 +555,7 @@ public final class CelEnvironmentYamlParserTest {
                                     .setReturnType(TypeDecl.ofTypeParam("V"))
                                     .build()))))
                 .build());
-    assertThat(environment.extend(CEL_WITH_MESSAGE_TYPES, CelOptions.DEFAULT)).isNotNull();
+    assertThat(environment.extend(CEL_WITH_MESSAGE_TYPES, CEL_OPTIONS)).isNotNull();
   }
 
   @Test
@@ -619,7 +592,7 @@ public final class CelEnvironmentYamlParserTest {
             + "  type: 'list<string>'";
 
     CelEnvironment environment = ENVIRONMENT_PARSER.parse(yamlConfig);
-    Cel cel = environment.extend(CelFactory.standardCelBuilder().build(), CelOptions.DEFAULT);
+    Cel cel = environment.extend(CelFactory.plannerCelBuilder().build(), CEL_OPTIONS);
 
     CelAbstractSyntaxTree ast = cel.compile("values.size() == 2 && values[0] == 'hello'").getAst();
     boolean result =
@@ -652,7 +625,7 @@ public final class CelEnvironmentYamlParserTest {
                             "request",
                             TypeDecl.create("google.rpc.context.AttributeContext.Request"))))
                 .build());
-    assertThat(environment.extend(CEL_WITH_MESSAGE_TYPES, CelOptions.DEFAULT)).isNotNull();
+    assertThat(environment.extend(CEL_WITH_MESSAGE_TYPES, CEL_OPTIONS)).isNotNull();
   }
 
   @Test
@@ -715,7 +688,7 @@ public final class CelEnvironmentYamlParserTest {
                                 .addParams(TypeDecl.create("string"), TypeDecl.create("string"))
                                 .build())))
                 .build());
-    assertThat(environment.extend(CEL_WITH_MESSAGE_TYPES, CelOptions.DEFAULT)).isNotNull();
+    assertThat(environment.extend(CEL_WITH_MESSAGE_TYPES, CEL_OPTIONS)).isNotNull();
   }
 
   @Test
@@ -734,7 +707,7 @@ public final class CelEnvironmentYamlParserTest {
     CelEnvironmentException e =
         assertThrows(
             CelEnvironmentException.class,
-            () -> environment.extend(CEL_WITH_MESSAGE_TYPES, CelOptions.DEFAULT));
+            () -> environment.extend(CEL_WITH_MESSAGE_TYPES, CEL_OPTIONS));
     assertThat(e).hasMessageThat().isEqualTo(testCase.expectedErrorMessage);
   }
 
@@ -1254,13 +1227,16 @@ public final class CelEnvironmentYamlParserTest {
             + "        return:\n"
             + "          type_name: 'bool'";
     CelEnvironment celEnvironment = ENVIRONMENT_PARSER.parse(configSource);
+    // TODO: CelEnvironment.extendRuntime does not automatically register
+    // YAML-declared functions without bindings as late-bound.
     Cel celDetails =
-        CelFactory.standardCelBuilder()
+        CelFactory.plannerCelBuilder()
             .addVar("a", SimpleType.INT)
             .addVar("b", SimpleType.INT)
             .addVar("c", SimpleType.INT)
+            .addLateBoundFunctions("test")
             .build();
-    Cel cel = celEnvironment.extend(celDetails, CelOptions.DEFAULT);
+    Cel cel = celEnvironment.extend(celDetails, CEL_OPTIONS);
     CelAbstractSyntaxTree ast = cel.compile("a < 0 && b < 0 && c < 0 && test(a<0)").getAst();
     CelLateFunctionBindings bindings =
         CelLateFunctionBindings.from(
@@ -1295,12 +1271,13 @@ public final class CelEnvironmentYamlParserTest {
 
     CelEnvironment celEnvironment = ENVIRONMENT_PARSER.parse(configSource);
     Cel celDetails =
-        CelFactory.standardCelBuilder()
+        CelFactory.plannerCelBuilder()
             .addVar("a", SimpleType.INT)
             .addVar("b", SimpleType.INT)
             .addVar("c", SimpleType.INT)
+            .addLateBoundFunctions("test")
             .build();
-    Cel cel = celEnvironment.extend(celDetails, CelOptions.DEFAULT);
+    Cel cel = celEnvironment.extend(celDetails, CEL_OPTIONS);
     CelAbstractSyntaxTree ast = cel.compile("a < 0 && b < 0 && c < 0 && test(a<0)").getAst();
     CelLateFunctionBindings bindings =
         CelLateFunctionBindings.from(

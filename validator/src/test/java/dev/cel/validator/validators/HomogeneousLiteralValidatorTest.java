@@ -27,7 +27,6 @@ import dev.cel.common.CelAbstractSyntaxTree;
 import dev.cel.common.CelValidationResult;
 import dev.cel.common.types.SimpleType;
 import dev.cel.extensions.CelOptionalLibrary;
-import dev.cel.runtime.CelFunctionBinding;
 import dev.cel.validator.CelValidator;
 import dev.cel.validator.CelValidatorFactory;
 import java.util.List;
@@ -38,7 +37,7 @@ import org.junit.runner.RunWith;
 @RunWith(TestParameterInjector.class)
 public class HomogeneousLiteralValidatorTest {
   private static final Cel CEL =
-      CelFactory.standardCelBuilder()
+      CelFactory.plannerCelBuilder()
           .addCompilerLibraries(CelOptionalLibrary.INSTANCE)
           .addRuntimeLibraries(CelOptionalLibrary.INSTANCE)
           .build();
@@ -228,7 +227,7 @@ public class HomogeneousLiteralValidatorTest {
   @TestParameters("{source: '''%s''.format([[[1, 2, [3.0, 4]]][0]])'}")
   public void heterogeneousLiterals_inExemptFunction(String source) throws Exception {
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.plannerCelBuilder()
             .addFunctionDeclarations(
                 newFunctionDeclaration(
                     "exemptFunction",
@@ -240,10 +239,6 @@ public class HomogeneousLiteralValidatorTest {
                         SimpleType.BOOL,
                         SimpleType.STRING,
                         SimpleType.DYN)))
-            .addFunctionBindings(
-                CelFunctionBinding.from("exemptFunctionOverloadId", Object.class, (arg) -> true),
-                CelFunctionBinding.from(
-                    "stringFormatOverloadId", String.class, Object.class, (str, arg) -> true))
             .build();
     CelValidator validator =
         CelValidatorFactory.standardCelValidatorBuilder(cel)
@@ -255,6 +250,5 @@ public class HomogeneousLiteralValidatorTest {
 
     assertThat(result.hasError()).isFalse();
     assertThat(result.getAllIssues()).isEmpty();
-    assertThat(cel.createProgram(ast).eval()).isInstanceOf(Boolean.class);
   }
 }

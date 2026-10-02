@@ -24,8 +24,8 @@ import dev.cel.common.CelOptions;
 import dev.cel.expr.conformance.proto3.TestAllTypes;
 import dev.cel.extensions.CelExtensions;
 import dev.cel.extensions.CelOptionalLibrary;
-import dev.cel.runtime.CelRuntime;
 import dev.cel.runtime.CelFunctionBinding;
+import dev.cel.runtime.CelRuntime;
 import dev.cel.runtime.CelRuntimeFactory;
 import java.util.List;
 import org.junit.Test;
@@ -35,7 +35,7 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class CelCompilerToolTest {
   private static final CelRuntime CEL_RUNTIME =
-      CelRuntimeFactory.standardCelRuntimeBuilder()
+      CelRuntimeFactory.plannerRuntimeBuilder()
           .addFunctionBindings(
               CelFunctionBinding.from("wrapper_string_isEmpty", String.class, String::isEmpty))
           .addLibraries(

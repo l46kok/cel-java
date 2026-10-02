@@ -42,7 +42,7 @@ import org.junit.runner.RunWith;
 public class AstDepthLimitValidatorTest {
 
   private static final Cel CEL =
-      CelFactory.standardCelBuilder()
+      CelFactory.plannerCelBuilder()
           .addVar("x", SimpleType.DYN)
           .addFunctionDeclarations(
               newFunctionDeclaration(

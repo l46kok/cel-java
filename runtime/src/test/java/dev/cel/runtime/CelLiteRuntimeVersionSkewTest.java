@@ -257,7 +257,7 @@ public final class CelLiteRuntimeVersionSkewTest {
   public void setUp() {
     // Server (schema V2): compiles and optimizes expressions against the newest descriptors.
     serverCompiler =
-        CelFactory.standardCelBuilder()
+        CelFactory.plannerCelBuilder()
             .setOptions(CEL_OPTIONS)
             .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
             .addCompilerLibraries(CelExtensions.bindings())
@@ -2150,7 +2150,7 @@ public final class CelLiteRuntimeVersionSkewTest {
       String expression, dev.cel.expr.conformance.proto2.TestAllTypes proto2Message)
       throws Exception {
     Cel proto2Cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.plannerCelBuilder()
             .setOptions(CEL_OPTIONS)
             .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
             .addMessageTypes(dev.cel.expr.conformance.proto2.TestAllTypes.getDescriptor())

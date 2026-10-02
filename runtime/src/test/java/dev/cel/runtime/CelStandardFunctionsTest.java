@@ -65,7 +65,7 @@ public class CelStandardFunctionsTest {
         assertThrows(
             IllegalArgumentException.class,
             () ->
-                CelRuntimeFactory.standardCelRuntimeBuilder()
+                CelRuntimeFactory.legacyCelRuntimeBuilder()
                     .setStandardEnvironmentEnabled(true)
                     .setStandardFunctions(
                         CelStandardFunctions.newBuilder()
@@ -145,8 +145,7 @@ public class CelStandardFunctionsTest {
   public void standardEnvironment_subsetEnvironment() throws Exception {
     CelCompiler celCompiler = CelCompilerFactory.standardCelCompilerBuilder().build();
     CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
-            .setStandardEnvironmentEnabled(false)
+        CelRuntimeFactory.plannerRuntimeBuilder()
             .setStandardFunctions(
                 CelStandardFunctions.newBuilder()
                     .includeFunctions(StandardFunction.ADD, StandardFunction.SUBTRACT)
@@ -194,7 +193,7 @@ public class CelStandardFunctionsTest {
             .setOptions(CelOptions.current().enableHeterogeneousNumericComparisons(true).build())
             .build();
     CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
+        CelRuntimeFactory.legacyCelRuntimeBuilder()
             .setOptions(CelOptions.current().enableHeterogeneousNumericComparisons(false).build())
             .build();
 
@@ -212,7 +211,7 @@ public class CelStandardFunctionsTest {
             .setOptions(CelOptions.current().enableUnsignedLongs(true).build())
             .build();
     CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
+        CelRuntimeFactory.legacyCelRuntimeBuilder()
             .setOptions(CelOptions.current().enableUnsignedLongs(false).build())
             .build();
 
@@ -232,7 +231,7 @@ public class CelStandardFunctionsTest {
             .setOptions(CelOptions.current().build())
             .build();
     CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
+        CelRuntimeFactory.legacyCelRuntimeBuilder()
             .setOptions(CelOptions.current().enableTimestampEpoch(false).build())
             .build();
 

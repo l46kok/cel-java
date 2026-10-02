@@ -485,7 +485,7 @@ public final class CelSetsExtensionsTest extends CelExtensionTestBase {
             .addLibraries(CelSetsCompilerLibrary.sets(0))
             .build();
     CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
+        CelRuntimeFactory.plannerRuntimeBuilder()
             .addFunctionBindings(CelSetsRuntimeLibrary.sets(0).newFunctionBindings())
             .build();
 
@@ -502,7 +502,7 @@ public final class CelSetsExtensionsTest extends CelExtensionTestBase {
             .addLibraries(CelSetsCompilerLibrary.sets(CelSetsCompilerLibrary.Function.CONTAINS))
             .build();
     CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
+        CelRuntimeFactory.plannerRuntimeBuilder()
             .addFunctionBindings(
                 CelSetsRuntimeLibrary.sets(CelSetsRuntimeLibrary.Function.CONTAINS)
                     .newFunctionBindings())

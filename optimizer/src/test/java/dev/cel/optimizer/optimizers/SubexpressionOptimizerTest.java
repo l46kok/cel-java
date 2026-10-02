@@ -25,7 +25,6 @@ import com.google.testing.junit.testparameterinjector.TestParameterInjector;
 import com.google.testing.junit.testparameterinjector.TestParameters;
 import dev.cel.bundle.Cel;
 import dev.cel.bundle.CelBuilder;
-import dev.cel.bundle.CelFactory;
 import dev.cel.common.CelAbstractSyntaxTree;
 import dev.cel.common.CelFunctionDecl;
 import dev.cel.common.CelMutableAst;
@@ -55,7 +54,6 @@ import dev.cel.runtime.CelAttributePattern;
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelFunctionBinding;
 import dev.cel.runtime.CelRuntime;
-import dev.cel.runtime.CelRuntimeFactory;
 import dev.cel.runtime.CelUnknownSet;
 import dev.cel.runtime.PartialVars;
 import dev.cel.runtime.Program;
@@ -137,20 +135,6 @@ public class SubexpressionOptimizerTest {
 
   private static final CelUnparser CEL_UNPARSER = CelUnparserFactory.newUnparser();
 
-  private static CelBuilder newCelBuilder() {
-    return CelFactory.standardCelBuilder()
-        .addMessageTypes(TestAllTypes.getDescriptor())
-        .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
-        .setOptions(CelOptions.current().populateMacroCalls(true).build())
-        .addCompilerLibraries(CelExtensions.bindings())
-        .addFunctionDeclarations(
-            CelFunctionDecl.newFunctionDeclaration(
-                "non_pure_custom_func",
-                newGlobalOverload("non_pure_custom_func_overload", SimpleType.INT, SimpleType.INT)))
-        .addVar("x", SimpleType.DYN)
-        .addVar("msg", StructTypeReference.create(TestAllTypes.getDescriptor().getFullName()));
-  }
-
   private CelOptimizer newCseOptimizer(SubexpressionOptimizerOptions options) {
     return CelOptimizerFactory.standardCelOptimizerBuilder(cel)
         .addAstOptimizers(SubexpressionOptimizer.newInstance(options))
@@ -159,7 +143,7 @@ public class SubexpressionOptimizerTest {
 
   @Test
   public void cse_resultTypeSet_celBlockOptimizationSuccess() throws Exception {
-    Cel cel = newCelBuilder().setResultType(SimpleType.BOOL).build();
+    Cel cel = this.cel.toCelBuilder().setResultType(SimpleType.BOOL).build();
     CelOptimizer celOptimizer =
         CelOptimizerFactory.standardCelOptimizerBuilder(cel)
             .addAstOptimizers(
@@ -423,8 +407,8 @@ public class SubexpressionOptimizerTest {
   public void lazyEval_blockIndexNeverReferenced() throws Exception {
     AtomicInteger invocation = new AtomicInteger();
     CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
-            .addMessageTypes(TestAllTypes.getDescriptor())
+        celForEvaluatingBlock
+            .toRuntimeBuilder()
             .addFunctionBindings(
                 CelFunctionBinding.from(
                     "get_true_overload",
@@ -453,8 +437,8 @@ public class SubexpressionOptimizerTest {
   public void lazyEval_blockIndexEvaluatedOnlyOnce() throws Exception {
     AtomicInteger invocation = new AtomicInteger();
     CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
-            .addMessageTypes(TestAllTypes.getDescriptor())
+        celForEvaluatingBlock
+            .toRuntimeBuilder()
             .addFunctionBindings(
                 CelFunctionBinding.from(
                     "get_true_overload",
@@ -478,8 +462,8 @@ public class SubexpressionOptimizerTest {
   public void lazyEval_withinComprehension_blockIndexEvaluatedOnlyOnce() throws Exception {
     AtomicInteger invocation = new AtomicInteger();
     CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
-            .addMessageTypes(TestAllTypes.getDescriptor())
+        celForEvaluatingBlock
+            .toRuntimeBuilder()
             .addFunctionBindings(
                 CelFunctionBinding.from(
                     "get_true_overload",
@@ -503,8 +487,8 @@ public class SubexpressionOptimizerTest {
   public void lazyEval_multipleBlockIndices_inResultExpr() throws Exception {
     AtomicInteger invocation = new AtomicInteger();
     CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
-            .addMessageTypes(TestAllTypes.getDescriptor())
+        celForEvaluatingBlock
+            .toRuntimeBuilder()
             .addFunctionBindings(
                 CelFunctionBinding.from(
                     "get_true_overload",
@@ -530,8 +514,8 @@ public class SubexpressionOptimizerTest {
   public void lazyEval_multipleBlockIndices_cascaded() throws Exception {
     AtomicInteger invocation = new AtomicInteger();
     CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
-            .addMessageTypes(TestAllTypes.getDescriptor())
+        celForEvaluatingBlock
+            .toRuntimeBuilder()
             .addFunctionBindings(
                 CelFunctionBinding.from(
                     "get_true_overload",
@@ -555,8 +539,8 @@ public class SubexpressionOptimizerTest {
   public void lazyEval_nestedComprehension_indexReferencedInNestedScopes() throws Exception {
     AtomicInteger invocation = new AtomicInteger();
     CelRuntime celRuntime =
-        CelRuntimeFactory.standardCelRuntimeBuilder()
-            .addMessageTypes(TestAllTypes.getDescriptor())
+        celForEvaluatingBlock
+            .toRuntimeBuilder()
             .addFunctionBindings(
                 CelFunctionBinding.from(
                     "get_true_overload",
@@ -570,8 +554,8 @@ public class SubexpressionOptimizerTest {
     CelAbstractSyntaxTree ast =
         compileUsingInternalFunctions(
             "cel.block([true, false, get_true()], [index2, false, index2].map(c0, [c0].map(c1, [c0,"
-                + " c1, index2]))) == [[[true, true, true]], [[false, false, true]], [[true, true,"
-                + " true]]]");
+                + " c1, index2])) == [[[true, true, true]], [[false, false, true]], [[true, true,"
+                + " true]]])");
 
     boolean result = (boolean) celRuntime.createProgram(ast).eval();
 
@@ -709,7 +693,11 @@ public class SubexpressionOptimizerTest {
             .builder()
             .addVar("x", SimpleType.DYN)
             .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
-            .setOptions(CelOptions.current().populateMacroCalls(true).build())
+            .setOptions(
+                CelOptions.current()
+                    .populateMacroCalls(true)
+                    .enableHeterogeneousNumericComparisons(true)
+                    .build())
             .addCompilerLibraries(CelExtensions.comprehensions())
             .addRuntimeLibraries(CelExtensions.comprehensions())
             .build();

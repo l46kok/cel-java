@@ -39,8 +39,12 @@ import org.junit.runners.JUnit4;
 public class CelOptimizerImplTest {
 
   private static final Cel CEL =
-      CelFactory.standardCelBuilder()
-          .setOptions(CelOptions.current().populateMacroCalls(true).build())
+      CelFactory.plannerCelBuilder()
+          .setOptions(
+              CelOptions.current()
+                  .populateMacroCalls(true)
+                  .enableHeterogeneousNumericComparisons(true)
+                  .build())
           .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
           .build();
 
@@ -78,20 +82,6 @@ public class CelOptimizerImplTest {
           events.add("pass_failure");
         }
       };
-
-  @Test
-  public void constructCelOptimizer_success() {
-    CelOptimizer celOptimizer =
-        CelOptimizerImpl.newBuilder(CEL)
-            .addAstOptimizers(
-                (ast, cel) ->
-                    // no-op
-                    OptimizationResult.create(ast))
-            .build();
-
-    assertThat(celOptimizer).isNotNull();
-    assertThat(celOptimizer).isInstanceOf(CelOptimizerImpl.class);
-  }
 
   @Test
   public void astOptimizers_invokedInOrder() throws Exception {

@@ -140,7 +140,7 @@ public class TestRunnerLibraryTest {
                                 TestUtil.getSrcDir()
                                     + "/google3/third_party/java/cel/testing/src/test/java/dev/cel/testing/testrunner/resources/empty_policy.yaml"))
                         .setCel(
-                            CelFactory.standardCelBuilder()
+                            CelFactory.plannerCelBuilder()
                                 .addFileTypes(TestAllTypes.getDescriptor().getFile())
                                 .addProtoTypeMasks(
                                     ProtoTypeMask.ofAllFields(
@@ -175,7 +175,7 @@ public class TestRunnerLibraryTest {
                             CelExpressionSource.fromSource(
                                 TestUtil.getSrcDir()
                                     + "/google3/third_party/java/cel/testing/src/test/java/dev/cel/testing/testrunner/resources/eval_error_policy.yaml"))
-                        .setCel(CelFactory.standardCelBuilder().addVar("x", SimpleType.INT).build())
+                        .setCel(CelFactory.plannerCelBuilder().addVar("x", SimpleType.INT).build())
                         .build()));
 
     assertThat(thrown)
@@ -210,7 +210,7 @@ public class TestRunnerLibraryTest {
                             CelExpressionSource.fromSource(
                                 TestUtil.getSrcDir()
                                     + "/google3/third_party/java/cel/testing/src/test/java/dev/cel/testing/testrunner/output.textproto"))
-                        .setCel(CelFactory.standardCelBuilder().build())
+                        .setCel(CelFactory.plannerCelBuilder().build())
                         .build()));
 
     assertThat(thrown).hasMessageThat().contains("modified: value.bool_value: true -> false");
@@ -299,7 +299,7 @@ public class TestRunnerLibraryTest {
         testCase,
         CelTestContext.newBuilder()
             .setCelExpression(CelExpressionSource.fromRawExpr("x + 1"))
-            .setCel(CelFactory.standardCelBuilder().addVar("x", SimpleType.INT).build())
+            .setCel(CelFactory.plannerCelBuilder().addVar("x", SimpleType.INT).build())
             .setBindingTransformer(
                 bindings -> {
                   ImmutableMap.Builder<String, Object> transformed = ImmutableMap.builder();
@@ -340,7 +340,7 @@ public class TestRunnerLibraryTest {
     CelTestContext celTestContext =
         CelTestContext.newBuilder()
             .setCelExpression(CelExpressionSource.fromRawExpr("true"))
-            .setCel(CelFactory.standardCelBuilder().build())
+            .setCel(CelFactory.plannerCelBuilder().build())
             .addMessageTypes(TestAllTypes.getDescriptor())
             .build();
 

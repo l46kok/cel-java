@@ -12,6 +12,7 @@ java_library(
     deps = [
         "//:java_truth",
         "//bundle:cel",
+        "//checker:standard_decl",
         "//common:cel_ast",
         "//common:compiler_common",
         "//common:options",
@@ -23,6 +24,7 @@ java_library(
         "//parser:macro",
         "//runtime",
         "//runtime:function_binding",
+        "//runtime:standard_functions",
         "//validator",
         "//validator:validator_builder",
         "//validator/validators:ast_depth_limit_validator",
@@ -33,7 +35,6 @@ java_library(
         "//validator/validators:timestamp",
         "@cel_spec//proto/cel/expr:checked_java_proto",
         "@maven//:com_google_guava_guava",
-        "@maven//:com_google_protobuf_protobuf_java",
         "@maven//:com_google_testparameterinjector_test_parameter_injector",
         "@maven//:junit_junit",
         "@maven_android//:com_google_protobuf_protobuf_javalite",

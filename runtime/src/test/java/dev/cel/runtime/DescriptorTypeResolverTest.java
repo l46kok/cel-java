@@ -28,10 +28,11 @@ import dev.cel.common.types.OpaqueType;
 import dev.cel.common.types.OptionalType;
 import dev.cel.common.types.ProtoMessageTypeProvider;
 import dev.cel.common.types.SimpleType;
-import dev.cel.common.types.StructTypeReference;
 import dev.cel.common.types.TypeType;
+import dev.cel.common.values.OpaqueValue;
 import dev.cel.expr.conformance.proto3.TestAllTypes;
 import dev.cel.extensions.CelOptionalLibrary;
+import java.util.Optional;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -42,11 +43,18 @@ public class DescriptorTypeResolverTest {
       new ProtoMessageTypeProvider(ImmutableList.of(TestAllTypes.getDescriptor()));
 
   private static final Cel CEL =
-      CelFactory.standardCelBuilder()
+      CelFactory.plannerCelBuilder()
           .setTypeProvider(PROTO_MESSAGE_TYPE_PROVIDER)
+          // TODO: Replace setValueProvider with
+          // addMessageTypes(TestAllTypes.getDescriptor()) once CelRuntimeImpl prioritizes custom
+          // CelTypeProvider over its internal messageTypeProvider.
+          .setValueProvider(
+              (structType, fields) ->
+                  structType.equals(TestAllTypes.getDescriptor().getFullName())
+                      ? Optional.of(TestAllTypes.getDefaultInstance())
+                      : Optional.empty())
           .addCompilerLibraries(CelOptionalLibrary.INSTANCE)
           .addRuntimeLibraries(CelOptionalLibrary.INSTANCE)
-          .addMessageTypes(TestAllTypes.getDescriptor())
           .setContainer(CelContainer.ofName(TestAllTypes.getDescriptor().getFullName()))
           .build();
 
@@ -65,7 +73,10 @@ public class DescriptorTypeResolverTest {
     OPTIONAL_TYPE("optional_type", TypeType.create(OptionalType.create(SimpleType.DYN))),
     PROTO_MESSAGE_TYPE(
         "TestAllTypes",
-        TypeType.create(StructTypeReference.create(TestAllTypes.getDescriptor().getFullName())));
+        TypeType.create(
+            PROTO_MESSAGE_TYPE_PROVIDER
+                .findType(TestAllTypes.getDescriptor().getFullName())
+                .get()));
 
     private final String expression;
 
@@ -79,9 +90,6 @@ public class DescriptorTypeResolverTest {
 
   @Test
   public void typeLiteral_success(@TestParameter TypeLiteralTestCase testCase) throws Exception {
-    if (!testCase.equals(TypeLiteralTestCase.DURATION)) {
-      return;
-    }
     CelAbstractSyntaxTree ast = CEL.compile(testCase.expression).getAst();
 
     assertThat(CEL.createProgram(ast).eval()).isEqualTo(testCase.celRuntimeType);
@@ -118,7 +126,10 @@ public class DescriptorTypeResolverTest {
     UINT("1u", TypeType.create(SimpleType.UINT)),
     PROTO_MESSAGE(
         "TestAllTypes{}",
-        TypeType.create(StructTypeReference.create(TestAllTypes.getDescriptor().getFullName()))),
+        TypeType.create(
+            PROTO_MESSAGE_TYPE_PROVIDER
+                .findType(TestAllTypes.getDescriptor().getFullName())
+                .get())),
     OPTIONAL_TYPE("optional.of(1)", TypeType.create(OptionalType.create(SimpleType.DYN)));
 
     private final String expression;
@@ -161,9 +172,19 @@ public class DescriptorTypeResolverTest {
     OpaqueType opaqueType = OpaqueType.create("opaque_type");
     Cel cel = CEL.toCelBuilder().addVar("opaque_var", opaqueType).build();
     CelAbstractSyntaxTree ast = cel.compile("type(opaque_var)").getAst();
-    final class CustomClass {}
+    final class CustomClass extends OpaqueValue {
+      @Override
+      public Object value() {
+        return this;
+      }
 
-    assertThat(CEL.createProgram(ast).eval(ImmutableMap.of("opaque_var", new CustomClass())))
+      @Override
+      public OpaqueType celType() {
+        return opaqueType;
+      }
+    }
+
+    assertThat(cel.createProgram(ast).eval(ImmutableMap.of("opaque_var", new CustomClass())))
         .isEqualTo(TypeType.create(opaqueType));
   }
 }

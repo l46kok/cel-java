@@ -12,11 +12,8 @@ java_library(
     deps = [
         "//:java_truth",
         "//bundle:cel",
-        "//common:compiler_common",
-        "//compiler",
-        "//parser:parser_factory",
-        "//runtime",
-        "//validator",
+        "//common:cel_issue",
+        "//common:cel_validation_result",
         "//validator:validator_builder",
         "//validator:validator_impl",
         "@maven//:junit_junit",

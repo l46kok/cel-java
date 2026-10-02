@@ -42,7 +42,7 @@ import java.util.Optional;
 @AutoValue
 public abstract class CelTestContext {
 
-  private static final Cel DEFAULT_CEL = CelFactory.standardCelBuilder().build();
+  private static final Cel DEFAULT_CEL = CelFactory.plannerCelBuilder().build();
 
   /**
    * The CEL environment for the CEL test.
@@ -166,7 +166,7 @@ public abstract class CelTestContext {
   public static CelTestContext.Builder newBuilder() {
     return new AutoValue_CelTestContext.Builder()
         .setCel(DEFAULT_CEL)
-        .setCelOptions(CelOptions.DEFAULT)
+        .setCelOptions(CelOptions.current().enableHeterogeneousNumericComparisons(true).build())
         .setVariableBindings(ImmutableMap.of())
         .setResultMatcher(new DefaultResultMatcher());
   }

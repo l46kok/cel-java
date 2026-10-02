@@ -39,9 +39,10 @@ import org.junit.runner.RunWith;
 
 @RunWith(TestParameterInjector.class)
 public class RegexLiteralValidatorTest {
-  private static final CelOptions CEL_OPTIONS = CelOptions.current().build();
+  private static final CelOptions CEL_OPTIONS =
+      CelOptions.current().enableHeterogeneousNumericComparisons(true).build();
 
-  private static final Cel CEL = CelFactory.standardCelBuilder().setOptions(CEL_OPTIONS).build();
+  private static final Cel CEL = CelFactory.plannerCelBuilder().setOptions(CEL_OPTIONS).build();
 
   private static final CelValidator CEL_VALIDATOR =
       CelValidatorFactory.standardCelValidatorBuilder(CEL)
@@ -80,7 +81,7 @@ public class RegexLiteralValidatorTest {
 
   @Test
   public void regex_globalWithVariable_noOp() throws Exception {
-    Cel cel = CelFactory.standardCelBuilder().addVar("str_var", SimpleType.STRING).build();
+    Cel cel = CelFactory.plannerCelBuilder().addVar("str_var", SimpleType.STRING).build();
     CelAbstractSyntaxTree ast = cel.compile("matches('test', str_var)").getAst();
 
     CelValidationResult result = CEL_VALIDATOR.validate(ast);
@@ -102,7 +103,7 @@ public class RegexLiteralValidatorTest {
 
   @Test
   public void regex_receiverWithVariable_noOp() throws Exception {
-    Cel cel = CelFactory.standardCelBuilder().addVar("str_var", SimpleType.STRING).build();
+    Cel cel = CelFactory.plannerCelBuilder().addVar("str_var", SimpleType.STRING).build();
     CelAbstractSyntaxTree ast = cel.compile("'test'.matches(str_var)").getAst();
 
     CelValidationResult result = CEL_VALIDATOR.validate(ast);
@@ -125,7 +126,7 @@ public class RegexLiteralValidatorTest {
   @Test
   public void regex_globalWithFunction_noOp() throws Exception {
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.plannerCelBuilder()
             .addFunctionDeclarations(
                 newFunctionDeclaration(
                     "testFunc", newGlobalOverload("testFuncOverloadId", SimpleType.STRING)))
@@ -152,7 +153,7 @@ public class RegexLiteralValidatorTest {
   @Test
   public void regex_receiverWithFunction_noOp() throws Exception {
     Cel cel =
-        CelFactory.standardCelBuilder()
+        CelFactory.plannerCelBuilder()
             .addFunctionDeclarations(
                 newFunctionDeclaration(
                     "testFunc", newGlobalOverload("testFuncOverloadId", SimpleType.STRING)))
