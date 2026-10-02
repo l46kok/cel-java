@@ -105,7 +105,7 @@ public abstract class RawProtoMessageLiteValue extends StructValue<String, RawPr
    */
   @Override
   public Object select(String field) {
-    throw CelAttributeNotFoundException.forFieldResolution(field);
+    throw newUnoptimizedFieldResolutionException(field);
   }
 
   /**
@@ -114,7 +114,15 @@ public abstract class RawProtoMessageLiteValue extends StructValue<String, RawPr
    */
   @Override
   public Optional<Object> find(String field) {
-    throw CelAttributeNotFoundException.forFieldResolution(field);
+    throw newUnoptimizedFieldResolutionException(field);
+  }
+
+  private CelAttributeNotFoundException newUnoptimizedFieldResolutionException(String field) {
+    return CelAttributeNotFoundException.of(
+        String.format(
+            "Error resolving field '%s' on '%s'. Field selection by name is not supported on raw"
+                + " proto wire bytes; register its CelLiteDescriptor or enable SelectOptimizer.",
+            field, celType().name()));
   }
 
   @Override
@@ -514,7 +522,10 @@ public abstract class RawProtoMessageLiteValue extends StructValue<String, RawPr
     checkNotNull(protoTypeName);
     checkNotNull(protoLiteCelValueConverter);
     return new AutoValue_RawProtoMessageLiteValue(
-        rawWireBytes, StructTypeReference.create(protoTypeName), protoLiteCelValueConverter);
+        rawWireBytes,
+        StructTypeReference.create(
+            protoTypeName.isEmpty() ? UNKNOWN_MESSAGE_TYPE_NAME : protoTypeName),
+        protoLiteCelValueConverter);
   }
 
   RawProtoMessageLiteValue() {}

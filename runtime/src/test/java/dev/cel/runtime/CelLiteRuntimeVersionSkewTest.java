@@ -16,6 +16,7 @@ package dev.cel.runtime;
 
 import static com.google.common.truth.Truth.assertThat;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.junit.Assert.assertThrows;
 
 import com.google.api.expr.v1alpha1.CheckedExpr;
 import com.google.common.collect.ImmutableList;
@@ -2088,6 +2089,165 @@ public final class CelLiteRuntimeVersionSkewTest {
     assertThat(result).isEqualTo(-1L);
   }
 
+  @SuppressWarnings("ImmutableEnumChecker") // Test only
+  private enum DescriptorlessEvaluationTestCase {
+    SCALAR_FIELDS(
+        "msg.single_int64 == -42 && msg.single_string == 'cel-skew-test' && msg.single_bool",
+        POPULATED_SERVER_MESSAGE,
+        true),
+    UNSET_SCALAR_DEFAULT(
+        "msg.single_int64 == 0 && msg.single_string == '' && !has(msg.single_int64)",
+        TestAllTypes.getDefaultInstance(),
+        true),
+    UNSET_SUBMESSAGE_DEFAULT(
+        "msg.oneof_type.payload.single_int64 == 0 && !has(msg.oneof_type)"
+            + " && !has(msg.oneof_type.payload)",
+        TestAllTypes.getDefaultInstance(),
+        true),
+    POPULATED_ONEOF_SUBMESSAGE(
+        "msg.oneof_type.payload.single_int64 == 77 && has(msg.oneof_type)"
+            + " && has(msg.oneof_type.payload) && has(msg.oneof_type.payload.single_int64)",
+        TestAllTypes.newBuilder()
+            .setOneofType(
+                NestedTestAllTypes.newBuilder()
+                    .setPayload(TestAllTypes.newBuilder().setSingleInt64(77L)))
+            .build(),
+        true),
+    PRESENCE_POPULATED(
+        "has(msg.single_int64) && has(msg.single_nested_message)"
+            + " && has(msg.single_nested_message.bb)",
+        POPULATED_SERVER_MESSAGE,
+        true),
+    SUBMESSAGE_SCALAR("msg.single_nested_message.bb", POPULATED_SERVER_MESSAGE, 123L),
+    REPEATED_SCALAR(
+        "msg.repeated_string == ['foo', 'bar'] && msg.repeated_int64[1] == 20",
+        POPULATED_SERVER_MESSAGE,
+        true),
+    REPEATED_SUBMESSAGE_COMPREHENSION(
+        "msg.repeated_nested_message[0].bb == 10"
+            + " && msg.repeated_nested_message.exists(x, x.bb == 20)",
+        POPULATED_SERVER_MESSAGE,
+        true),
+    MAP_SCALAR_AND_SUBMESSAGE(
+        "msg.map_int32_int32[1] == 2 && msg.map_string_message['m1'].bb == 55"
+            + " && msg.map_int64_nested_type[1].payload.single_int64 == 100",
+        POPULATED_SERVER_MESSAGE,
+        true),
+    WELL_KNOWN_TYPES(
+        "msg.single_duration == duration('1h')"
+            + " && msg.single_timestamp == timestamp('2023-11-14T22:13:20.000000500Z')"
+            + " && msg.repeated_duration[0] == duration('5m')"
+            + " && msg.map_string_duration['d'] == duration('5m')",
+        POPULATED_SERVER_MESSAGE,
+        true),
+    ;
+
+    private final String expression;
+    private final TestAllTypes message;
+    private final Object expectedResult;
+
+    DescriptorlessEvaluationTestCase(
+        String expression, TestAllTypes message, Object expectedResult) {
+      this.expression = expression;
+      this.message = message;
+      this.expectedResult = expectedResult;
+    }
+  }
+
+  @Test
+  public void descriptorlessRuntime_zeroRegisteredDescriptors_evaluatesFromWireBytes(
+      @TestParameter DescriptorlessEvaluationTestCase testCase) throws Exception {
+    CelLiteRuntime descriptorlessRuntime = newDescriptorlessRuntime();
+    CelAbstractSyntaxTree optimizedAst =
+        serverOptimizer.optimize(serverCompiler.compile(testCase.expression).getAst());
+    Program program = descriptorlessRuntime.createProgram(optimizedAst);
+
+    Object result = program.eval(ImmutableMap.of("msg", testCase.message));
+
+    assertThat(result).isEqualTo(testCase.expectedResult);
+  }
+
+  @Test
+  public void partialDescriptorRuntime_missingChildDescriptor_evaluatesFromWireBytes(
+      @TestParameter DescriptorlessEvaluationTestCase testCase) throws Exception {
+    ImmutableList<MessageLiteDescriptor> withoutChildMessages =
+        TestAllTypesCelDescriptor.getDescriptor().getProtoTypeNamesToDescriptors().values().stream()
+            .filter(d -> !d.getProtoTypeName().equals(NestedMessage.getDescriptor().getFullName()))
+            .collect(ImmutableList.toImmutableList());
+    CelLiteRuntime partialRuntime =
+        CelLiteRuntimeFactory.newLiteRuntimeBuilder()
+            .setStandardFunctions(CelStandardFunctions.ALL_STANDARD_FUNCTIONS)
+            .setValueProvider(
+                ProtoMessageLiteValueProvider.newInstance(
+                    new CelLiteDescriptor("partial", withoutChildMessages) {}))
+            .setContainer(CEL_CONTAINER)
+            .build();
+    CelAbstractSyntaxTree optimizedAst =
+        serverOptimizer.optimize(serverCompiler.compile(testCase.expression).getAst());
+    Program program = partialRuntime.createProgram(optimizedAst);
+
+    Object result = program.eval(ImmutableMap.of("msg", testCase.message));
+
+    assertThat(result).isEqualTo(testCase.expectedResult);
+  }
+
+  @Test
+  public void descriptorlessRuntime_unoptimizedAst_throwsDescriptiveException(
+      @TestParameter({"msg.single_int64", "has(msg.single_int64)"}) String expression)
+      throws Exception {
+    CelLiteRuntime descriptorlessRuntime = newDescriptorlessRuntime();
+    CelAbstractSyntaxTree unoptimizedAst = serverCompiler.compile(expression).getAst();
+    Program program = descriptorlessRuntime.createProgram(unoptimizedAst);
+
+    CelEvaluationException thrown =
+        assertThrows(
+            CelEvaluationException.class,
+            () -> program.eval(ImmutableMap.of("msg", POPULATED_SERVER_MESSAGE)));
+
+    assertThat(thrown)
+        .hasCauseThat()
+        .hasMessageThat()
+        .isEqualTo(
+            "Error resolving field 'single_int64' on 'cel.@unknownMessage'. Field selection by name"
+                + " is not supported on raw proto wire bytes; register its CelLiteDescriptor or"
+                + " enable SelectOptimizer.");
+  }
+
+  @Test
+  public void partialDescriptorRuntime_unoptimizedAst_throwsDescriptiveException(
+      @TestParameter({"msg.single_nested_message.bb", "has(msg.single_nested_message.bb)"})
+          String expression)
+      throws Exception {
+    ImmutableList<MessageLiteDescriptor> withoutChildMessages =
+        TestAllTypesCelDescriptor.getDescriptor().getProtoTypeNamesToDescriptors().values().stream()
+            .filter(d -> !d.getProtoTypeName().equals(NestedMessage.getDescriptor().getFullName()))
+            .collect(ImmutableList.toImmutableList());
+    CelLiteRuntime partialRuntime =
+        CelLiteRuntimeFactory.newLiteRuntimeBuilder()
+            .setStandardFunctions(CelStandardFunctions.ALL_STANDARD_FUNCTIONS)
+            .setValueProvider(
+                ProtoMessageLiteValueProvider.newInstance(
+                    new CelLiteDescriptor("partial", withoutChildMessages) {}))
+            .setContainer(CEL_CONTAINER)
+            .build();
+    CelAbstractSyntaxTree unoptimizedAst = serverCompiler.compile(expression).getAst();
+    Program program = partialRuntime.createProgram(unoptimizedAst);
+
+    CelEvaluationException thrown =
+        assertThrows(
+            CelEvaluationException.class,
+            () -> program.eval(ImmutableMap.of("msg", POPULATED_SERVER_MESSAGE)));
+
+    assertThat(thrown)
+        .hasCauseThat()
+        .hasMessageThat()
+        .isEqualTo(
+            "Error resolving field 'bb' on"
+                + " 'cel.expr.conformance.proto3.TestAllTypes.NestedMessage'. Field selection by"
+                + " name is not supported on raw proto wire bytes; register its CelLiteDescriptor"
+                + " or enable SelectOptimizer.");
+  }
+
   private Program compileScoreModelLateBoundProgram() throws Exception {
     Cel celWithLateFunc =
         serverCompiler
@@ -2267,6 +2427,14 @@ public final class CelLiteRuntimeVersionSkewTest {
     return CelLiteRuntimeFactory.newLiteRuntimeBuilder()
         .setStandardFunctions(CelStandardFunctions.ALL_STANDARD_FUNCTIONS)
         .setValueProvider(ProtoMessageLiteValueProvider.newInstance(partialDescriptor))
+        .setContainer(CEL_CONTAINER)
+        .build();
+  }
+
+  private static CelLiteRuntime newDescriptorlessRuntime() {
+    return CelLiteRuntimeFactory.newLiteRuntimeBuilder()
+        .setStandardFunctions(CelStandardFunctions.ALL_STANDARD_FUNCTIONS)
+        .setValueProvider(ProtoMessageLiteValueProvider.newInstance())
         .setContainer(CEL_CONTAINER)
         .build();
   }

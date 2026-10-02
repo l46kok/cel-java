@@ -71,12 +71,23 @@ public final class RawProtoMessageLiteValueTest {
   }
 
   @Test
-  public void create_defaultsEmptyTypeName() {
+  public void create_defaultsUnknownMessageTypeName() {
     ByteString bytes = ByteString.copyFromUtf8("test");
+
     RawProtoMessageLiteValue value = RawProtoMessageLiteValue.create(bytes, EMPTY_CONVERTER);
 
     assertThat(value.rawWireBytes()).isEqualTo(bytes);
-    assertThat(value.celType().name()).isEmpty();
+    assertThat(value.celType().name()).isEqualTo("cel.@unknownMessage");
+  }
+
+  @Test
+  public void create_emptyTypeName_normalizesToUnknownMessageTypeName() {
+    ByteString bytes = ByteString.copyFromUtf8("test");
+
+    RawProtoMessageLiteValue value = RawProtoMessageLiteValue.create(bytes, "", EMPTY_CONVERTER);
+
+    assertThat(value.rawWireBytes()).isEqualTo(bytes);
+    assertThat(value.celType().name()).isEqualTo("cel.@unknownMessage");
   }
 
   @Test
@@ -84,7 +95,15 @@ public final class RawProtoMessageLiteValueTest {
     RawProtoMessageLiteValue value =
         RawProtoMessageLiteValue.create(ByteString.EMPTY, "custom.Message", EMPTY_CONVERTER);
 
-    assertThrows(CelAttributeNotFoundException.class, () -> value.select("field"));
+    CelAttributeNotFoundException e =
+        assertThrows(CelAttributeNotFoundException.class, () -> value.select("field"));
+
+    assertThat(e)
+        .hasMessageThat()
+        .isEqualTo(
+            "Error resolving field 'field' on 'custom.Message'. Field selection by name is not"
+                + " supported on raw proto wire bytes; register its CelLiteDescriptor or enable"
+                + " SelectOptimizer.");
   }
 
   @Test
@@ -92,7 +111,15 @@ public final class RawProtoMessageLiteValueTest {
     RawProtoMessageLiteValue value =
         RawProtoMessageLiteValue.create(ByteString.EMPTY, "custom.Message", EMPTY_CONVERTER);
 
-    assertThrows(CelAttributeNotFoundException.class, () -> value.find("field"));
+    CelAttributeNotFoundException e =
+        assertThrows(CelAttributeNotFoundException.class, () -> value.find("field"));
+
+    assertThat(e)
+        .hasMessageThat()
+        .isEqualTo(
+            "Error resolving field 'field' on 'custom.Message'. Field selection by name is not"
+                + " supported on raw proto wire bytes; register its CelLiteDescriptor or enable"
+                + " SelectOptimizer.");
   }
 
   @Test
