@@ -48,8 +48,8 @@ final class EvalOptionalSelectField extends PlannedInterpretable {
 
     // The operand arrives already adapted, so re-materializing it would re-scan every entry of a
     // map for nothing. Traversing keeps that O(1); the selected value is materialized by the
-    // attribute below.
-    Object runtimeOperandValue = celValueConverter.toTraversalTarget(operandValue);
+    // attribute below, which shares this adaptation through the frame if it has the same root.
+    Object runtimeOperandValue = frame.toTraversalTarget(operandValue, celValueConverter);
     boolean hasField = false;
     if (runtimeOperandValue instanceof AccumulatedUnknowns) {
       Object hasFieldResult = EvalHelpers.evalStrictly(presenceAttribute, resolver, frame);

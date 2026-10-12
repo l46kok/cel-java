@@ -33,7 +33,7 @@ final class RelativeAttribute implements Attribute {
   @Override
   public Object resolve(long exprId, GlobalResolver ctx, ExecutionFrame frame) {
     Object obj = EvalHelpers.evalStrictly(operand, ctx, frame);
-    return NamespacedAttribute.applyQualifiers(obj, celValueConverter, qualifiers);
+    return NamespacedAttribute.applyQualifiers(obj, celValueConverter, qualifiers, frame);
   }
 
   @Override

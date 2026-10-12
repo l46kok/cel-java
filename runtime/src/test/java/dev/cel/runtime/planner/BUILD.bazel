@@ -65,6 +65,7 @@ java_library(
         "//runtime/planner:async_completion_coordinator",
         "//runtime/planner:async_gate",
         "//runtime/planner:optimized_select_planner",
+        "//runtime/planner:planned_interpretable",
         "//runtime/planner:planned_program",
         "//runtime/planner:program_planner",
         "//runtime/standard:type",

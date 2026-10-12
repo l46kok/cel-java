@@ -660,12 +660,15 @@ java_library(
         "ExecutionFrame.java",
         "PlannedInterpretable.java",
     ],
+    tags = [
+    ],
     deps = [
         ":async_call_state_tracker",
         ":localized_evaluation_exception",
         "//common:options",
         "//common/ast",
         "//common/exceptions:iteration_budget_exceeded",
+        "//common/values",
         "//runtime:evaluation_exception",
         "//runtime:evaluation_listener",
         "//runtime:function_resolver",
@@ -1334,6 +1337,7 @@ cel_android_library(
         "//common:options",
         "//common/ast:ast_android",
         "//common/exceptions:iteration_budget_exceeded",
+        "//common/values:values_android",
         "//runtime:evaluation_exception",
         "//runtime:evaluation_listener_android",
         "//runtime:interpretable_android",

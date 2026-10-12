@@ -90,7 +90,7 @@ final class NamespacedAttribute implements Attribute {
       }
 
       if (value != null) {
-        return applyQualifiers(value, celValueConverter, qualifiers);
+        return applyQualifiers(value, celValueConverter, qualifiers, frame);
       }
 
       // Attempt to resolve the qualify type name if the name is not a variable identifier
@@ -183,7 +183,10 @@ final class NamespacedAttribute implements Attribute {
   }
 
   static Object applyQualifiers(
-      Object value, CelValueConverter celValueConverter, ImmutableList<Qualifier> qualifiers) {
+      Object value,
+      CelValueConverter celValueConverter,
+      ImmutableList<Qualifier> qualifiers,
+      ExecutionFrame frame) {
     if (value instanceof AccumulatedUnknowns) {
       return value;
     }
@@ -191,7 +194,7 @@ final class NamespacedAttribute implements Attribute {
     // adapting on the way in and only the terminal value is materialized on the way out.
     Object obj = value;
     if (!qualifiers.isEmpty()) {
-      obj = celValueConverter.toTraversalTarget(obj);
+      obj = frame.toTraversalTarget(obj, celValueConverter);
       // Avoid enhanced for loop to prevent UnmodifiableIterator from being allocated
       for (int i = 0; i < qualifiers.size(); i++) {
         obj = qualifiers.get(i).qualify(obj);

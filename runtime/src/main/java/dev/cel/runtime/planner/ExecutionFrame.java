@@ -19,6 +19,7 @@ import static com.google.common.base.Preconditions.checkState;
 
 import dev.cel.common.CelOptions;
 import dev.cel.common.exceptions.CelIterationLimitExceededException;
+import dev.cel.common.values.CelValueConverter;
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelEvaluationListener;
 import dev.cel.runtime.CelFunctionResolver;
@@ -39,6 +40,9 @@ final class ExecutionFrame {
   private final @Nullable AsyncCallStateTracker asyncTracker;
   private int iterationCount;
   private @Nullable BlockMemoizer blockMemoizer;
+  // The last select chain root that adapted to a new object in this evaluation, and that object.
+  private @Nullable Object lastRoot;
+  private @Nullable Object lastTraversalTarget;
 
   static ExecutionFrame create(
       CelFunctionResolver functionResolver,
@@ -90,6 +94,22 @@ final class ExecutionFrame {
 
   BlockMemoizer getBlockMemoizer() {
     return blockMemoizer;
+  }
+
+  /** Adapts a select chain root, reusing the last adaptation if the root is the same object. */
+  @SuppressWarnings("ReferenceEquality") // Identity is the point: value equality would be O(size).
+  Object toTraversalTarget(Object root, CelValueConverter celValueConverter) {
+    // The converter isn't part of the key: a program plans all its chains with one converter.
+    if (root == lastRoot) {
+      return lastTraversalTarget;
+    }
+    Object adapted = celValueConverter.toTraversalTarget(root);
+    // Roots that adapt to themselves (maps, CelValues) mustn't evict a reusable wrapper.
+    if (adapted != root) {
+      lastRoot = root;
+      lastTraversalTarget = adapted;
+    }
+    return adapted;
   }
 
   boolean isAsync() {
