@@ -138,7 +138,7 @@ public final class ProtoLiteCelValueConverter extends BaseProtoCelValueConverter
       if (existingValue instanceof RawProtoMessageLiteValue) {
         bytes = ((RawProtoMessageLiteValue) existingValue).toByteString().concat(bytes);
       }
-      return RawProtoMessageLiteValue.create(bytes, fieldProtoTypeName, this);
+      return RawProtoMessageLiteValue.create(bytes, fieldProtoTypeName, this, /* isView= */ true);
     }
     WellKnownProto wellKnownProto = WellKnownProto.getByTypeName(fieldProtoTypeName).orElse(null);
     if (isStructLike(wellKnownProto)) {
@@ -356,6 +356,8 @@ public final class ProtoLiteCelValueConverter extends BaseProtoCelValueConverter
       @Nullable FieldLiteDescriptor keyDescriptor,
       @Nullable FieldLiteDescriptor valueDescriptor) {
     CodedInputStream inputStream = bytes.newCodedInput();
+    // Submessages alias bytes; unwrapping parses or copies them, so no view outlives evaluation.
+    inputStream.enableAliasing(true);
     int targetFieldNumber = fieldDescriptor.getFieldNumber();
     Object fieldValue = null;
     try {

@@ -63,6 +63,22 @@ public final class RawProtoMessageLiteValueTest {
   }
 
   @Test
+  public void value_selectedSubmessage_returnsCopy() throws Exception {
+    ByteString submessage = encode(out -> out.writeInt32(1, 42));
+    RawProtoMessageLiteValue raw =
+        RawProtoMessageLiteValue.create(
+            encode(out -> out.writeBytes(21, submessage)), EMPTY_CONVERTER);
+    SelectField field =
+        SelectField.create(21L, "single_nested_message", SelectField.MESSAGE_TYPE_CODE);
+    RawProtoMessageLiteValue selected = (RawProtoMessageLiteValue) raw.selectByFieldNumber(field);
+
+    WireMessageLite value = selected.value();
+
+    assertThat(value).isNotSameInstanceAs(selected);
+    assertThat(value.toByteString()).isEqualTo(submessage);
+  }
+
+  @Test
   public void create_defaultsUnknownMessageTypeName() {
     ByteString bytes = ByteString.copyFromUtf8("test");
 

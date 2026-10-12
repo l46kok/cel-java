@@ -50,6 +50,9 @@ abstract class RawProtoMessageLiteValue extends StructValue<String, WireMessageL
 
   abstract ProtoLiteCelValueConverter protoLiteCelValueConverter();
 
+  // Set when toByteString() may alias a parent message's buffer.
+  abstract boolean isView();
+
   @Override
   public String protoTypeName() {
     return celType().name();
@@ -57,7 +60,13 @@ abstract class RawProtoMessageLiteValue extends StructValue<String, WireMessageL
 
   @Override
   public WireMessageLite value() {
-    return this;
+    // A view escaping evaluation would pin the parent's whole buffer, so it leaves as a copy.
+    return isView()
+        ? create(
+            ByteString.copyFrom(toByteString().asReadOnlyByteBuffer()),
+            protoTypeName(),
+            protoLiteCelValueConverter())
+        : this;
   }
 
   @Override
@@ -136,6 +145,14 @@ abstract class RawProtoMessageLiteValue extends StructValue<String, WireMessageL
       ByteString rawWireBytes,
       String protoTypeName,
       ProtoLiteCelValueConverter protoLiteCelValueConverter) {
+    return create(rawWireBytes, protoTypeName, protoLiteCelValueConverter, /* isView= */ false);
+  }
+
+  static RawProtoMessageLiteValue create(
+      ByteString rawWireBytes,
+      String protoTypeName,
+      ProtoLiteCelValueConverter protoLiteCelValueConverter,
+      boolean isView) {
     checkNotNull(rawWireBytes);
     checkNotNull(protoTypeName);
     checkNotNull(protoLiteCelValueConverter);
@@ -143,7 +160,8 @@ abstract class RawProtoMessageLiteValue extends StructValue<String, WireMessageL
         rawWireBytes,
         StructTypeReference.create(
             protoTypeName.isEmpty() ? UNKNOWN_MESSAGE_TYPE_NAME : protoTypeName),
-        protoLiteCelValueConverter);
+        protoLiteCelValueConverter,
+        isView);
   }
 
   RawProtoMessageLiteValue() {}
