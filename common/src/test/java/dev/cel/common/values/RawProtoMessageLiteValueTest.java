@@ -278,6 +278,20 @@ public final class RawProtoMessageLiteValueTest {
   }
 
   @Test
+  public void selectByFieldNumber_twice_reusesFieldDescriptor() throws Exception {
+    RawProtoMessageLiteValue raw =
+        RawProtoMessageLiteValue.create(encode(out -> out.writeInt64(1, 42L)), EMPTY_CONVERTER);
+    SelectField field = SelectField.create(1L, "single_int64", 3, 0L);
+    raw.selectByFieldNumber(field);
+    Object fieldDescriptor = field.liteFieldDescriptor();
+
+    raw.selectByFieldNumber(field);
+
+    assertThat(fieldDescriptor).isNotNull();
+    assertThat(field.liteFieldDescriptor()).isSameInstanceAs(fieldDescriptor);
+  }
+
+  @Test
   public void selectByFieldNumber_absentWithDefaultValue_returnsDefault() {
     RawProtoMessageLiteValue raw =
         RawProtoMessageLiteValue.create(

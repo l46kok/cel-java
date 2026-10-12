@@ -464,20 +464,29 @@ public final class ProtoLiteCelValueConverter extends BaseProtoCelValueConverter
     return false;
   }
 
-  /** Describes {@code field} by the type information it carries. */
+  /** Describes {@code field} by the type information it carries, built once and kept on it. */
   private static FieldLiteDescriptor newFieldDescriptor(SelectField field) {
+    Object cached = field.liteFieldDescriptor();
+    if (cached != null) {
+      return (FieldLiteDescriptor) cached;
+    }
     // Only presence tests omit the type code: their presence check doesn't depend on the type, and
     // the fields they navigate through are messages, as are map entries.
     boolean isMap = field.mapEntrySpec() != null;
     boolean isMessage = isMap || field.typeCode() == SelectField.NO_TYPE_CODE;
-    return newFieldDescriptor(
-        field.fieldNumber(),
-        field.fieldName(),
-        isMap
-            ? EncodingType.MAP
-            : (field.defaultValue() instanceof List ? EncodingType.LIST : EncodingType.SINGULAR),
-        isMessage ? SelectField.MESSAGE_TYPE_CODE : field.typeCode(),
-        field.protoTypeName());
+    FieldLiteDescriptor fieldDescriptor =
+        newFieldDescriptor(
+            field.fieldNumber(),
+            field.fieldName(),
+            isMap
+                ? EncodingType.MAP
+                : (field.defaultValue() instanceof List
+                    ? EncodingType.LIST
+                    : EncodingType.SINGULAR),
+            isMessage ? SelectField.MESSAGE_TYPE_CODE : field.typeCode(),
+            field.protoTypeName());
+    field.setLiteFieldDescriptor(fieldDescriptor);
+    return fieldDescriptor;
   }
 
   private static FieldLiteDescriptor newFieldDescriptor(

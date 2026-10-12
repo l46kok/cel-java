@@ -46,7 +46,7 @@ abstract class RawProtoMessageLiteValue extends StructValue<String, WireMessageL
   public abstract ByteString toByteString();
 
   @Override
-  public abstract CelType celType();
+  public abstract String protoTypeName();
 
   abstract ProtoLiteCelValueConverter protoLiteCelValueConverter();
 
@@ -54,8 +54,9 @@ abstract class RawProtoMessageLiteValue extends StructValue<String, WireMessageL
   abstract boolean isView();
 
   @Override
-  public String protoTypeName() {
-    return celType().name();
+  public CelType celType() {
+    // Built on demand, since one of these values is created on every hop but rarely asked its type.
+    return StructTypeReference.create(protoTypeName());
   }
 
   @Override
@@ -117,23 +118,22 @@ abstract class RawProtoMessageLiteValue extends StructValue<String, WireMessageL
         String.format(
             "Error resolving field '%s' on '%s'. Field selection by name is not supported on raw"
                 + " proto wire bytes; register its CelLiteDescriptor or enable SelectOptimizer.",
-            field, celType().name()));
+            field, protoTypeName()));
   }
 
   @Override
   public Object selectByFieldNumber(SelectField field) {
-    return protoLiteCelValueConverter()
-        .selectByFieldNumber(toByteString(), celType().name(), field);
+    return protoLiteCelValueConverter().selectByFieldNumber(toByteString(), protoTypeName(), field);
   }
 
   @Override
   public boolean hasFieldByNumber(SelectField field) {
-    return protoLiteCelValueConverter().hasFieldByNumber(toByteString(), celType().name(), field);
+    return protoLiteCelValueConverter().hasFieldByNumber(toByteString(), protoTypeName(), field);
   }
 
   @Override
   public Optional<Object> findByFieldNumber(SelectField field) {
-    return protoLiteCelValueConverter().findByFieldNumber(toByteString(), celType().name(), field);
+    return protoLiteCelValueConverter().findByFieldNumber(toByteString(), protoTypeName(), field);
   }
 
   static RawProtoMessageLiteValue create(
@@ -158,8 +158,7 @@ abstract class RawProtoMessageLiteValue extends StructValue<String, WireMessageL
     checkNotNull(protoLiteCelValueConverter);
     return new AutoValue_RawProtoMessageLiteValue(
         rawWireBytes,
-        StructTypeReference.create(
-            protoTypeName.isEmpty() ? UNKNOWN_MESSAGE_TYPE_NAME : protoTypeName),
+        protoTypeName.isEmpty() ? UNKNOWN_MESSAGE_TYPE_NAME : protoTypeName,
         protoLiteCelValueConverter,
         isView);
   }

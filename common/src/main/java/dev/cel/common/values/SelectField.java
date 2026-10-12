@@ -32,7 +32,8 @@ import org.jspecify.annotations.Nullable;
 @AutoValue
 @AutoValue.CopyAnnotations
 @Immutable
-@SuppressWarnings("Immutable") // Default value is an immutable CEL literal or null
+// Default value is an immutable CEL literal or null; liteFieldDescriptor is a memo of this field.
+@SuppressWarnings("Immutable")
 public abstract class SelectField {
 
   private static final int MAX_FIELD_NUMBER = 536870911;
@@ -82,6 +83,19 @@ public abstract class SelectField {
    * #CEL_MAP_TYPE_CODE}).
    */
   abstract @Nullable MapEntrySpec mapEntrySpec();
+
+  // The lite runtime's FieldLiteDescriptor for this field, built from this field alone on first
+  // use so descriptorless hops don't rebuild it. Typed Object to keep this target free of protobuf
+  // deps. A race at most rebuilds it, as the descriptor's fields are all final.
+  private @Nullable Object liteFieldDescriptor;
+
+  @Nullable Object liteFieldDescriptor() {
+    return liteFieldDescriptor;
+  }
+
+  void setLiteFieldDescriptor(Object liteFieldDescriptor) {
+    this.liteFieldDescriptor = liteFieldDescriptor;
+  }
 
   /**
    * Creates a presence-test qualifier hop.
