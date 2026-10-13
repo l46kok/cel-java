@@ -16,7 +16,6 @@ package dev.cel.common.navigation;
 
 import com.google.auto.value.AutoValue;
 import dev.cel.common.ast.CelExpr;
-import dev.cel.common.navigation.ExprPropertyCalculator.ExprProperty;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -32,14 +31,7 @@ public abstract class CelNavigableExpr extends BaseNavigableExpr<CelExpr> {
 
   /** Constructs a new instance of {@link CelNavigableExpr} from {@link CelExpr}. */
   public static CelNavigableExpr fromExpr(CelExpr expr) {
-    ExprPropertyCalculator<CelExpr> exprHeightCalculator = new ExprPropertyCalculator<>(expr);
-    ExprProperty exprProperty = exprHeightCalculator.getProperty(expr.id());
-
-    return builder()
-        .setExpr(expr)
-        .setHeight(exprProperty.height())
-        .setMaxId(exprProperty.maxId())
-        .build();
+    return buildWithProperties(builder(), expr, new ExprPropertyCalculator<>(expr));
   }
 
   @Override

@@ -39,6 +39,7 @@ public class CelNavigableMutableExprTest {
     assertThat(navigableExpr.expr()).isEqualTo(constExpr);
     assertThat(navigableExpr.depth()).isEqualTo(2);
     assertThat(navigableExpr.parent()).isEmpty();
+    assertThat(navigableExpr.allNodes()).containsExactly(navigableExpr);
   }
 
   @Test
@@ -146,5 +147,25 @@ public class CelNavigableMutableExprTest {
 
     assertThat(allNodes)
         .containsExactly(CelMutableExpr.ofConstant(CelConstant.ofValue("element1")));
+  }
+
+  @Test
+  public void allNodes_zeroIds_heightsPopulated() {
+    CelNavigableMutableExpr mutableExpr =
+        CelNavigableMutableExpr.fromExpr(
+            CelMutableExpr.ofList(
+                CelMutableList.create(
+                    CelMutableExpr.ofConstant(CelConstant.ofValue("element1")),
+                    CelMutableExpr.ofList(
+                        CelMutableList.create(
+                            CelMutableExpr.ofConstant(CelConstant.ofValue("element2")))))));
+
+    ImmutableList<Integer> heights =
+        mutableExpr
+            .allNodes(TraversalOrder.PRE_ORDER)
+            .map(BaseNavigableExpr::height)
+            .collect(toImmutableList());
+
+    assertThat(heights).containsExactly(2, 0, 1, 0).inOrder();
   }
 }

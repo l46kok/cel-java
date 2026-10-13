@@ -21,30 +21,17 @@ import dev.cel.common.ast.Expression;
 import dev.cel.common.ast.Expression.List;
 import dev.cel.common.ast.Expression.Map;
 import dev.cel.common.ast.Expression.Struct;
-import java.util.HashMap;
+import java.util.IdentityHashMap;
 
 /** Package-private class to assist computing the height and the max ID of expression nodes. */
 final class ExprPropertyCalculator<E extends Expression> {
-  // Store hashmap instead of immutable map for performance, such that this helper class can be
-  // instantiated faster.
-  private final HashMap<Long, ExprProperty> idToProperty;
+  // Store IdentityHashMap instead of immutable map for performance, such that this helper class can
+  // be instantiated faster and nodes with duplicate IDs (e.g. 0) do not collide.
+  private final IdentityHashMap<E, ExprProperty> exprToProperty;
 
-  ExprPropertyCalculator(E celExpr) {
-    this.idToProperty = new HashMap<>();
-    visit(celExpr);
-  }
-
-  /**
-   * Retrieves the property containing the expression's maximum ID and the height of the subtree.
-   *
-   * @throws IllegalArgumentException If the provided expression ID does not exist.
-   */
-  ExprProperty getProperty(Long exprId) {
-    if (!idToProperty.containsKey(exprId)) {
-      throw new IllegalArgumentException("Property not found for expression id: " + exprId);
-    }
-
-    return idToProperty.get(exprId);
+  ExprProperty getProperty(E expr) {
+    ExprProperty property = exprToProperty.get(expr);
+    return property != null ? property : visit(expr);
   }
 
   private ExprProperty visit(E expr) {
@@ -79,7 +66,7 @@ final class ExprPropertyCalculator<E extends Expression> {
     ExprProperty exprProperty =
         ExprProperty.create(
             baseHeight + visitedProperty.height(), max(visitedProperty.maxId(), expr.id()));
-    idToProperty.put(expr.id(), exprProperty);
+    exprToProperty.put(expr, exprProperty);
 
     return exprProperty;
   }
@@ -135,6 +122,11 @@ final class ExprPropertyCalculator<E extends Expression> {
       visitedProperty = ExprProperty.merge(visitedProperty, visit(expr));
     }
     return visitedProperty;
+  }
+
+  ExprPropertyCalculator(E celExpr) {
+    this.exprToProperty = new IdentityHashMap<>();
+    visit(celExpr);
   }
 
   /** Value class to store the height and the max ID at a specific expression ID. */

@@ -20,6 +20,7 @@ import com.google.errorprone.annotations.DoNotMock;
 import dev.cel.common.ast.CelExpr;
 import dev.cel.common.ast.CelExpr.ExprKind;
 import dev.cel.common.ast.Expression;
+import dev.cel.common.navigation.ExprPropertyCalculator.ExprProperty;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -34,7 +35,29 @@ import java.util.stream.Stream;
 @SuppressWarnings("unchecked") // Generic types are properly bound to Expression
 public abstract class BaseNavigableExpr<E extends Expression> {
 
+  private ExprPropertyCalculator<E> exprPropertyCalculator;
+
   BaseNavigableExpr() {}
+
+  ExprPropertyCalculator<E> exprPropertyCalculator() {
+    if (exprPropertyCalculator == null) {
+      exprPropertyCalculator = new ExprPropertyCalculator<>(expr());
+    }
+    return exprPropertyCalculator;
+  }
+
+  static <E extends Expression, T extends BaseNavigableExpr<E>> T buildWithProperties(
+      Builder<E, T> builder, E expr, ExprPropertyCalculator<E> exprPropertyCalculator) {
+    ExprProperty exprProperty = exprPropertyCalculator.getProperty(expr);
+    T navigableExpr =
+        builder
+            .setExpr(expr)
+            .setHeight(exprProperty.height())
+            .setMaxId(exprProperty.maxId())
+            .build();
+    ((BaseNavigableExpr<E>) navigableExpr).exprPropertyCalculator = exprPropertyCalculator;
+    return navigableExpr;
+  }
 
   public abstract E expr();
 

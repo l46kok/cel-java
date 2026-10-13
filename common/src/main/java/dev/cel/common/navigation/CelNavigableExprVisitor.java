@@ -14,9 +14,10 @@
 
 package dev.cel.common.navigation;
 
+import static com.google.common.base.Preconditions.checkState;
+
 import dev.cel.common.ast.Expression;
 import dev.cel.common.ast.Expression.List;
-import dev.cel.common.navigation.ExprPropertyCalculator.ExprProperty;
 import java.util.stream.Stream;
 
 /** Visitor implementation to navigate an AST. */
@@ -27,16 +28,6 @@ final class CelNavigableExprVisitor<E extends Expression, T extends BaseNavigabl
   private final ExprPropertyCalculator<E> exprPropertyCalculator;
   private final TraversalOrder traversalOrder;
   private final int maxDepth;
-
-  private CelNavigableExprVisitor(
-      int maxDepth,
-      ExprPropertyCalculator<E> exprPropertyCalculator,
-      TraversalOrder traversalOrder) {
-    this.maxDepth = maxDepth;
-    this.exprPropertyCalculator = exprPropertyCalculator;
-    this.traversalOrder = traversalOrder;
-    this.streamBuilder = Stream.builder();
-  }
 
   /**
    * Returns a stream containing all the nodes using the specified traversal order. Note that the
@@ -81,10 +72,9 @@ final class CelNavigableExprVisitor<E extends Expression, T extends BaseNavigabl
    */
   static <E extends Expression, T extends BaseNavigableExpr<E>> Stream<T> collect(
       T navigableExpr, int maxDepth, TraversalOrder traversalOrder) {
-    ExprPropertyCalculator<E> exprHeightCalculator =
-        new ExprPropertyCalculator<>(navigableExpr.expr());
     CelNavigableExprVisitor<E, T> visitor =
-        new CelNavigableExprVisitor<>(maxDepth, exprHeightCalculator, traversalOrder);
+        new CelNavigableExprVisitor<>(
+            maxDepth, navigableExpr.exprPropertyCalculator(), traversalOrder);
 
     visitor.visit(navigableExpr);
 
@@ -92,12 +82,14 @@ final class CelNavigableExprVisitor<E extends Expression, T extends BaseNavigabl
   }
 
   private void visit(T navigableExpr) {
-    if (navigableExpr.depth() > MAX_DESCENDANTS_RECURSION_DEPTH - 1) {
-      throw new IllegalStateException("Max recursion depth reached.");
+    checkState(
+        navigableExpr.depth() <= MAX_DESCENDANTS_RECURSION_DEPTH - 1,
+        "Max recursion depth reached.");
+    if (navigableExpr.depth() > maxDepth) {
+      return;
     }
 
-    boolean addToStream = navigableExpr.depth() <= maxDepth;
-    if (addToStream && traversalOrder.equals(TraversalOrder.PRE_ORDER)) {
+    if (traversalOrder.equals(TraversalOrder.PRE_ORDER)) {
       streamBuilder.add(navigableExpr);
     }
 
@@ -124,7 +116,7 @@ final class CelNavigableExprVisitor<E extends Expression, T extends BaseNavigabl
         break;
     }
 
-    if (addToStream && traversalOrder.equals(TraversalOrder.POST_ORDER)) {
+    if (traversalOrder.equals(TraversalOrder.POST_ORDER)) {
       streamBuilder.add(navigableExpr);
     }
   }
@@ -177,15 +169,19 @@ final class CelNavigableExprVisitor<E extends Expression, T extends BaseNavigabl
   }
 
   private T newNavigableChild(T parent, E expr) {
-    ExprProperty exprProperty = exprPropertyCalculator.getProperty(expr.id());
+    return BaseNavigableExpr.buildWithProperties(
+        parent.<T>builderFromInstance().setDepth(parent.depth() + 1).setParent(parent),
+        expr,
+        exprPropertyCalculator);
+  }
 
-    return parent
-        .<T>builderFromInstance()
-        .setExpr(expr)
-        .setDepth(parent.depth() + 1)
-        .setHeight(exprProperty.height())
-        .setMaxId(exprProperty.maxId())
-        .setParent(parent)
-        .build();
+  private CelNavigableExprVisitor(
+      int maxDepth,
+      ExprPropertyCalculator<E> exprPropertyCalculator,
+      TraversalOrder traversalOrder) {
+    this.maxDepth = maxDepth;
+    this.exprPropertyCalculator = exprPropertyCalculator;
+    this.traversalOrder = traversalOrder;
+    this.streamBuilder = Stream.builder();
   }
 }
