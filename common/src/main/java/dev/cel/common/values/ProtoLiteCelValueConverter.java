@@ -119,7 +119,10 @@ public final class ProtoLiteCelValueConverter extends BaseProtoCelValueConverter
         return CelByteString.of(inputStream.readByteArray());
       case MESSAGE:
         return mergeOrReadMessageField(
-            inputStream.readBytes(), fieldDescriptor.getFieldProtoTypeName(), existingValue);
+            inputStream.readBytes(),
+            fieldDescriptor.getFieldProtoTypeName(),
+            existingValue,
+            /* isView= */ true);
       case STRING:
         return inputStream.readStringRequireUtf8();
       default:
@@ -127,26 +130,28 @@ public final class ProtoLiteCelValueConverter extends BaseProtoCelValueConverter
     }
   }
 
+  // For bytes that don't alias another message's buffer (empty or freshly serialized).
   private Object readMessageField(ByteString bytes, String fieldProtoTypeName) {
-    return mergeOrReadMessageField(bytes, fieldProtoTypeName, /* existingValue= */ null);
+    return mergeOrReadMessageField(
+        bytes, fieldProtoTypeName, /* existingValue= */ null, /* isView= */ false);
   }
 
   private Object mergeOrReadMessageField(
-      ByteString bytes, String fieldProtoTypeName, @Nullable Object existingValue) {
+      ByteString bytes, String fieldProtoTypeName, @Nullable Object existingValue, boolean isView) {
     MessageLiteDescriptor descriptor =
         descriptorPool.findDescriptor(fieldProtoTypeName).orElse(null);
     if (descriptor == null) {
       if (existingValue instanceof RawProtoMessageLiteValue) {
         bytes = ((RawProtoMessageLiteValue) existingValue).toByteString().concat(bytes);
       }
-      return RawProtoMessageLiteValue.create(bytes, fieldProtoTypeName, this, /* isView= */ true);
+      return RawProtoMessageLiteValue.create(bytes, fieldProtoTypeName, this, isView);
     }
     WellKnownProto wellKnownProto = WellKnownProto.getByTypeName(fieldProtoTypeName).orElse(null);
     if (isStructLike(wellKnownProto)) {
       if (existingValue instanceof ProtoMessageLiteValue) {
         bytes = ((ProtoMessageLiteValue) existingValue).toByteString().concat(bytes);
       }
-      return ProtoMessageLiteValue.create(bytes, fieldProtoTypeName, this);
+      return ProtoMessageLiteValue.create(bytes, descriptor, this);
     }
     if (existingValue instanceof MessageLite) {
       return mergeMessageLite(((MessageLite) existingValue).toBuilder(), bytes, fieldProtoTypeName);
@@ -171,29 +176,7 @@ public final class ProtoLiteCelValueConverter extends BaseProtoCelValueConverter
         : getDefaultCelValue(fieldDescriptor);
   }
 
-  @Nullable FieldLiteDescriptor findFieldDescriptor(String protoTypeName, int fieldNumber) {
-    MessageLiteDescriptor descriptor = descriptorPool.findDescriptor(protoTypeName).orElse(null);
-    return descriptor == null ? null : descriptor.findByFieldNumber(fieldNumber);
-  }
-
-  @Nullable FieldLiteDescriptor findFieldDescriptor(String protoTypeName, String fieldName) {
-    MessageLiteDescriptor descriptor = descriptorPool.findDescriptor(protoTypeName).orElse(null);
-    return descriptor == null ? null : descriptor.findByFieldName(fieldName);
-  }
-
-  @Nullable MessageLiteDescriptor findDescriptorWithGetters(String protoTypeName) {
-    return descriptorPool
-        .findDescriptor(protoTypeName)
-        .filter(MessageLiteDescriptor::hasGetters)
-        .orElse(null);
-  }
-
-  MessageLite parseMessageLite(ByteString bytes, String protoTypeName) {
-    MessageLiteDescriptor descriptor = descriptorPool.getDescriptorOrThrow(protoTypeName);
-    return parseMessageLite(bytes, descriptor);
-  }
-
-  private static MessageLite parseMessageLite(ByteString bytes, MessageLiteDescriptor descriptor) {
+  static MessageLite parseMessageLite(ByteString bytes, MessageLiteDescriptor descriptor) {
     if (bytes.isEmpty()) {
       return descriptor.newMessageBuilder().getDefaultInstanceForType();
     }
@@ -229,7 +212,7 @@ public final class ProtoLiteCelValueConverter extends BaseProtoCelValueConverter
     WellKnownProto wellKnownProto =
         WellKnownProto.getByTypeName(descriptor.getProtoTypeName()).orElse(null);
     if (isStructLike(wellKnownProto)) {
-      return ProtoMessageLiteValue.create(msg, descriptor.getProtoTypeName(), this);
+      return ProtoMessageLiteValue.create(msg, descriptor, this);
     }
 
     return fromWellKnownProto(msg, checkNotNull(wellKnownProto));
@@ -425,12 +408,17 @@ public final class ProtoLiteCelValueConverter extends BaseProtoCelValueConverter
     return Optional.ofNullable(readField(bytes, protoTypeName, field));
   }
 
-  /** Returns whether {@code field} is present in {@code bytes}. */
+  /** Returns whether {@code field}, unknown to its message's descriptor, is in {@code bytes}. */
   boolean hasFieldByNumber(ByteString bytes, String protoTypeName, SelectField field) {
-    FieldLiteDescriptor fieldDescriptor = findFieldDescriptor(protoTypeName, field.fieldNumber());
-    if (fieldDescriptor == null) {
-      fieldDescriptor = newFieldDescriptor(field);
-    }
+    return hasFieldByNumber(bytes, protoTypeName, field, newFieldDescriptor(field));
+  }
+
+  /** Like the overload above, for a field its message's descriptor has. */
+  boolean hasFieldByNumber(
+      ByteString bytes,
+      String protoTypeName,
+      SelectField field,
+      FieldLiteDescriptor fieldDescriptor) {
     if (fieldDescriptor.getProtoFieldType().equals(FieldLiteDescriptor.Type.GROUP)) {
       throw new UnsupportedOperationException("Groups are not supported");
     }
@@ -469,8 +457,8 @@ public final class ProtoLiteCelValueConverter extends BaseProtoCelValueConverter
    * wire bytes: its CEL value, or null if it's absent.
    */
   @Nullable Object readFieldByGetter(
-      MessageLite message, MessageLiteDescriptor descriptor, FieldLiteDescriptor fieldDescriptor) {
-    Object value = readGetter(message, descriptor, fieldDescriptor.getFieldNumber());
+      ProtoMessageLiteValue message, FieldLiteDescriptor fieldDescriptor) {
+    Object value = readGetter(message, fieldDescriptor.getFieldNumber());
     if (value == null) {
       return null;
     }
@@ -519,14 +507,14 @@ public final class ProtoLiteCelValueConverter extends BaseProtoCelValueConverter
   }
 
   /** Like {@link #hasFieldByNumber}, through the field's generated getter. */
-  boolean hasByGetter(MessageLite message, MessageLiteDescriptor descriptor, SelectField field) {
-    return readGetter(message, descriptor, field.fieldNumber()) != null;
+  boolean hasByGetter(ProtoMessageLiteValue message, SelectField field) {
+    return readGetter(message, field.fieldNumber()) != null;
   }
 
   // A field's value as its getter returns it, or null if it's unset or an empty repeated or map.
-  private static @Nullable Object readGetter(
-      MessageLite message, MessageLiteDescriptor descriptor, int fieldNumber) {
-    Object value = descriptor.getFieldValue(message, fieldNumber);
+  private static @Nullable Object readGetter(ProtoMessageLiteValue message, int fieldNumber) {
+    Object value =
+        message.descriptor().getFieldValue(checkNotNull(message.rawValue()), fieldNumber);
     boolean isEmpty =
         (value instanceof List && ((List<?>) value).isEmpty())
             || (value instanceof Map && ((Map<?, ?>) value).isEmpty());
@@ -549,18 +537,11 @@ public final class ProtoLiteCelValueConverter extends BaseProtoCelValueConverter
             : (long) ((EnumLite) value).getNumber();
       case MESSAGE:
         MessageLite message = (MessageLite) value;
-        String protoTypeName = fieldDescriptor.getFieldProtoTypeName();
-        MessageLiteDescriptor descriptor =
-            descriptorPool.findDescriptor(protoTypeName).orElse(null);
-        if (descriptor == null) {
-          // Without a descriptor, only this submessage is serialized, rather than its whole root.
-          return RawProtoMessageLiteValue.create(message.toByteString(), protoTypeName, this);
-        }
-        if (descriptorPool.findDescriptor(message).orElse(null) != descriptor) {
-          // The pool decodes this type into another class, such as an older version of it.
-          return readMessageField(message.toByteString(), protoTypeName);
-        }
-        return toRuntimeValue(message, descriptor);
+        MessageLiteDescriptor descriptor = descriptorPool.findDescriptor(message).orElse(null);
+        // Not a class the pool knows (e.g. another version of its type): read its own bytes.
+        return descriptor != null
+            ? toRuntimeValue(message, descriptor)
+            : readMessageField(message.toByteString(), fieldDescriptor.getFieldProtoTypeName());
       default:
         return super.toRuntimeValue(value);
     }

@@ -387,6 +387,23 @@ public final class ProtoLiteCelValueConverterTest {
   }
 
   @Test
+  public void select_inMemorySubmessageWithoutDescriptor_isNotCopiedOnUnwrap() {
+    TestAllTypes msg =
+        TestAllTypes.newBuilder()
+            .setOneofType(
+                NestedTestAllTypes.newBuilder()
+                    .setPayload(TestAllTypes.newBuilder().setSingleInt64(42L)))
+            .build();
+    ProtoMessageLiteValue value =
+        (ProtoMessageLiteValue) PROTO_LITE_CEL_VALUE_CONVERTER.toRuntimeValue(msg);
+
+    RawProtoMessageLiteValue submessage = (RawProtoMessageLiteValue) value.select("oneof_type");
+
+    // Serialized on its own rather than sliced from its parent, so unwrapping needn't copy it.
+    assertThat(submessage.value()).isSameInstanceAs(submessage);
+  }
+
+  @Test
   public void readField_splitSingularSubmessages_mergesAllOccurrences() throws Exception {
     ByteArrayOutputStream unknownFieldBaos = new ByteArrayOutputStream();
     CodedOutputStream cos = CodedOutputStream.newInstance(unknownFieldBaos);
@@ -435,14 +452,6 @@ public final class ProtoLiteCelValueConverterTest {
             NestedTestAllTypes.newBuilder()
                 .setPayload(TestAllTypes.newBuilder().setSingleInt32(10).setSingleString("merged"))
                 .build());
-  }
-
-  @Test
-  public void parseMessageLite_emptyBytes_returnsDefaultInstanceSingleton() {
-    MessageLite parsed =
-        PROTO_LITE_CEL_VALUE_CONVERTER.parseMessageLite(ByteString.EMPTY, PROTO3_TEST_ALL_TYPES);
-
-    assertThat(parsed).isSameInstanceAs(TestAllTypes.getDefaultInstance());
   }
 
   @Test
@@ -593,7 +602,10 @@ public final class ProtoLiteCelValueConverterTest {
 
     boolean result =
         PROTO_LITE_CEL_VALUE_CONVERTER.hasFieldByNumber(
-            emptyPackedBytes, messageName, repeatedInt32);
+            emptyPackedBytes,
+            messageName,
+            repeatedInt32,
+            fieldDescriptor(messageName, TestAllTypes.REPEATED_INT32_FIELD_NUMBER));
 
     assertThat(result).isFalse();
   }
@@ -612,7 +624,10 @@ public final class ProtoLiteCelValueConverterTest {
 
     boolean result =
         PROTO_LITE_CEL_VALUE_CONVERTER.hasFieldByNumber(
-            emptyThenPopulatedBytes, PROTO3_TEST_ALL_TYPES, repeatedInt32);
+            emptyThenPopulatedBytes,
+            PROTO3_TEST_ALL_TYPES,
+            repeatedInt32,
+            fieldDescriptor(PROTO3_TEST_ALL_TYPES, TestAllTypes.REPEATED_INT32_FIELD_NUMBER));
 
     assertThat(result).isTrue();
   }
@@ -701,10 +716,9 @@ public final class ProtoLiteCelValueConverterTest {
         (ProtoMessageLiteValue) ALL_TYPES_CONVERTER.toRuntimeValue(testCase.message);
     ProtoMessageLiteValue fromWire =
         ProtoMessageLiteValue.create(
-            testCase.message.toByteString(), throughGetters.celType().name(), ALL_TYPES_CONVERTER);
+            testCase.message.toByteString(), throughGetters.descriptor(), ALL_TYPES_CONVERTER);
 
-    for (FieldLiteDescriptor field :
-        DESCRIPTOR_POOL.findDescriptor(testCase.message).get().getFieldDescriptors()) {
+    for (FieldLiteDescriptor field : throughGetters.descriptor().getFieldDescriptors()) {
       String name = field.getFieldName();
       SelectField selectField = SelectField.create(field.getFieldNumber(), name);
       expect
@@ -743,7 +757,7 @@ public final class ProtoLiteCelValueConverterTest {
         (ProtoMessageLiteValue) ALL_TYPES_CONVERTER.toRuntimeValue(message);
     ProtoMessageLiteValue fromWire =
         ProtoMessageLiteValue.create(
-            message.toByteString(), inMemory.celType().name(), ALL_TYPES_CONVERTER);
+            message.toByteString(), inMemory.descriptor(), ALL_TYPES_CONVERTER);
     SelectField field =
         SelectField.create(
             dev.cel.expr.conformance.proto2.TestAllTypes.STANDALONE_ENUM_FIELD_NUMBER,
