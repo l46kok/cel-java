@@ -31,6 +31,7 @@ import com.google.protobuf.FloatValue;
 import com.google.protobuf.Int32Value;
 import com.google.protobuf.Int64Value;
 import com.google.protobuf.ListValue;
+import com.google.protobuf.Message;
 import com.google.protobuf.StringValue;
 import com.google.protobuf.Struct;
 import com.google.protobuf.Timestamp;
@@ -42,11 +43,13 @@ import com.google.testing.junit.testparameterinjector.TestParameterInjector;
 import com.google.testing.junit.testparameterinjector.TestParameters;
 import dev.cel.common.CelDescriptorUtil;
 import dev.cel.common.CelOptions;
+import dev.cel.common.exceptions.CelAttributeNotFoundException;
 import dev.cel.common.internal.CelDescriptorPool;
 import dev.cel.common.internal.DefaultDescriptorPool;
 import dev.cel.common.internal.DefaultMessageFactory;
 import dev.cel.common.internal.DynamicProto;
 import dev.cel.common.types.StructTypeReference;
+import dev.cel.expr.conformance.proto2.NestedTestAllTypes;
 import dev.cel.expr.conformance.proto2.TestAllTypes;
 import dev.cel.expr.conformance.proto2.TestAllTypes.NestedEnum;
 import dev.cel.expr.conformance.proto2.TestAllTypes.NestedMessage;
@@ -65,6 +68,13 @@ public final class ProtoMessageValueTest {
           DefaultDescriptorPool.INSTANCE,
           DynamicProto.create(DefaultMessageFactory.INSTANCE),
           CelOptions.DEFAULT);
+
+  private static final ImmutableList<SelectField> CHILD_CHILD_PAYLOAD_INT64 =
+      ImmutableList.of(
+          SelectField.create(1L, "child", 11),
+          SelectField.create(1L, "child", 11),
+          SelectField.create(2L, "payload", 11),
+          SelectField.create(2L, "single_int64", 3, -64L));
 
   @Test
   public void emptyProtoMessage() {
@@ -325,7 +335,7 @@ public final class ProtoMessageValueTest {
 
   @SuppressWarnings("ImmutableEnumChecker") // Test only
   private enum SelectFieldJsonValueTestCase {
-    NULL(Value.newBuilder().build(), NullValue.NULL_VALUE),
+    NULL(Value.getDefaultInstance(), NullValue.NULL_VALUE),
     BOOL(Value.newBuilder().setBoolValue(true).build(), true),
     DOUBLE(Value.newBuilder().setNumberValue(4.5d).build(), 4.5d),
     STRING(Value.newBuilder().setStringValue("test").build(), "test"),
@@ -665,5 +675,103 @@ public final class ProtoMessageValueTest {
         .setStandaloneMessage(NestedMessage.getDefaultInstance())
         .setStandaloneEnum(NestedEnum.BAR)
         .build();
+  }
+
+  @SuppressWarnings("ImmutableEnumChecker") // Test only
+  private enum WalkableChainTestCase {
+    SET(
+        NestedTestAllTypes.newBuilder()
+            .setChild(
+                NestedTestAllTypes.newBuilder()
+                    .setChild(
+                        NestedTestAllTypes.newBuilder()
+                            .setPayload(TestAllTypes.newBuilder().setSingleInt64(42))))
+            .build(),
+        42L),
+    // Reads single_int64's declared default from the unset submessages' default instances.
+    UNSET_INTERMEDIATE(NestedTestAllTypes.getDefaultInstance(), -64L);
+
+    private final NestedTestAllTypes message;
+    private final long expected;
+
+    WalkableChainTestCase(NestedTestAllTypes message, long expected) {
+      this.message = message;
+      this.expected = expected;
+    }
+  }
+
+  @Test
+  public void selectPath_nestedChain_returnsLeafValue(
+      @TestParameter WalkableChainTestCase testCase) {
+    ProtoMessageValue root = newProtoMessageValue(testCase.message);
+
+    Object result = root.selectPath(CHILD_CHILD_PAYLOAD_INT64, 0);
+
+    assertThat(result).isEqualTo(testCase.expected);
+  }
+
+  @Test
+  public void selectPath_dynamicRoot_selectsOneHopAtATime() {
+    ProtoMessageValue root =
+        newProtoMessageValue(DynamicMessage.getDefaultInstance(NestedTestAllTypes.getDescriptor()));
+
+    Object result = root.selectPath(CHILD_CHILD_PAYLOAD_INT64, 0);
+
+    assertThat(result).isEqualTo(-64L);
+  }
+
+  @SuppressWarnings("ImmutableEnumChecker") // Test only
+  private enum UnwalkableChainTestCase {
+    UNKNOWN_FIRST_HOP(
+        TestAllTypes.getDefaultInstance(),
+        ImmutableList.of(
+            SelectField.create(99999L, "unknown", 11), SelectField.create(1L, "bb", 5, 0L)),
+        IllegalArgumentException.class),
+    SCALAR_FIRST_HOP(
+        TestAllTypes.newBuilder().setSingleInt64(1L).build(),
+        ImmutableList.of(
+            SelectField.create(2L, "single_int64", 3, 0L), SelectField.create(1L, "bb", 5, 0L)),
+        CelAttributeNotFoundException.class),
+    REPEATED_FIRST_HOP(
+        TestAllTypes.newBuilder()
+            .addRepeatedNestedMessage(NestedMessage.getDefaultInstance())
+            .build(),
+        ImmutableList.of(
+            SelectField.create(51L, "repeated_nested_message", 11),
+            SelectField.create(1L, "bb", 5, 0L)),
+        CelAttributeNotFoundException.class),
+    WELL_KNOWN_FIRST_HOP(
+        TestAllTypes.newBuilder().setSingleTimestamp(Timestamp.newBuilder().setSeconds(1)).build(),
+        ImmutableList.of(
+            SelectField.create(102L, "single_timestamp", 11),
+            SelectField.create(1L, "seconds", 3, 0L)),
+        CelAttributeNotFoundException.class);
+
+    private final Message message;
+    private final ImmutableList<SelectField> fields;
+    private final Class<? extends Exception> thrown;
+
+    UnwalkableChainTestCase(
+        Message message, ImmutableList<SelectField> fields, Class<? extends Exception> thrown) {
+      this.message = message;
+      this.fields = fields;
+      this.thrown = thrown;
+    }
+  }
+
+  @Test
+  public void selectPath_unwalkableChain_throwsLikeEachHop(
+      @TestParameter UnwalkableChainTestCase testCase) {
+    ProtoMessageValue root = newProtoMessageValue(testCase.message);
+
+    assertThrows(testCase.thrown, () -> root.selectPath(testCase.fields, 0));
+  }
+
+  private static ProtoMessageValue newProtoMessageValue(Message message) {
+    return ProtoMessageValue.create(
+        message,
+        DefaultDescriptorPool.INSTANCE,
+        PROTO_CEL_VALUE_CONVERTER,
+        /* enableJsonFieldNames= */ false);
   }
 }

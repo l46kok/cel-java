@@ -17,6 +17,7 @@ package dev.cel.common.values;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.auto.value.AutoValue;
+import com.google.common.collect.ImmutableList;
 import com.google.errorprone.annotations.Immutable;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.CodedInputStream;
@@ -134,6 +135,19 @@ abstract class RawProtoMessageLiteValue extends StructValue<String, WireMessageL
   @Override
   public Optional<Object> findByFieldNumber(SelectField field) {
     return protoLiteCelValueConverter().findByFieldNumber(toByteString(), protoTypeName(), field);
+  }
+
+  @Override
+  public Object selectPath(ImmutableList<SelectField> fields, int from) {
+    // Wire bytes have no submessages in memory to walk. Consecutive hops through wire bytes are
+    // selected here, rather than each going back through the traversal.
+    Object current = this;
+    int i = from;
+    while (i < fields.size() - 1 && current instanceof RawProtoMessageLiteValue) {
+      current = ((RawProtoMessageLiteValue) current).selectByFieldNumber(fields.get(i));
+      i++;
+    }
+    return OptimizedSelectTraversal.qualify(current, fields, i);
   }
 
   static RawProtoMessageLiteValue create(

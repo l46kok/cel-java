@@ -14,6 +14,7 @@
 
 package dev.cel.common.values;
 
+import com.google.common.collect.ImmutableList;
 import com.google.errorprone.annotations.Immutable;
 import dev.cel.common.annotations.Internal;
 import java.util.Optional;
@@ -23,7 +24,8 @@ import java.util.Optional;
  *
  * <p>Implementations resolve individual field selections against themselves by protobuf field
  * number. Walking the chain across multiple fields and heterogeneous values belongs to {@link
- * OptimizedSelectTraversal}.
+ * OptimizedSelectTraversal}, though an implementation may walk the part of it that it can read
+ * itself through {@link #selectPath}.
  *
  * <p>CEL Library Internals. Do Not Use.
  */
@@ -42,4 +44,11 @@ public interface OptimizedSelectable {
    * step of a presence test, or empty if absent.
    */
   Optional<Object> findByFieldNumber(SelectField field);
+
+  /**
+   * Selects {@code fields} from index {@code from} on, starting at this value, and returns the last
+   * one's value. Implementations may walk the nested values they can read without materializing
+   * each one, and hand the rest back to {@link OptimizedSelectTraversal}.
+   */
+  Object selectPath(ImmutableList<SelectField> fields, int from);
 }

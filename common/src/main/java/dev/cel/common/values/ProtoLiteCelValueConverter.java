@@ -506,6 +506,46 @@ public final class ProtoLiteCelValueConverter extends BaseProtoCelValueConverter
         "Unexpected encoding type: " + fieldDescriptor.getEncodingType());
   }
 
+  /**
+   * Like {@link OptimizedSelectable#selectPath}: walks {@code message}'s in-memory submessages
+   * through their getters without wrapping them, then selects the rest from the last one reached.
+   */
+  Object selectPath(ProtoMessageLiteValue message, ImmutableList<SelectField> fields, int from) {
+    MessageLite current = message.rawValue();
+    MessageLiteDescriptor descriptor = message.descriptor();
+    if (current == null || !descriptor.hasGetters()) {
+      // Only in-memory messages read through generated getters can be walked.
+      return OptimizedSelectTraversal.qualify(
+          message.selectByFieldNumber(fields.get(from)), fields, from + 1);
+    }
+    int i = from;
+    // Walks submessages up to the one holding the last field, stopping at one that's unset or has
+    // no descriptor with getters, such as well-known types.
+    while (i < fields.size() - 1) {
+      Object submessage = descriptor.getFieldValue(current, fields.get(i).fieldNumber());
+      if (!(submessage instanceof MessageLite)) {
+        break;
+      }
+      Optional<MessageLiteDescriptor> submessageDescriptor =
+          descriptorPool
+              .findDescriptor((MessageLite) submessage)
+              .filter(MessageLiteDescriptor::hasGetters);
+      if (!submessageDescriptor.isPresent()) {
+        break;
+      }
+      current = (MessageLite) submessage;
+      descriptor = submessageDescriptor.get();
+      i++;
+    }
+    // Selects the next field from the last message reached, or from this one if none was.
+    ProtoMessageLiteValue reached = message;
+    if (i > from) {
+      reached = ProtoMessageLiteValue.create(current, descriptor, this);
+    }
+    return OptimizedSelectTraversal.qualify(
+        reached.selectByFieldNumber(fields.get(i)), fields, i + 1);
+  }
+
   /** Like {@link #hasFieldByNumber}, through the field's generated getter. */
   boolean hasByGetter(ProtoMessageLiteValue message, SelectField field) {
     return readGetter(message, field.fieldNumber()) != null;

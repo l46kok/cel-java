@@ -35,8 +35,17 @@ public final class OptimizedSelectTraversal {
    * Qualifies {@code target} through every field in {@code fields} and returns the terminal value.
    */
   public static Object qualify(Object target, ImmutableList<SelectField> fields) {
+    return qualify(target, fields, 0);
+  }
+
+  /** Qualifies {@code target} through the fields of {@code fields} from index {@code from} on. */
+  static Object qualify(Object target, ImmutableList<SelectField> fields, int from) {
     Object current = target;
-    for (int i = 0; i < fields.size(); i++) {
+    for (int i = from; i < fields.size(); i++) {
+      // With only the last field left, there's nothing to walk.
+      if (i < fields.size() - 1 && current instanceof OptimizedSelectable) {
+        return ((OptimizedSelectable) current).selectPath(fields, i);
+      }
       current = qualifyField(current, fields.get(i));
     }
     return current;

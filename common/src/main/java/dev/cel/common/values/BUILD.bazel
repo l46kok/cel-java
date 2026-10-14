@@ -280,6 +280,7 @@ java_library(
     ],
     deps = [
         ":base_proto_cel_value_converter",
+        ":optimized_select_traversal",
         ":optimized_selectable",
         ":preadapted_list",
         ":select_field",
@@ -328,6 +329,7 @@ java_library(
     ],
     deps = [
         ":base_proto_cel_value_converter",
+        ":optimized_select_traversal",
         ":optimized_selectable",
         ":preadapted_list",
         ":select_field",
@@ -360,6 +362,7 @@ cel_android_library(
     ],
     deps = [
         ":base_proto_cel_value_converter_android",
+        ":optimized_select_traversal_android",
         ":optimized_selectable_android",
         ":preadapted_list_android",
         ":select_field_android",
@@ -483,6 +486,7 @@ java_library(
         ":select_field",
         "//common/annotations",
         "@maven//:com_google_errorprone_error_prone_annotations",
+        "@maven//:com_google_guava_guava",
     ],
 )
 
@@ -495,6 +499,7 @@ cel_android_library(
         ":select_field_android",
         "//common/annotations",
         "@maven//:com_google_errorprone_error_prone_annotations",
+        "@maven_android//:com_google_guava_guava",
     ],
 )
 

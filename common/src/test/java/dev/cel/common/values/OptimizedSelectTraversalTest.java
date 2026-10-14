@@ -238,6 +238,27 @@ public final class OptimizedSelectTraversalTest {
   }
 
   @Test
+  public void qualify_valueWalkingRestOfChain_returnsItsResult() {
+    FakeOptimizedSelectable walking =
+        new FakeOptimizedSelectable(ImmutableMap.of()) {
+          @Override
+          public Object selectPath(ImmutableList<SelectField> fields, int from) {
+            return "walked from " + fields.get(from).fieldName();
+          }
+        };
+    FakeOptimizedSelectable root = new FakeOptimizedSelectable(ImmutableMap.of("outer", walking));
+    ImmutableList<SelectField> fields =
+        ImmutableList.of(
+            SelectField.create(1L, "outer", 11),
+            SelectField.create(2L, "middle", 11),
+            SelectField.create(3L, "leaf", 9, ""));
+
+    Object result = OptimizedSelectTraversal.qualify(root, fields);
+
+    assertThat(result).isEqualTo("walked from middle");
+  }
+
+  @Test
   public void hasField_unsupportedTarget_throwsException() {
     ImmutableList<SelectField> fields = ImmutableList.of(SelectField.create(1L, "invalid_field"));
 
@@ -272,7 +293,7 @@ public final class OptimizedSelectTraversalTest {
   }
 
   @SuppressWarnings("Immutable")
-  private static final class FakeOptimizedSelectable implements OptimizedSelectable {
+  private static class FakeOptimizedSelectable implements OptimizedSelectable {
     private final ImmutableMap<String, Object> values;
 
     @Override
@@ -295,6 +316,12 @@ public final class OptimizedSelectTraversalTest {
     @Override
     public Optional<Object> findByFieldNumber(SelectField field) {
       return Optional.ofNullable(values.get(field.fieldName()));
+    }
+
+    @Override
+    public Object selectPath(ImmutableList<SelectField> fields, int from) {
+      return OptimizedSelectTraversal.qualify(
+          selectByFieldNumber(fields.get(from)), fields, from + 1);
     }
 
     FakeOptimizedSelectable(Map<String, Object> values) {

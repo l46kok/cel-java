@@ -2591,9 +2591,14 @@ public final class CelLiteRuntimeVersionSkewTest {
     return new CelLiteDescriptor(version, descriptors) {
       @Override
       protected @Nullable Object getFieldValue(int messageIndex, Object message, int fieldNumber) {
+        MessageLiteDescriptor clientDesc = descriptors.get(messageIndex);
+        // Like the client's generated code, which has no getter for a field its schema lacks.
+        if (clientDesc.findByFieldNumber(fieldNumber) == null) {
+          return null;
+        }
         return fullDescriptor
             .getProtoTypeNamesToDescriptors()
-            .get(descriptors.get(messageIndex).getProtoTypeName())
+            .get(clientDesc.getProtoTypeName())
             .getFieldValue((MessageLite) message, fieldNumber);
       }
     };

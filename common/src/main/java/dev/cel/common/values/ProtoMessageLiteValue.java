@@ -18,6 +18,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.auto.value.AutoValue;
 import com.google.auto.value.extension.memoized.Memoized;
+import com.google.common.collect.ImmutableList;
 import com.google.errorprone.annotations.Immutable;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.MessageLite;
@@ -145,6 +146,11 @@ abstract class ProtoMessageLiteValue extends StructValue<String, MessageLite>
   public Optional<Object> find(String field) {
     // Per SelectableValue#find, a field that doesn't exist is reported as absent.
     return Optional.ofNullable(descriptor().findByFieldName(field)).map(this::readField);
+  }
+
+  @Override
+  public Object selectPath(ImmutableList<SelectField> fields, int from) {
+    return protoLiteCelValueConverter().selectPath(this, fields, from);
   }
 
   @Override

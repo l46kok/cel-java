@@ -17,11 +17,14 @@ package dev.cel.common.values;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.auto.value.AutoValue;
+import com.google.common.collect.ImmutableList;
 import com.google.errorprone.annotations.Immutable;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
+import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Message;
 import dev.cel.common.internal.CelDescriptorPool;
+import dev.cel.common.internal.WellKnownProto;
 import dev.cel.common.types.CelType;
 import dev.cel.common.types.StructTypeReference;
 import java.util.Optional;
@@ -76,9 +79,7 @@ public abstract class ProtoMessageValue extends StructValue<String, Message>
 
   @Override
   public Object selectByFieldNumber(SelectField field) {
-    FieldDescriptor fieldDescriptor = findFieldByNumber(value().getDescriptorForType(), field);
-
-    return protoCelValueConverter().fromProtoMessageFieldToCelValue(value(), fieldDescriptor);
+    return selectField(value(), field);
   }
 
   @Override
@@ -93,6 +94,42 @@ public abstract class ProtoMessageValue extends StructValue<String, Message>
     FieldDescriptor fieldDescriptor = findFieldByNumber(value().getDescriptorForType(), field);
 
     return findFieldValue(fieldDescriptor);
+  }
+
+  @Override
+  public Object selectPath(ImmutableList<SelectField> fields, int from) {
+    Message message = value();
+    if (message instanceof DynamicMessage) {
+      // Each hop adapts a dynamic message into its generated class, if it has one.
+      return OptimizedSelectTraversal.qualify(
+          selectByFieldNumber(fields.get(from)), fields, from + 1);
+    }
+    int i = from;
+    // Walks nested messages without wrapping them, up to the one holding the last field.
+    while (i < fields.size() - 1) {
+      FieldDescriptor fieldDescriptor =
+          findFieldByNumber(message.getDescriptorForType(), fields.get(i));
+      if (!isWalkable(fieldDescriptor)) {
+        break;
+      }
+      message = (Message) message.getField(fieldDescriptor);
+      i++;
+    }
+    return OptimizedSelectTraversal.qualify(selectField(message, fields.get(i)), fields, i + 1);
+  }
+
+  // A singular message field that isn't of a well-known type, which the converter would adapt.
+  private static boolean isWalkable(FieldDescriptor fieldDescriptor) {
+    return fieldDescriptor.getJavaType() == FieldDescriptor.JavaType.MESSAGE
+        && !fieldDescriptor.isRepeated()
+        && !WellKnownProto.getByTypeName(fieldDescriptor.getMessageType().getFullName())
+            .isPresent();
+  }
+
+  private Object selectField(Message message, SelectField field) {
+    FieldDescriptor fieldDescriptor = findFieldByNumber(message.getDescriptorForType(), field);
+
+    return protoCelValueConverter().fromProtoMessageFieldToCelValue(message, fieldDescriptor);
   }
 
   public static ProtoMessageValue create(

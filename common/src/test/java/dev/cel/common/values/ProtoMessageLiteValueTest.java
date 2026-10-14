@@ -43,6 +43,8 @@ import com.google.testing.junit.testparameterinjector.TestParameterInjector;
 import dev.cel.common.exceptions.CelAttributeNotFoundException;
 import dev.cel.common.internal.CelLiteDescriptorPool;
 import dev.cel.common.internal.DefaultLiteDescriptorPool;
+import dev.cel.expr.conformance.proto3.NestedTestAllTypes;
+import dev.cel.expr.conformance.proto3.NestedTestAllTypesCelDescriptor;
 import dev.cel.expr.conformance.proto3.TestAllTypes;
 import dev.cel.expr.conformance.proto3.TestAllTypes.NestedEnum;
 import dev.cel.expr.conformance.proto3.TestAllTypes.NestedMessage;
@@ -63,7 +65,9 @@ import org.junit.runner.RunWith;
 public final class ProtoMessageLiteValueTest {
   private static final CelLiteDescriptorPool DESCRIPTOR_POOL =
       DefaultLiteDescriptorPool.newInstance(
-          ImmutableSet.of(TestAllTypesCelDescriptor.getDescriptor()));
+          ImmutableSet.of(
+              TestAllTypesCelDescriptor.getDescriptor(),
+              NestedTestAllTypesCelDescriptor.getDescriptor()));
 
   private static final ProtoLiteCelValueConverter PROTO_LITE_CEL_VALUE_CONVERTER =
       ProtoLiteCelValueConverter.newInstance(DESCRIPTOR_POOL);
@@ -74,6 +78,24 @@ public final class ProtoMessageLiteValueTest {
   private static final MessageLiteDescriptor NESTED_MESSAGE_DESCRIPTOR =
       DESCRIPTOR_POOL.getDescriptorOrThrow(
           "cel.expr.conformance.proto3.TestAllTypes.NestedMessage");
+
+  // Like PROTO_LITE_CEL_VALUE_CONVERTER, but NestedTestAllTypes's TestAllTypes payload has no
+  // descriptor.
+  private static final ProtoLiteCelValueConverter PARTIAL_CONVERTER =
+      ProtoLiteCelValueConverter.newInstance(
+          DefaultLiteDescriptorPool.newInstance(
+              ImmutableSet.of(NestedTestAllTypesCelDescriptor.getDescriptor())));
+
+  private static final SelectField CHILD = SelectField.create(1L, "child", 11);
+  private static final SelectField PAYLOAD = SelectField.create(2L, "payload", 11);
+  private static final SelectField SINGLE_INT64 = SelectField.create(2L, "single_int64", 3, 0L);
+  private static final ImmutableList<SelectField> STANDALONE_BB =
+      ImmutableList.of(
+          SelectField.create(23L, "standalone_message", 11), SelectField.create(1L, "bb", 5, 0L));
+  private static final ImmutableList<SelectField> TIMESTAMP_SECONDS =
+      ImmutableList.of(
+          SelectField.create(102L, "single_timestamp", 11),
+          SelectField.create(1L, "seconds", 3, 0L));
 
   @Test
   public void create_withEmptyMessage() {
@@ -958,5 +980,144 @@ public final class ProtoMessageLiteValueTest {
             () -> OptimizedSelectTraversal.hasField(val, fields));
 
     assertThat(thrown).hasMessageThat().contains("leaf_field");
+  }
+
+  @SuppressWarnings("ImmutableEnumChecker") // Test only
+  private enum WalkableChainTestCase {
+    ALL_DESCRIBED(PROTO_LITE_CEL_VALUE_CONVERTER, nestedPayloadInt64(42L), 42L),
+    DESCRIPTORLESS_PAYLOAD(PARTIAL_CONVERTER, nestedPayloadInt64(42L), 42L),
+    UNSET_AFTER_ONE_HOP(
+        PROTO_LITE_CEL_VALUE_CONVERTER,
+        NestedTestAllTypes.newBuilder().setChild(NestedTestAllTypes.getDefaultInstance()).build(),
+        0L);
+
+    private final ProtoLiteCelValueConverter converter;
+    private final NestedTestAllTypes message;
+    private final long expected;
+
+    WalkableChainTestCase(
+        ProtoLiteCelValueConverter converter, NestedTestAllTypes message, long expected) {
+      this.converter = converter;
+      this.message = message;
+      this.expected = expected;
+    }
+  }
+
+  @Test
+  public void selectPath_nestedChainWithGetters_returnsLeafValue(
+      @TestParameter WalkableChainTestCase testCase) {
+    ProtoMessageLiteValue root =
+        (ProtoMessageLiteValue) testCase.converter.toRuntimeValue(testCase.message);
+
+    Object result = root.selectPath(ImmutableList.of(CHILD, CHILD, PAYLOAD, SINGLE_INT64), 0);
+
+    assertThat(result).isEqualTo(testCase.expected);
+  }
+
+  @SuppressWarnings("ImmutableEnumChecker") // Test only
+  private enum UnwalkableChainTestCase {
+    UNSET_FIRST_HOP(TEST_ALL_TYPES_DESCRIPTOR, TestAllTypes.getDefaultInstance(), 0L),
+    ROOT_WITHOUT_GETTERS(
+        new MessageLiteDescriptor("unowned.TestAllTypes", ImmutableList.of(), () -> null),
+        standaloneBb(7),
+        7L);
+
+    private final MessageLiteDescriptor descriptor;
+    private final TestAllTypes message;
+    private final long expected;
+
+    UnwalkableChainTestCase(MessageLiteDescriptor descriptor, TestAllTypes message, long expected) {
+      this.descriptor = descriptor;
+      this.message = message;
+      this.expected = expected;
+    }
+  }
+
+  @Test
+  public void selectPath_unwalkableChain_selectsOneHopAtATime(
+      @TestParameter UnwalkableChainTestCase testCase) {
+    ProtoMessageLiteValue root =
+        ProtoMessageLiteValue.create(
+            testCase.message, testCase.descriptor, PROTO_LITE_CEL_VALUE_CONVERTER);
+
+    Object result = root.selectPath(STANDALONE_BB, 0);
+
+    assertThat(result).isEqualTo(testCase.expected);
+  }
+
+  @Test
+  public void selectPath_wireBackedRoot_readsWireBytes() {
+    ProtoMessageLiteValue root =
+        ProtoMessageLiteValue.create(
+            standaloneBb(7).toByteString(),
+            TEST_ALL_TYPES_DESCRIPTOR,
+            PROTO_LITE_CEL_VALUE_CONVERTER);
+
+    Object result = root.selectPath(STANDALONE_BB, 0);
+
+    assertThat(result).isEqualTo(7L);
+  }
+
+  @Test
+  public void qualify_wellKnownTypeMidChain_throwsLikeEachHop() {
+    ProtoMessageLiteValue root =
+        (ProtoMessageLiteValue)
+            PROTO_LITE_CEL_VALUE_CONVERTER.toRuntimeValue(
+                TestAllTypes.newBuilder()
+                    .setSingleTimestamp(Timestamp.newBuilder().setSeconds(1))
+                    .build());
+
+    CelAttributeNotFoundException thrown =
+        assertThrows(
+            CelAttributeNotFoundException.class,
+            () -> OptimizedSelectTraversal.qualify(root, TIMESTAMP_SECONDS));
+
+    assertThat(thrown).hasMessageThat().contains("seconds");
+  }
+
+  @Test
+  public void qualify_unknownFieldMidChain_readsWireBytes() throws Exception {
+    ByteArrayOutputStream inner = new ByteArrayOutputStream();
+    CodedOutputStream innerOut = CodedOutputStream.newInstance(inner);
+    innerOut.writeString(1, "inner");
+    innerOut.flush();
+    ByteArrayOutputStream child = new ByteArrayOutputStream();
+    CodedOutputStream childOut = CodedOutputStream.newInstance(child);
+    childOut.writeBytes(998, ByteString.copyFrom(inner.toByteArray()));
+    childOut.flush();
+    ProtoMessageLiteValue root =
+        (ProtoMessageLiteValue)
+            PROTO_LITE_CEL_VALUE_CONVERTER.toRuntimeValue(
+                NestedTestAllTypes.newBuilder()
+                    .setChild(
+                        NestedTestAllTypes.parseFrom(
+                            child.toByteArray(), ExtensionRegistryLite.getEmptyRegistry()))
+                    .build());
+
+    Object result =
+        OptimizedSelectTraversal.qualify(
+            root,
+            ImmutableList.of(
+                CHILD,
+                SelectField.create(998L, "unknown", 11),
+                SelectField.create(1L, "s", 9, "")));
+
+    assertThat(result).isEqualTo("inner");
+  }
+
+  private static NestedTestAllTypes nestedPayloadInt64(long value) {
+    return NestedTestAllTypes.newBuilder()
+        .setChild(
+            NestedTestAllTypes.newBuilder()
+                .setChild(
+                    NestedTestAllTypes.newBuilder()
+                        .setPayload(TestAllTypes.newBuilder().setSingleInt64(value))))
+        .build();
+  }
+
+  private static TestAllTypes standaloneBb(int bb) {
+    return TestAllTypes.newBuilder()
+        .setStandaloneMessage(NestedMessage.newBuilder().setBb(bb))
+        .build();
   }
 }
