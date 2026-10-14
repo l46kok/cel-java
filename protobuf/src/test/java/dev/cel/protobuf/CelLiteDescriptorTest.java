@@ -254,36 +254,9 @@ public class CelLiteDescriptorTest {
   public void fieldLiteDescriptor_nullParameters_throws() {
     assertThrows(
         NullPointerException.class,
-        () ->
-            new FieldLiteDescriptor(
-                1,
-                "field",
-                null,
-                EncodingType.SINGULAR,
-                FieldLiteDescriptor.Type.INT32,
-                false,
-                ""));
+        () -> new FieldLiteDescriptor(1, "field", null, FieldLiteDescriptor.Type.INT32, false, ""));
     assertThrows(
         NullPointerException.class,
-        () ->
-            new FieldLiteDescriptor(
-                1,
-                "field",
-                FieldLiteDescriptor.JavaType.INT,
-                null,
-                FieldLiteDescriptor.Type.INT32,
-                false,
-                ""));
-    assertThrows(
-        NullPointerException.class,
-        () ->
-            new FieldLiteDescriptor(
-                1,
-                "field",
-                FieldLiteDescriptor.JavaType.INT,
-                EncodingType.SINGULAR,
-                null,
-                false,
-                ""));
+        () -> new FieldLiteDescriptor(1, "field", EncodingType.SINGULAR, null, false, ""));
   }
 }

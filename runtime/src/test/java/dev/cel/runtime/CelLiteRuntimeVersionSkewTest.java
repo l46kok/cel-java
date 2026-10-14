@@ -2570,7 +2570,6 @@ public final class CelLiteRuntimeVersionSkewTest {
             new FieldLiteDescriptor(
                 f.getFieldNumber(),
                 clientFieldName,
-                f.getJavaType(),
                 f.getEncodingType(),
                 f.getProtoFieldType(),
                 f.getIsPacked(),
@@ -2652,7 +2651,6 @@ public final class CelLiteRuntimeVersionSkewTest {
         new FieldLiteDescriptor(
             /* fieldNumber= */ 1,
             /* fieldName= */ "v1_single_int32",
-            /* javaType= */ FieldLiteDescriptor.JavaType.INT,
             /* encodingType= */ FieldLiteDescriptor.EncodingType.SINGULAR,
             /* protoFieldType= */ FieldLiteDescriptor.Type.INT32,
             /* isPacked= */ false,

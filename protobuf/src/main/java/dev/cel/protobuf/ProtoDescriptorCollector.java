@@ -67,7 +67,6 @@ final class ProtoDescriptorCollector {
                 .setFieldNumber(fieldDescriptor.getNumber())
                 .setFieldName(fieldDescriptor.getName())
                 .setIsPacked(fieldDescriptor.isPacked())
-                .setJavaType(adaptJavaType(fieldDescriptor.getJavaType()))
                 .setProtoFieldType(adaptFieldProtoType(fieldDescriptor.getType()))
                 .setGetterExpression(getterExpression(fieldDescriptor));
 
@@ -236,31 +235,6 @@ final class ProtoDescriptorCollector {
     }
 
     throw new IllegalArgumentException("Unknown Type: " + type);
-  }
-
-  private static FieldLiteDescriptor.JavaType adaptJavaType(JavaType javaType) {
-    switch (javaType) {
-      case INT:
-        return FieldLiteDescriptor.JavaType.INT;
-      case LONG:
-        return FieldLiteDescriptor.JavaType.LONG;
-      case FLOAT:
-        return FieldLiteDescriptor.JavaType.FLOAT;
-      case DOUBLE:
-        return FieldLiteDescriptor.JavaType.DOUBLE;
-      case BOOLEAN:
-        return FieldLiteDescriptor.JavaType.BOOLEAN;
-      case STRING:
-        return FieldLiteDescriptor.JavaType.STRING;
-      case BYTE_STRING:
-        return FieldLiteDescriptor.JavaType.BYTE_STRING;
-      case ENUM:
-        return FieldLiteDescriptor.JavaType.ENUM;
-      case MESSAGE:
-        return FieldLiteDescriptor.JavaType.MESSAGE;
-    }
-
-    throw new IllegalArgumentException("Unknown JavaType: " + javaType);
   }
 
   private static ImmutableSet<Descriptor> collectNested(Descriptor descriptor) {

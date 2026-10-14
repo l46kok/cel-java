@@ -81,12 +81,6 @@ public abstract class LiteDescriptorCodegenMetadata {
 
     public abstract String getFieldName();
 
-    // Fully-qualified name to the Java Type enumeration (ex:
-    // dev.cel.protobuf.CelLiteDescriptor.FieldLiteDescriptor.INT)
-    public String getJavaTypeEnumName() {
-      return getFullyQualifiedEnumName(getJavaType());
-    }
-
     // Fully-qualified name to the EncodingType enumeration (ex:
     // dev.cel.protobuf.CelLiteDescriptor.FieldLiteDescriptor.SINGULAR)
     public String getEncodingTypeEnumName() {
@@ -107,8 +101,6 @@ public abstract class LiteDescriptorCodegenMetadata {
     // empty for groups, which CEL doesn't support.
     public abstract String getGetterExpression();
 
-    abstract FieldLiteDescriptor.JavaType getJavaType();
-
     abstract FieldLiteDescriptor.Type getProtoFieldType();
 
     abstract EncodingType getEncodingType();
@@ -124,8 +116,6 @@ public abstract class LiteDescriptorCodegenMetadata {
       abstract Builder setFieldNumber(int fieldNumber);
 
       abstract Builder setFieldName(String fieldName);
-
-      abstract Builder setJavaType(FieldLiteDescriptor.JavaType javaTypeEnum);
 
       abstract Builder setEncodingType(EncodingType encodingTypeEnum);
 

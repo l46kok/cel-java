@@ -175,7 +175,6 @@ public abstract class CelLiteDescriptor {
   public static final class FieldLiteDescriptor {
     private final int fieldNumber;
     private final String fieldName;
-    private final JavaType javaType;
     private final String fieldProtoTypeName;
     private final Type protoFieldType;
     private final EncodingType encodingType;
@@ -242,6 +241,7 @@ public abstract class CelLiteDescriptor {
 
       private final int number;
       private final WireFormat.FieldType wireFormatFieldType;
+      private final JavaType javaType;
 
       /** Gets the type number corresponding to {@code FieldDescriptorProto.Type#getNumber()}. */
       public int getNumber() {
@@ -305,6 +305,8 @@ public abstract class CelLiteDescriptor {
       private Type(int number, WireFormat.FieldType wireFormatFieldType) {
         this.number = number;
         this.wireFormatFieldType = Objects.requireNonNull(wireFormatFieldType);
+        // JavaType's constants match WireFormat.JavaType's by name.
+        this.javaType = JavaType.valueOf(wireFormatFieldType.getJavaType().name());
       }
     }
 
@@ -322,7 +324,7 @@ public abstract class CelLiteDescriptor {
      * <p>This is exactly the same as com.google.protobuf.Descriptors#JavaType
      */
     public JavaType getJavaType() {
-      return javaType;
+      return protoFieldType.javaType;
     }
 
     public EncodingType getEncodingType() {
@@ -357,8 +359,6 @@ public abstract class CelLiteDescriptor {
      *
      * @param fieldNumber Field index
      * @param fieldName Name of the field
-     * @param javaType Canonical Java type name (ex: Long, Double, Float, Message... see
-     *     com.google.protobuf.Descriptors#JavaType)
      * @param encodingType Describes whether the field is a singular (primitives or messages), list
      *     or a map with respect to CEL.
      * @param protoFieldType Protobuf Field Type (ex: INT32, SINT32, GROUP, MESSAGE... see
@@ -370,14 +370,12 @@ public abstract class CelLiteDescriptor {
     public FieldLiteDescriptor(
         int fieldNumber,
         String fieldName,
-        JavaType javaType,
         EncodingType encodingType, // LIST, MAP, SINGULAR
         Type protoFieldType, // INT32, SINT32, GROUP, MESSAGE... (See Descriptors#Type)
         boolean isPacked,
         String fieldProtoTypeName) {
       this.fieldNumber = fieldNumber;
       this.fieldName = Objects.requireNonNull(fieldName);
-      this.javaType = Objects.requireNonNull(javaType);
       this.encodingType = Objects.requireNonNull(encodingType);
       this.protoFieldType = Objects.requireNonNull(protoFieldType);
       this.isPacked = isPacked;

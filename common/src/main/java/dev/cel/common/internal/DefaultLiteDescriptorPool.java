@@ -88,13 +88,11 @@ public final class DefaultLiteDescriptorPool implements CelLiteDescriptorPool {
                 newPrimitiveFieldDescriptor(
                     1,
                     "type_url",
-                    FieldLiteDescriptor.JavaType.STRING,
                     FieldLiteDescriptor.Type.STRING))
             .add(
                 newPrimitiveFieldDescriptor(
                     2,
                     "value",
-                    FieldLiteDescriptor.JavaType.BYTE_STRING,
                     FieldLiteDescriptor.Type.BYTES));
         break;
       case FIELD_MASK:
@@ -103,7 +101,6 @@ public final class DefaultLiteDescriptorPool implements CelLiteDescriptorPool {
             new FieldLiteDescriptor(
                 /* fieldNumber= */ 1,
                 /* fieldName= */ "paths",
-                /* javaType= */ FieldLiteDescriptor.JavaType.STRING,
                 /* encodingType= */ EncodingType.LIST,
                 /* protoFieldType= */ FieldLiteDescriptor.Type.STRING,
                 /* isPacked= */ false,
@@ -112,8 +109,7 @@ public final class DefaultLiteDescriptorPool implements CelLiteDescriptorPool {
       case BOOL_VALUE:
         messageBuilder = BoolValue::newBuilder;
         fieldDescriptors.add(
-            newPrimitiveFieldDescriptor(
-                1, "value", FieldLiteDescriptor.JavaType.BOOLEAN, FieldLiteDescriptor.Type.BOOL));
+            newPrimitiveFieldDescriptor(1, "value", FieldLiteDescriptor.Type.BOOL));
         break;
       case BYTES_VALUE:
         messageBuilder = BytesValue::newBuilder;
@@ -121,50 +117,42 @@ public final class DefaultLiteDescriptorPool implements CelLiteDescriptorPool {
             newPrimitiveFieldDescriptor(
                 1,
                 "value",
-                FieldLiteDescriptor.JavaType.BYTE_STRING,
                 FieldLiteDescriptor.Type.BYTES));
         break;
       case DOUBLE_VALUE:
         messageBuilder = DoubleValue::newBuilder;
         fieldDescriptors.add(
-            newPrimitiveFieldDescriptor(
-                1, "value", FieldLiteDescriptor.JavaType.DOUBLE, FieldLiteDescriptor.Type.DOUBLE));
+            newPrimitiveFieldDescriptor(1, "value", FieldLiteDescriptor.Type.DOUBLE));
         break;
       case FLOAT_VALUE:
         messageBuilder = FloatValue::newBuilder;
         fieldDescriptors.add(
-            newPrimitiveFieldDescriptor(
-                1, "value", FieldLiteDescriptor.JavaType.FLOAT, FieldLiteDescriptor.Type.FLOAT));
+            newPrimitiveFieldDescriptor(1, "value", FieldLiteDescriptor.Type.FLOAT));
         break;
       case INT32_VALUE:
         messageBuilder = Int32Value::newBuilder;
         fieldDescriptors.add(
-            newPrimitiveFieldDescriptor(
-                1, "value", FieldLiteDescriptor.JavaType.INT, FieldLiteDescriptor.Type.INT32));
+            newPrimitiveFieldDescriptor(1, "value", FieldLiteDescriptor.Type.INT32));
         break;
       case INT64_VALUE:
         messageBuilder = Int64Value::newBuilder;
         fieldDescriptors.add(
-            newPrimitiveFieldDescriptor(
-                1, "value", FieldLiteDescriptor.JavaType.LONG, FieldLiteDescriptor.Type.INT64));
+            newPrimitiveFieldDescriptor(1, "value", FieldLiteDescriptor.Type.INT64));
         break;
       case STRING_VALUE:
         messageBuilder = StringValue::newBuilder;
         fieldDescriptors.add(
-            newPrimitiveFieldDescriptor(
-                1, "value", FieldLiteDescriptor.JavaType.STRING, FieldLiteDescriptor.Type.STRING));
+            newPrimitiveFieldDescriptor(1, "value", FieldLiteDescriptor.Type.STRING));
         break;
       case UINT32_VALUE:
         messageBuilder = UInt32Value::newBuilder;
         fieldDescriptors.add(
-            newPrimitiveFieldDescriptor(
-                1, "value", FieldLiteDescriptor.JavaType.INT, FieldLiteDescriptor.Type.UINT32));
+            newPrimitiveFieldDescriptor(1, "value", FieldLiteDescriptor.Type.UINT32));
         break;
       case UINT64_VALUE:
         messageBuilder = UInt64Value::newBuilder;
         fieldDescriptors.add(
-            newPrimitiveFieldDescriptor(
-                1, "value", FieldLiteDescriptor.JavaType.LONG, FieldLiteDescriptor.Type.UINT64));
+            newPrimitiveFieldDescriptor(1, "value", FieldLiteDescriptor.Type.UINT64));
         break;
       case JSON_STRUCT_VALUE:
         messageBuilder = Struct::newBuilder;
@@ -172,7 +160,6 @@ public final class DefaultLiteDescriptorPool implements CelLiteDescriptorPool {
             new FieldLiteDescriptor(
                 /* fieldNumber= */ 1,
                 /* fieldName= */ "fields",
-                /* javaType= */ FieldLiteDescriptor.JavaType.MESSAGE,
                 /* encodingType= */ EncodingType.MAP,
                 /* protoFieldType= */ FieldLiteDescriptor.Type.MESSAGE,
                 /* isPacked= */ false,
@@ -184,7 +171,6 @@ public final class DefaultLiteDescriptorPool implements CelLiteDescriptorPool {
             new FieldLiteDescriptor(
                 /* fieldNumber= */ 1,
                 /* fieldName= */ "null_value",
-                /* javaType= */ FieldLiteDescriptor.JavaType.ENUM,
                 /* encodingType= */ EncodingType.SINGULAR,
                 /* protoFieldType= */ FieldLiteDescriptor.Type.ENUM,
                 /* isPacked= */ false,
@@ -193,7 +179,6 @@ public final class DefaultLiteDescriptorPool implements CelLiteDescriptorPool {
             new FieldLiteDescriptor(
                 /* fieldNumber= */ 2,
                 /* fieldName= */ "number_value",
-                /* javaType= */ FieldLiteDescriptor.JavaType.DOUBLE,
                 /* encodingType= */ EncodingType.SINGULAR,
                 /* protoFieldType= */ FieldLiteDescriptor.Type.DOUBLE,
                 /* isPacked= */ false,
@@ -202,7 +187,6 @@ public final class DefaultLiteDescriptorPool implements CelLiteDescriptorPool {
             new FieldLiteDescriptor(
                 /* fieldNumber= */ 3,
                 /* fieldName= */ "string_value",
-                /* javaType= */ FieldLiteDescriptor.JavaType.STRING,
                 /* encodingType= */ EncodingType.SINGULAR,
                 /* protoFieldType= */ FieldLiteDescriptor.Type.STRING,
                 /* isPacked= */ false,
@@ -211,7 +195,6 @@ public final class DefaultLiteDescriptorPool implements CelLiteDescriptorPool {
             new FieldLiteDescriptor(
                 /* fieldNumber= */ 4,
                 /* fieldName= */ "bool_value",
-                /* javaType= */ FieldLiteDescriptor.JavaType.BOOLEAN,
                 /* encodingType= */ EncodingType.SINGULAR,
                 /* protoFieldType= */ FieldLiteDescriptor.Type.BOOL,
                 /* isPacked= */ false,
@@ -220,7 +203,6 @@ public final class DefaultLiteDescriptorPool implements CelLiteDescriptorPool {
             new FieldLiteDescriptor(
                 /* fieldNumber= */ 5,
                 /* fieldName= */ "struct_value",
-                /* javaType= */ FieldLiteDescriptor.JavaType.MESSAGE,
                 /* encodingType= */ EncodingType.SINGULAR,
                 /* protoFieldType= */ FieldLiteDescriptor.Type.MESSAGE,
                 /* isPacked= */ false,
@@ -229,7 +211,6 @@ public final class DefaultLiteDescriptorPool implements CelLiteDescriptorPool {
             new FieldLiteDescriptor(
                 /* fieldNumber= */ 6,
                 /* fieldName= */ "list_value",
-                /* javaType= */ FieldLiteDescriptor.JavaType.MESSAGE,
                 /* encodingType= */ EncodingType.SINGULAR,
                 /* protoFieldType= */ FieldLiteDescriptor.Type.MESSAGE,
                 /* isPacked= */ false,
@@ -241,7 +222,6 @@ public final class DefaultLiteDescriptorPool implements CelLiteDescriptorPool {
             new FieldLiteDescriptor(
                 /* fieldNumber= */ 1,
                 /* fieldName= */ "values",
-                /* javaType= */ FieldLiteDescriptor.JavaType.MESSAGE,
                 /* encodingType= */ EncodingType.LIST,
                 /* protoFieldType= */ FieldLiteDescriptor.Type.MESSAGE,
                 /* isPacked= */ false,
@@ -250,28 +230,14 @@ public final class DefaultLiteDescriptorPool implements CelLiteDescriptorPool {
       case DURATION:
         messageBuilder = Duration::newBuilder;
         fieldDescriptors
-            .add(
-                newPrimitiveFieldDescriptor(
-                    1,
-                    "seconds",
-                    FieldLiteDescriptor.JavaType.LONG,
-                    FieldLiteDescriptor.Type.INT64))
-            .add(
-                newPrimitiveFieldDescriptor(
-                    2, "nanos", FieldLiteDescriptor.JavaType.INT, FieldLiteDescriptor.Type.INT32));
+            .add(newPrimitiveFieldDescriptor(1, "seconds", FieldLiteDescriptor.Type.INT64))
+            .add(newPrimitiveFieldDescriptor(2, "nanos", FieldLiteDescriptor.Type.INT32));
         break;
       case TIMESTAMP:
         messageBuilder = Timestamp::newBuilder;
         fieldDescriptors
-            .add(
-                newPrimitiveFieldDescriptor(
-                    1,
-                    "seconds",
-                    FieldLiteDescriptor.JavaType.LONG,
-                    FieldLiteDescriptor.Type.INT64))
-            .add(
-                newPrimitiveFieldDescriptor(
-                    2, "nanos", FieldLiteDescriptor.JavaType.INT, FieldLiteDescriptor.Type.INT32));
+            .add(newPrimitiveFieldDescriptor(1, "seconds", FieldLiteDescriptor.Type.INT64))
+            .add(newPrimitiveFieldDescriptor(2, "nanos", FieldLiteDescriptor.Type.INT32));
         break;
       case EMPTY:
         messageBuilder = Empty::newBuilder;
@@ -284,12 +250,10 @@ public final class DefaultLiteDescriptorPool implements CelLiteDescriptorPool {
   private static FieldLiteDescriptor newPrimitiveFieldDescriptor(
       int fieldNumber,
       String fieldName,
-      FieldLiteDescriptor.JavaType javaType,
       FieldLiteDescriptor.Type protoFieldType) {
     return new FieldLiteDescriptor(
         /* fieldNumber= */ fieldNumber,
         /* fieldName= */ fieldName,
-        /* javaType= */ javaType,
         /* encodingType= */ EncodingType.SINGULAR,
         /* protoFieldType= */ protoFieldType,
         /* isPacked= */ false,

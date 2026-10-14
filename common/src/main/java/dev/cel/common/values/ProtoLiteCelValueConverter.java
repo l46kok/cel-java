@@ -618,14 +618,11 @@ public final class ProtoLiteCelValueConverter extends BaseProtoCelValueConverter
       EncodingType encodingType,
       int typeCode,
       String protoTypeName) {
-    FieldLiteDescriptor.Type protoFieldType = FieldLiteDescriptor.Type.forNumber(typeCode);
     return new FieldLiteDescriptor(
         fieldNumber,
         fieldName,
-        // FieldLiteDescriptor.JavaType's constants match WireFormat.JavaType's by name.
-        JavaType.valueOf(protoFieldType.toWireFormatFieldType().getJavaType().name()),
         encodingType,
-        protoFieldType,
+        FieldLiteDescriptor.Type.forNumber(typeCode),
         /* isPacked= */ false,
         protoTypeName);
   }
