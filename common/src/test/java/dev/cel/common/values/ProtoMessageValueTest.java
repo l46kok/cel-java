@@ -427,6 +427,19 @@ public final class ProtoMessageValueTest {
   }
 
   @Test
+  public void toString_returnsTypeNameOnly() {
+    ProtoMessageValue protoMessageValue =
+        ProtoMessageValue.create(
+            TestAllTypes.newBuilder().setSingleString("secret").build(),
+            DefaultDescriptorPool.INSTANCE,
+            PROTO_CEL_VALUE_CONVERTER,
+            /* enableJsonFieldNames= */ false);
+
+    assertThat(protoMessageValue.toString())
+        .isEqualTo("ProtoMessageValue{protoTypeName=cel.expr.conformance.proto2.TestAllTypes}");
+  }
+
+  @Test
   public void findField_jsonName_success() {
     TestAllTypes testAllTypes = TestAllTypes.newBuilder().setSingleInt32(42).build();
 

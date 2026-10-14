@@ -35,9 +35,6 @@ public abstract class ProtoMessageValue extends StructValue<String, Message>
   @Override
   public abstract Message value();
 
-  @Override
-  public abstract CelType celType();
-
   abstract CelDescriptorPool celDescriptorPool();
 
   abstract ProtoCelValueConverter protoCelValueConverter();
@@ -45,8 +42,20 @@ public abstract class ProtoMessageValue extends StructValue<String, Message>
   abstract boolean enableJsonFieldNames();
 
   @Override
+  public CelType celType() {
+    // Built on demand, since one of these values is created on every hop but rarely asked its type.
+    return StructTypeReference.create(value().getDescriptorForType().getFullName());
+  }
+
+  @Override
   public boolean isZeroValue() {
     return value().getDefaultInstanceForType().equals(value());
+  }
+
+  @Override
+  public final String toString() {
+    // AutoValue's would print the message's contents, which may be sensitive.
+    return "ProtoMessageValue{protoTypeName=" + value().getDescriptorForType().getFullName() + "}";
   }
 
   @Override
@@ -95,11 +104,7 @@ public abstract class ProtoMessageValue extends StructValue<String, Message>
     checkNotNull(celDescriptorPool);
     checkNotNull(protoCelValueConverter);
     return new AutoValue_ProtoMessageValue(
-        value,
-        StructTypeReference.create(value.getDescriptorForType().getFullName()),
-        celDescriptorPool,
-        protoCelValueConverter,
-        enableJsonFieldNames);
+        value, celDescriptorPool, protoCelValueConverter, enableJsonFieldNames);
   }
 
   private Optional<Object> findFieldValue(FieldDescriptor fieldDescriptor) {
