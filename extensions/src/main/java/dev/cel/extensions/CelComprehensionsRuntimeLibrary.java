@@ -34,8 +34,10 @@ import java.util.Set;
 public final class CelComprehensionsRuntimeLibrary implements CelInternalLiteRuntimeLibrary {
 
   private static final String MAP_INSERT_FUNCTION = "cel.@mapInsert";
-  private static final String MAP_INSERT_OVERLOAD_MAP_MAP = "cel_@mapInsert_map_map";
-  private static final String MAP_INSERT_OVERLOAD_KEY_VALUE = "cel_@mapInsert_map_key_value";
+  private static final String MAP_INSERT_OVERLOAD_MAP_MAP = "@mapInsert_map_map";
+  private static final String MAP_INSERT_OVERLOAD_KEY_VALUE = "@mapInsert_map_key_value";
+  private static final String LEGACY_MAP_INSERT_OVERLOAD_MAP_MAP = "cel_@mapInsert_map_map";
+  private static final String LEGACY_MAP_INSERT_OVERLOAD_KEY_VALUE = "cel_@mapInsert_map_key_value";
 
   /** Enumeration of functions for Comprehensions runtime extension. */
   public enum Function {
@@ -125,6 +127,16 @@ public final class CelComprehensionsRuntimeLibrary implements CelInternalLiteRun
                   (map1, map2) -> mapInsertMap(map1, map2, runtimeEquality)),
               CelFunctionBinding.from(
                   MAP_INSERT_OVERLOAD_KEY_VALUE,
+                  ImmutableList.of(Map.class, Object.class, Object.class),
+                  args -> mapInsertKeyValue(args, runtimeEquality)),
+              // Legacy overload IDs retained to support evaluation of cached ASTs (b/573697356).
+              CelFunctionBinding.from(
+                  LEGACY_MAP_INSERT_OVERLOAD_MAP_MAP,
+                  Map.class,
+                  Map.class,
+                  (map1, map2) -> mapInsertMap(map1, map2, runtimeEquality)),
+              CelFunctionBinding.from(
+                  LEGACY_MAP_INSERT_OVERLOAD_KEY_VALUE,
                   ImmutableList.of(Map.class, Object.class, Object.class),
                   args -> mapInsertKeyValue(args, runtimeEquality))));
     }

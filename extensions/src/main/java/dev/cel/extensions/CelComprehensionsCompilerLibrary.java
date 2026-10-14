@@ -42,8 +42,8 @@ public final class CelComprehensionsCompilerLibrary
     implements CelCompilerLibrary, CelExtensionLibrary.FeatureSet {
 
   private static final String MAP_INSERT_FUNCTION = "cel.@mapInsert";
-  private static final String MAP_INSERT_OVERLOAD_MAP_MAP = "cel_@mapInsert_map_map";
-  private static final String MAP_INSERT_OVERLOAD_KEY_VALUE = "cel_@mapInsert_map_key_value";
+  private static final String MAP_INSERT_OVERLOAD_MAP_MAP = "@mapInsert_map_map";
+  private static final String MAP_INSERT_OVERLOAD_KEY_VALUE = "@mapInsert_map_key_value";
 
   private static final class Types {
     private static final TypeParamType TYPE_PARAM_K = TypeParamType.create("K");

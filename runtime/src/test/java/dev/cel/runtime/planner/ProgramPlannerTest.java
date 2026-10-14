@@ -255,7 +255,7 @@ public final class ProgramPlannerTest {
         CelFunctionBinding.fromOverloads(
             "cel.@mapInsert",
             CelFunctionBinding.from(
-                "cel_@mapInsert_map_key_value",
+                "@mapInsert_map_key_value",
                 ImmutableList.of(Map.class, Object.class, Object.class),
                 args -> args[0])));
 

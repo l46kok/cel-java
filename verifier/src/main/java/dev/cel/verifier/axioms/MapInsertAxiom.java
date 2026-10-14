@@ -29,7 +29,7 @@ final class MapInsertAxiom {
   static final CelZ3FunctionAxiom INSTANCE =
       CelZ3FunctionAxiom.newBuilder(CelComprehensionsExtensions.Function.MAP_INSERT.functionDecl())
           .addTernaryOverloadTranslator(
-              "cel_@mapInsert_map_key_value",
+              "@mapInsert_map_key_value",
               (ctx, typeSystem, constraintSink, mapVal, keyVal, valueVal) -> {
                 BoolExpr isMap = typeSystem.isMap(mapVal);
                 BoolExpr isValidKey =

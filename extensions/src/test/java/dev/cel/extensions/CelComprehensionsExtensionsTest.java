@@ -21,6 +21,7 @@ import static org.junit.Assert.assertThrows;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Maps;
 import com.google.testing.junit.testparameterinjector.TestParameter;
 import com.google.testing.junit.testparameterinjector.TestParameterInjector;
 import com.google.testing.junit.testparameterinjector.TestParameters;
@@ -31,6 +32,7 @@ import dev.cel.common.CelFunctionDecl;
 import dev.cel.common.CelOptions;
 import dev.cel.common.CelValidationException;
 import dev.cel.common.CelValidationResult;
+import dev.cel.common.ast.CelReference;
 import dev.cel.common.exceptions.CelAttributeNotFoundException;
 import dev.cel.common.exceptions.CelDivideByZeroException;
 import dev.cel.common.exceptions.CelIndexOutOfBoundsException;
@@ -551,5 +553,37 @@ public class CelComprehensionsExtensionsTest extends CelExtensionTestBase {
     assertThrows(
         UnsupportedOperationException.class,
         () -> runtimeLibrary.setRuntimeOptions(liteRuntimeBuilder));
+  }
+
+  @Test
+  @TestParameters(
+      "{expr: '[1, 2].transformMap(i, v, v + 1) == {0: 2, 1: 3}',"
+          + " canonicalOverloadId: '@mapInsert_map_key_value'}")
+  @TestParameters(
+      "{expr: \"{'a': 1, 'b': 2}.transformMapEntry(k, v, {k: v + 1}) == {'a': 2, 'b': 3}\","
+          + " canonicalOverloadId: '@mapInsert_map_map'}")
+  public void evaluate_legacyMapInsertOverloadIds_success(String expr, String canonicalOverloadId)
+      throws Exception {
+    Assume.assumeFalse(isParseOnly);
+    CelAbstractSyntaxTree ast = cel.compile(expr).getAst();
+    CelAbstractSyntaxTree legacyAst =
+        CelAbstractSyntaxTree.newCheckedAst(
+            ast.getExpr(),
+            ast.getSource(),
+            Maps.transformValues(
+                ast.getReferenceMap(),
+                ref ->
+                    ref.overloadIds().contains(canonicalOverloadId)
+                        ? CelReference.newBuilder()
+                            .addOverloadIds("cel_" + canonicalOverloadId)
+                            .build()
+                        : ref),
+            ast.getTypeMap());
+
+    Object result = cel.createProgram(legacyAst).eval();
+
+    assertThat(ast.getReferenceMap().values())
+        .contains(CelReference.newBuilder().addOverloadIds(canonicalOverloadId).build());
+    assertThat(result).isEqualTo(true);
   }
 }
