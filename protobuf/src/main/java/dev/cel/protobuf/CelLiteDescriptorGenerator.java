@@ -117,7 +117,7 @@ final class CelLiteDescriptorGenerator implements Callable<Integer> {
 
   private ImmutableList<GeneratedClass> codegenCelLiteDescriptors(
       FileDescriptor targetFileDescriptor) throws Exception {
-    String javaPackageName = GeneratorNames.getFileJavaPackage(targetFileDescriptor.toProto());
+    String javaPackageName = GeneratorNames.getFileJavaPackage(targetFileDescriptor);
     String javaClassName;
 
     List<Descriptor> descriptors = targetFileDescriptor.getMessageTypes();

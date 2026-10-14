@@ -51,7 +51,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.function.Consumer;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -525,23 +528,24 @@ public final class ProtoMessageLiteValueTest {
     assertThat(selectedValue).isEqualTo(testCase.value);
   }
 
+  @SuppressWarnings("ImmutableEnumChecker") // Test only
   private enum ContainerFieldTestCase {
     REPEATED(
         SelectField.create(TestAllTypes.REPEATED_INT64_FIELD_NUMBER, "repeated_int64", 3),
-        ImmutableList.class),
+        container -> ((List<?>) container).clear()),
     MAP(
         SelectField.createMap(
             TestAllTypes.MAP_INT64_INT64_FIELD_NUMBER,
             "map_int64_int64",
             SelectField.MapEntrySpec.create(3, 3)),
-        ImmutableMap.class);
+        container -> ((Map<?, ?>) container).clear());
 
     private final SelectField selectField;
-    private final Class<?> immutableType;
+    private final Consumer<Object> clear;
 
-    ContainerFieldTestCase(SelectField selectField, Class<?> immutableType) {
+    ContainerFieldTestCase(SelectField selectField, Consumer<Object> clear) {
       this.selectField = selectField;
-      this.immutableType = immutableType;
+      this.clear = clear;
     }
   }
 
@@ -556,7 +560,7 @@ public final class ProtoMessageLiteValueTest {
 
     Object selectedValue = protoMessageValue.select(testCase.selectField.fieldName());
 
-    assertThat(selectedValue).isInstanceOf(testCase.immutableType);
+    assertThrows(UnsupportedOperationException.class, () -> testCase.clear.accept(selectedValue));
   }
 
   @Test
@@ -570,7 +574,7 @@ public final class ProtoMessageLiteValueTest {
 
     Object selectedValue = protoMessageValue.selectByFieldNumber(testCase.selectField);
 
-    assertThat(selectedValue).isInstanceOf(testCase.immutableType);
+    assertThrows(UnsupportedOperationException.class, () -> testCase.clear.accept(selectedValue));
   }
 
   @SuppressWarnings("ImmutableEnumChecker") // Test only

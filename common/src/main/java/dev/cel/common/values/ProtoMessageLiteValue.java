@@ -25,6 +25,7 @@ import dev.cel.common.exceptions.CelAttributeNotFoundException;
 import dev.cel.common.types.CelType;
 import dev.cel.common.types.StructTypeReference;
 import dev.cel.protobuf.CelLiteDescriptor.FieldLiteDescriptor;
+import dev.cel.protobuf.CelLiteDescriptor.MessageLiteDescriptor;
 import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -40,7 +41,8 @@ import org.jspecify.annotations.Nullable;
  * <p>An instance is backed by either a materialized {@link #rawValue()} or unparsed {@link
  * #wireBytes()} (exactly one is non-null). Wire-backed instances decode selected fields directly
  * from {@link #wireBytes()} and lazily parse the full {@link MessageLite} only if {@link #value()}
- * is invoked.
+ * is invoked. Materialized instances read fields through their descriptor's generated getters if it
+ * has them, and otherwise, as for fields it doesn't know, decode them from their serialized bytes.
  *
  * <p>Implements {@link OptimizedSelectable} so that select chains can address fields by number:
  *
@@ -120,7 +122,7 @@ abstract class ProtoMessageLiteValue extends StructValue<String, MessageLite>
 
   @Override
   public Object select(String field) {
-    FieldLiteDescriptor fd = findFieldDescriptor(field).orElse(null);
+    FieldLiteDescriptor fd = findFieldDescriptor(field);
     if (fd == null) {
       throw CelAttributeNotFoundException.of(
           String.format("field '%s' is not declared in message '%s'", field, celType().name()));
@@ -131,33 +133,63 @@ abstract class ProtoMessageLiteValue extends StructValue<String, MessageLite>
 
   @Override
   public Optional<Object> find(String field) {
-    FieldLiteDescriptor fd = findFieldDescriptor(field).orElse(null);
     // Per SelectableValue#find, a field that doesn't exist is reported as absent.
-    return Optional.ofNullable(fd).map(value -> readField(value));
+    return Optional.ofNullable(findFieldDescriptor(field)).map(this::readField);
   }
 
   @Override
   public Object selectByFieldNumber(SelectField field) {
+    FieldLiteDescriptor fd = findFieldDescriptor(field.fieldNumber());
+    if (fd != null) {
+      Object value = readField(fd);
+      return value != null ? value : protoLiteCelValueConverter().getDefaultCelValue(field, fd);
+    }
     return protoLiteCelValueConverter()
         .selectByFieldNumber(toByteString(), celType().name(), field);
   }
 
   @Override
   public boolean hasFieldByNumber(SelectField field) {
+    MessageLite message = rawValue();
+    if (message != null && findFieldDescriptor(field.fieldNumber()) != null) {
+      MessageLiteDescriptor descriptor = findDescriptorWithGetters();
+      if (descriptor != null) {
+        return protoLiteCelValueConverter().hasByGetter(message, descriptor, field);
+      }
+    }
     return protoLiteCelValueConverter().hasFieldByNumber(toByteString(), celType().name(), field);
   }
 
   @Override
   public Optional<Object> findByFieldNumber(SelectField field) {
+    FieldLiteDescriptor fd = findFieldDescriptor(field.fieldNumber());
+    if (fd != null) {
+      return Optional.ofNullable(readField(fd));
+    }
     return protoLiteCelValueConverter().findByFieldNumber(toByteString(), celType().name(), field);
   }
 
   private @Nullable Object readField(FieldLiteDescriptor fd) {
+    MessageLite message = rawValue();
+    if (message != null) {
+      MessageLiteDescriptor descriptor = findDescriptorWithGetters();
+      if (descriptor != null) {
+        return protoLiteCelValueConverter().readFieldByGetter(message, descriptor, fd);
+      }
+    }
     return protoLiteCelValueConverter().readField(toByteString(), celType().name(), fd);
   }
 
-  private Optional<FieldLiteDescriptor> findFieldDescriptor(String fieldName) {
+  private @Nullable FieldLiteDescriptor findFieldDescriptor(String fieldName) {
     return protoLiteCelValueConverter().findFieldDescriptor(celType().name(), fieldName);
+  }
+
+  private @Nullable FieldLiteDescriptor findFieldDescriptor(int fieldNumber) {
+    return protoLiteCelValueConverter().findFieldDescriptor(celType().name(), fieldNumber);
+  }
+
+  private @Nullable MessageLiteDescriptor findDescriptorWithGetters() {
+    return protoLiteCelValueConverter().findDescriptorWithGetters(celType().name());
   }
 
   static ProtoMessageLiteValue create(

@@ -27,6 +27,7 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.CodedOutputStream;
 import com.google.protobuf.ExtensionRegistryLite;
 import com.google.protobuf.Int64Value;
+import com.google.protobuf.MessageLite;
 import com.google.protobuf.NullValue;
 import com.google.protobuf.Struct;
 import com.google.protobuf.UnknownFieldSet;
@@ -301,7 +302,8 @@ public final class CelLiteRuntimeVersionSkewTest {
       }
     }
 
-    CelLiteDescriptor clientDescriptor = new CelLiteDescriptor("v1", allMsgDescs.build()) {};
+    CelLiteDescriptor clientDescriptor =
+        newClientCelLiteDescriptor("v1", fullDescriptor, allMsgDescs.build());
     ProtoMessageLiteValueProvider clientValueProvider =
         ProtoMessageLiteValueProvider.newInstance(
             clientDescriptor, NestedTestAllTypesCelDescriptor.getDescriptor());
@@ -2253,7 +2255,10 @@ public final class CelLiteRuntimeVersionSkewTest {
             .setStandardFunctions(CelStandardFunctions.ALL_STANDARD_FUNCTIONS)
             .setValueProvider(
                 ProtoMessageLiteValueProvider.newInstance(
-                    new CelLiteDescriptor("partial", withoutChildMessages) {}))
+                    newClientCelLiteDescriptor(
+                        "partial",
+                        TestAllTypesCelDescriptor.getDescriptor(),
+                        withoutChildMessages)))
             .setContainer(CEL_CONTAINER)
             .build();
     CelAbstractSyntaxTree optimizedAst =
@@ -2301,7 +2306,10 @@ public final class CelLiteRuntimeVersionSkewTest {
             .setStandardFunctions(CelStandardFunctions.ALL_STANDARD_FUNCTIONS)
             .setValueProvider(
                 ProtoMessageLiteValueProvider.newInstance(
-                    new CelLiteDescriptor("partial", withoutChildMessages) {}))
+                    newClientCelLiteDescriptor(
+                        "partial",
+                        TestAllTypesCelDescriptor.getDescriptor(),
+                        withoutChildMessages)))
             .setContainer(CEL_CONTAINER)
             .build();
     CelAbstractSyntaxTree unoptimizedAst = serverCompiler.compile(expression).getAst();
@@ -2513,7 +2521,8 @@ public final class CelLiteRuntimeVersionSkewTest {
     MessageLiteDescriptor clientProto2MsgDesc =
         buildClientTestAllTypesDescriptor(fullProto2MsgDesc, "single_int32");
     CelLiteDescriptor clientProto2Descriptor =
-        new CelLiteDescriptor("v1_proto2", ImmutableList.of(clientProto2MsgDesc)) {};
+        newClientCelLiteDescriptor(
+            "v1_proto2", fullProto2Descriptor, ImmutableList.of(clientProto2MsgDesc));
     CelLiteRuntime clientProto2Runtime =
         CelLiteRuntimeFactory.newLiteRuntimeBuilder()
             .setStandardFunctions(CelStandardFunctions.ALL_STANDARD_FUNCTIONS)
@@ -2574,6 +2583,22 @@ public final class CelLiteRuntimeVersionSkewTest {
         fullMsgDesc.getProtoTypeName(), clientFields.build(), fullMsgDesc::newMessageBuilder);
   }
 
+  // Reads the client's message types through the full descriptor's getters for the same types.
+  private static CelLiteDescriptor newClientCelLiteDescriptor(
+      String version,
+      CelLiteDescriptor fullDescriptor,
+      ImmutableList<MessageLiteDescriptor> descriptors) {
+    return new CelLiteDescriptor(version, descriptors) {
+      @Override
+      protected @Nullable Object getFieldValue(int messageIndex, Object message, int fieldNumber) {
+        return fullDescriptor
+            .getProtoTypeNamesToDescriptors()
+            .get(descriptors.get(messageIndex).getProtoTypeName())
+            .getFieldValue((MessageLite) message, fieldNumber);
+      }
+    };
+  }
+
   private static CelLiteRuntime newRuntimeWithoutNestedMessageDescriptor() {
     CelLiteDescriptor fullDescriptor = TestAllTypesCelDescriptor.getDescriptor();
     MessageLiteDescriptor clientTestAllTypesDesc =
@@ -2582,7 +2607,8 @@ public final class CelLiteRuntimeVersionSkewTest {
                 .getProtoTypeNamesToDescriptors()
                 .get(TestAllTypes.getDescriptor().getFullName()));
     CelLiteDescriptor partialDescriptor =
-        new CelLiteDescriptor("v1_no_nested", ImmutableList.of(clientTestAllTypesDesc)) {};
+        newClientCelLiteDescriptor(
+            "v1_no_nested", fullDescriptor, ImmutableList.of(clientTestAllTypesDesc));
     return CelLiteRuntimeFactory.newLiteRuntimeBuilder()
         .setStandardFunctions(CelStandardFunctions.ALL_STANDARD_FUNCTIONS)
         .setValueProvider(ProtoMessageLiteValueProvider.newInstance(partialDescriptor))
@@ -2599,8 +2625,8 @@ public final class CelLiteRuntimeVersionSkewTest {
                 .get(TestAllTypes.getDescriptor().getFullName()),
             excludedFieldName);
     CelLiteDescriptor partialDescriptor =
-        new CelLiteDescriptor(
-            "v1_no_" + excludedFieldName, ImmutableList.of(clientTestAllTypesDesc)) {};
+        newClientCelLiteDescriptor(
+            "v1_no_" + excludedFieldName, fullDescriptor, ImmutableList.of(clientTestAllTypesDesc));
     return CelLiteRuntimeFactory.newLiteRuntimeBuilder()
         .setStandardFunctions(CelStandardFunctions.ALL_STANDARD_FUNCTIONS)
         .setValueProvider(ProtoMessageLiteValueProvider.newInstance(partialDescriptor))
@@ -2632,7 +2658,13 @@ public final class CelLiteRuntimeVersionSkewTest {
             ImmutableList.of(v1SingleInt32Field),
             NestedMessage::newBuilder);
     CelLiteDescriptor v1OlderClassDescriptor =
-        new CelLiteDescriptor("v1_older_class", ImmutableList.of(v1OlderClassTestAllTypesDesc)) {};
+        new CelLiteDescriptor("v1_older_class", ImmutableList.of(v1OlderClassTestAllTypesDesc)) {
+          @Override
+          protected @Nullable Object getFieldValue(
+              int messageIndex, Object message, int fieldNumber) {
+            return fieldNumber == 1 ? nonDefault(((NestedMessage) message).getBb()) : null;
+          }
+        };
     return CelLiteRuntimeFactory.newLiteRuntimeBuilder()
         .setStandardFunctions(CelStandardFunctions.ALL_STANDARD_FUNCTIONS)
         .setValueProvider(

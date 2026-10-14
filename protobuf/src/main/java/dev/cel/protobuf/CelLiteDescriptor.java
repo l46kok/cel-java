@@ -17,17 +17,21 @@ package dev.cel.protobuf;
 import static java.lang.Math.ceil;
 
 import com.google.errorprone.annotations.Immutable;
+import com.google.protobuf.ByteString;
 import com.google.protobuf.MessageLite;
 import com.google.protobuf.WireFormat;
 import dev.cel.common.annotations.Internal;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
-import java.util.Optional;
+import java.util.Set;
 import java.util.function.Supplier;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Base class for code generated CEL lite descriptors to extend from.
@@ -37,6 +41,10 @@ import java.util.function.Supplier;
 @Internal
 @Immutable
 public abstract class CelLiteDescriptor {
+  private static final Set<Object> defaultScalarValues =
+      Collections.unmodifiableSet(
+          new HashSet<>(Arrays.asList(false, 0, 0L, 0.0f, 0.0d, "", ByteString.EMPTY)));
+
   @SuppressWarnings("Immutable") // Copied to unmodifiable map
   private final Map<String, MessageLiteDescriptor> protoFqnToDescriptors;
 
@@ -73,6 +81,13 @@ public abstract class CelLiteDescriptor {
     @SuppressWarnings("Immutable") // Does not alter the descriptor content
     private final Supplier<MessageLite.Builder> messageBuilderSupplier;
 
+    // The generated descriptor declaring this message, and this message's position in it.
+    @SuppressWarnings("Immutable") // Set once, before the descriptor is published
+    private @Nullable CelLiteDescriptor owner;
+
+    @SuppressWarnings("Immutable") // Set once, before the descriptor is published
+    private int index;
+
     public String getProtoTypeName() {
       return fullyQualifiedProtoTypeName;
     }
@@ -81,12 +96,12 @@ public abstract class CelLiteDescriptor {
       return fieldLiteDescriptors;
     }
 
-    public Optional<FieldLiteDescriptor> findByFieldNumber(int fieldNumber) {
-      return Optional.ofNullable(fieldNumberToFieldDescriptors.get(fieldNumber));
+    public @Nullable FieldLiteDescriptor findByFieldNumber(int fieldNumber) {
+      return fieldNumberToFieldDescriptors.get(fieldNumber);
     }
 
-    public Optional<FieldLiteDescriptor> findByFieldName(String fieldName) {
-      return Optional.ofNullable(fieldNameToFieldDescriptors.get(fieldName));
+    public @Nullable FieldLiteDescriptor findByFieldName(String fieldName) {
+      return fieldNameToFieldDescriptors.get(fieldName);
     }
 
     public FieldLiteDescriptor getByFieldNameOrThrow(String fieldName) {
@@ -94,14 +109,31 @@ public abstract class CelLiteDescriptor {
     }
 
     public FieldLiteDescriptor getByFieldNumberOrThrow(int fieldNumber) {
-      return findByFieldNumber(fieldNumber)
-          .orElseThrow(
-              () -> new NoSuchElementException("Could not find field number: " + fieldNumber));
+      FieldLiteDescriptor fd = fieldNumberToFieldDescriptors.get(fieldNumber);
+      if (fd == null) {
+        throw new NoSuchElementException("Could not find field number: " + fieldNumber);
+      }
+      return fd;
     }
 
     /** Gets the builder for the message. Returns null for maps. */
     public MessageLite.Builder newMessageBuilder() {
       return messageBuilderSupplier.get();
+    }
+
+    /** Whether {@link #getFieldValue} reads this message's fields with their generated getters. */
+    public boolean hasGetters() {
+      return owner != null;
+    }
+
+    /**
+     * Reads field {@code fieldNumber} of {@code message}, an instance of this message type, with
+     * its generated getter: the Java value (an open enum's number; a repeated or map field's list
+     * or map, possibly empty), or null if a singular field is unset. Requires {@link #hasGetters}
+     * and one of this message type's fields; throws for groups, which CEL doesn't support.
+     */
+    public @Nullable Object getFieldValue(MessageLite message, int fieldNumber) {
+      return Objects.requireNonNull(owner).getFieldValue(index, message, fieldNumber);
     }
 
     /**
@@ -353,10 +385,30 @@ public abstract class CelLiteDescriptor {
     }
   }
 
+  /**
+   * Implemented by generated descriptors to read field {@code fieldNumber} of {@code message}, an
+   * instance of their {@code messageIndex}th message type, with its generated getter. See {@link
+   * MessageLiteDescriptor#getFieldValue}.
+   */
+  protected abstract @Nullable Object getFieldValue(
+      int messageIndex, Object message, int fieldNumber);
+
+  /** Returns {@code value}, or null if it's its type's default (unset, for implicit presence). */
+  protected static @Nullable Object nonDefault(Object value) {
+    // Float and Double equality compares bits, so -0.0 and NaN count as set, as in protobuf.
+    return defaultScalarValues.contains(value) ? null : value;
+  }
+
   protected CelLiteDescriptor(String version, List<MessageLiteDescriptor> messageInfoList) {
     Map<String, MessageLiteDescriptor> protoFqnMap =
         new HashMap<>(getMapInitialCapacity(messageInfoList.size()));
-    for (MessageLiteDescriptor msgInfo : messageInfoList) {
+    for (int i = 0; i < messageInfoList.size(); i++) {
+      MessageLiteDescriptor msgInfo = messageInfoList.get(i);
+      // A descriptor reused from another CelLiteDescriptor keeps reading through that one.
+      if (msgInfo.owner == null) {
+        msgInfo.owner = this;
+        msgInfo.index = i;
+      }
       protoFqnMap.put(msgInfo.getProtoTypeName(), msgInfo);
     }
 

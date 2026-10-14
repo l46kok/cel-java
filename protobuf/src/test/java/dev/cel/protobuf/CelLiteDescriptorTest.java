@@ -25,8 +25,9 @@ import dev.cel.protobuf.CelLiteDescriptor.FieldLiteDescriptor;
 import dev.cel.protobuf.CelLiteDescriptor.FieldLiteDescriptor.EncodingType;
 import dev.cel.protobuf.CelLiteDescriptor.FieldLiteDescriptor.JavaType;
 import dev.cel.protobuf.CelLiteDescriptor.MessageLiteDescriptor;
+import dev.cel.testing.testdata.AccessorNames;
+import dev.cel.testing.testdata.AccessorNamesCelLiteDescriptor;
 import java.util.Map;
-import java.util.Optional;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -76,23 +77,23 @@ public class CelLiteDescriptorTest {
             .getProtoTypeNamesToDescriptors()
             .get("cel.expr.conformance.proto3.TestAllTypes");
 
-    Optional<FieldLiteDescriptor> fieldLiteDescriptor =
+    FieldLiteDescriptor fieldLiteDescriptor =
         testAllTypesDescriptor.findByFieldName("single_string");
 
-    assertThat(fieldLiteDescriptor.map(FieldLiteDescriptor::getFieldNumber)).hasValue(14);
+    assertThat(fieldLiteDescriptor.getFieldNumber()).isEqualTo(14);
   }
 
   @Test
-  public void findByFieldName_undeclaredField_returnsEmpty() {
+  public void findByFieldName_undeclaredField_returnsNull() {
     MessageLiteDescriptor testAllTypesDescriptor =
         TEST_ALL_TYPES_CEL_LITE_DESCRIPTOR
             .getProtoTypeNamesToDescriptors()
             .get("cel.expr.conformance.proto3.TestAllTypes");
 
-    Optional<FieldLiteDescriptor> fieldLiteDescriptor =
+    FieldLiteDescriptor fieldLiteDescriptor =
         testAllTypesDescriptor.findByFieldName("undeclared_field");
 
-    assertThat(fieldLiteDescriptor).isEmpty();
+    assertThat(fieldLiteDescriptor).isNull();
   }
 
   @Test
@@ -213,6 +214,23 @@ public class CelLiteDescriptorTest {
   public void protoFieldType_numbersAndWireTypes(@TestParameter ProtoFieldTypeTestCase testCase) {
     assertThat(testCase.type.getNumber()).isEqualTo(testCase.expectedNumber);
     assertThat(testCase.type.toWireFormatFieldType()).isEqualTo(testCase.expectedWireType);
+  }
+
+  @Test
+  public void getFieldValue_messageAfterRoot_readsField() {
+    AccessorNames.Nested message = AccessorNames.Nested.newBuilder().setX(7).build();
+
+    Object value =
+        accessorNamesDescriptor("AccessorNames.Nested")
+            .getFieldValue(message, AccessorNames.Nested.X_FIELD_NUMBER);
+
+    assertThat(value).isEqualTo(7);
+  }
+
+  private static MessageLiteDescriptor accessorNamesDescriptor(String name) {
+    return AccessorNamesCelLiteDescriptor.getDescriptor()
+        .getProtoTypeNamesToDescriptors()
+        .get("dev.cel.testing.testdata." + name);
   }
 
   @Test
