@@ -396,11 +396,6 @@ public final class ProtoTimeUtils {
   }
 
   /** Calculate the difference between two timestamps. */
-  public static Duration between(Timestamp from, Timestamp to) {
-    return between(from, to, /* validateOverflow= */ true);
-  }
-
-  /** Calculate the difference between two timestamps. */
   public static Duration between(Timestamp from, Timestamp to, boolean validateOverflow) {
     Instant javaFrom = ProtoTimeUtils.toJavaInstant(checkValid(from));
     Instant javaTo = ProtoTimeUtils.toJavaInstant(checkValid(to));

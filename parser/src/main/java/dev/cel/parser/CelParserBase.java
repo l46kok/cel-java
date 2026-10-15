@@ -65,14 +65,6 @@ abstract class CelParserBase implements CelParser {
     return macros;
   }
 
-  final ImmutableList<CelStandardMacro> getStandardMacros() {
-    return standardMacros;
-  }
-
-  final ImmutableSet<CelParserLibrary> getParserLibraries() {
-    return parserLibraries;
-  }
-
   final Optional<CelMacro> findMacro(String key) {
     return Optional.ofNullable(macros.get(key));
   }
