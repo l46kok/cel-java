@@ -14,6 +14,7 @@
 
 package dev.cel.runtime;
 
+import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.truth.Truth.assertThat;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertThrows;
@@ -25,8 +26,19 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.primitives.UnsignedLong;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.CodedOutputStream;
+import com.google.protobuf.DescriptorProtos.DescriptorProto;
+import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
+import com.google.protobuf.DescriptorProtos.FileDescriptorProto;
+import com.google.protobuf.DescriptorProtos.MessageOptions;
+import com.google.protobuf.Descriptors.Descriptor;
+import com.google.protobuf.Descriptors.FileDescriptor;
+import com.google.protobuf.DynamicMessage;
+import com.google.protobuf.Empty;
 import com.google.protobuf.ExtensionRegistryLite;
+import com.google.protobuf.FieldMask;
 import com.google.protobuf.Int64Value;
+import com.google.protobuf.InvalidProtocolBufferException;
+import com.google.protobuf.ListValue;
 import com.google.protobuf.MessageLite;
 import com.google.protobuf.NullValue;
 import com.google.protobuf.Struct;
@@ -70,6 +82,7 @@ import java.io.ByteArrayOutputStream;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.junit.Before;
 import org.junit.Test;
@@ -125,6 +138,13 @@ public final class CelLiteRuntimeVersionSkewTest {
           "standalone_enum",
           "single_duration",
           "single_timestamp",
+          "single_struct",
+          "single_value",
+          "single_int64_wrapper",
+          "single_string_wrapper",
+          "list_value",
+          "field_mask",
+          "empty",
           "oneof_type",
           "oneof_bool",
           "repeated_int64",
@@ -144,11 +164,16 @@ public final class CelLiteRuntimeVersionSkewTest {
           "repeated_nested_enum",
           "repeated_duration",
           "repeated_timestamp",
+          "repeated_int64_wrapper",
+          "map_bool_string",
           "map_int32_int32",
           "map_int64_nested_type",
+          "map_uint32_string",
+          "map_uint64_string",
           "map_string_message",
           "map_string_duration",
-          "map_string_timestamp");
+          "map_string_timestamp",
+          "map_string_int64_wrapper");
 
   private static final ImmutableMap<String, String> CLIENT_RENAMED_FIELD_NAMES =
       ImmutableMap.of(
@@ -739,7 +764,10 @@ public final class CelLiteRuntimeVersionSkewTest {
 
   @Test
   public void has_renamedRepeatedField_emptyPackedWireBytes_returnsFalse() throws Exception {
-    TestAllTypes msg =
+    // Evaluated via newOlderClassV1Runtime() on nested_msg.payload so payload is a wire-backed
+    // ProtoMessageLiteValue (rawValue == null, !canReadByGetter()) with a known packable
+    // FieldLiteDescriptor (v1_repeated_int32, tag 31).
+    TestAllTypes wirePayload =
         TestAllTypes.newBuilder()
             .setUnknownFields(
                 UnknownFieldSet.newBuilder()
@@ -750,10 +778,47 @@ public final class CelLiteRuntimeVersionSkewTest {
                             .build())
                     .build())
             .build();
+    NestedTestAllTypes nestedMsg = NestedTestAllTypes.newBuilder().setPayload(wirePayload).build();
+    Program program =
+        newOlderClassV1Runtime()
+            .createProgram(
+                serverOptimizer.optimize(
+                    serverCompiler.compile("has(nested_msg.payload.repeated_int32)").getAst()));
 
-    Object result = eval("has(msg.repeated_int32)", msg);
+    Object result = program.eval(ImmutableMap.of("nested_msg", nestedMsg));
 
     assertThat(result).isEqualTo(false);
+  }
+
+  @Test
+  public void has_renamedRepeatedField_emptyThenPopulatedPackedBytes_returnsTrue()
+      throws Exception {
+    TestAllTypes wirePayload =
+        TestAllTypes.newBuilder()
+            .setUnknownFields(
+                UnknownFieldSet.newBuilder()
+                    .addField(
+                        TestAllTypes.REPEATED_INT32_FIELD_NUMBER,
+                        UnknownFieldSet.Field.newBuilder()
+                            .addLengthDelimited(ByteString.EMPTY)
+                            .addLengthDelimited(ByteString.copyFrom(new byte[] {42}))
+                            .build())
+                    .build())
+            .build();
+    NestedTestAllTypes nestedMsg = NestedTestAllTypes.newBuilder().setPayload(wirePayload).build();
+    Program program =
+        newOlderClassV1Runtime()
+            .createProgram(
+                serverOptimizer.optimize(
+                    serverCompiler
+                        .compile(
+                            "has(nested_msg.payload.repeated_int32) &&"
+                                + " nested_msg.payload.repeated_int32 == [42]")
+                        .getAst()));
+
+    Object result = program.eval(ImmutableMap.of("nested_msg", nestedMsg));
+
+    assertThat(result).isEqualTo(true);
   }
 
   @Test
@@ -922,7 +987,6 @@ public final class CelLiteRuntimeVersionSkewTest {
 
     assertThat(result).isEqualTo(-1L);
   }
-
 
   @SuppressWarnings("ImmutableEnumChecker") // Test only
   private enum ComprehensionTestCase {
@@ -1991,20 +2055,17 @@ public final class CelLiteRuntimeVersionSkewTest {
                     .addRepeatedNestedMessage(NestedMessage.newBuilder().setBb(44)))
             .build()
             .toByteString();
-
     ByteArrayOutputStream entry1Stream = new ByteArrayOutputStream();
     CodedOutputStream entry1Cos = CodedOutputStream.newInstance(entry1Stream);
     entry1Cos.writeInt64(1, 7L);
     entry1Cos.writeBytes(2, entry1Chunk1);
     entry1Cos.flush();
-
     ByteArrayOutputStream entry2Stream = new ByteArrayOutputStream();
     CodedOutputStream entry2Cos = CodedOutputStream.newInstance(entry2Stream);
     entry2Cos.writeInt64(1, 7L);
     entry2Cos.writeBytes(2, entry2Chunk1);
     entry2Cos.writeBytes(2, entry2Chunk2);
     entry2Cos.flush();
-
     TestAllTypes msg =
         TestAllTypes.newBuilder()
             .setUnknownFields(
@@ -2249,7 +2310,7 @@ public final class CelLiteRuntimeVersionSkewTest {
     ImmutableList<MessageLiteDescriptor> withoutChildMessages =
         TestAllTypesCelDescriptor.getDescriptor().getProtoTypeNamesToDescriptors().values().stream()
             .filter(d -> !d.getProtoTypeName().equals(NestedMessage.getDescriptor().getFullName()))
-            .collect(ImmutableList.toImmutableList());
+            .collect(toImmutableList());
     CelLiteRuntime partialRuntime =
         CelLiteRuntimeFactory.newLiteRuntimeBuilder()
             .setStandardFunctions(CelStandardFunctions.ALL_STANDARD_FUNCTIONS)
@@ -2300,7 +2361,7 @@ public final class CelLiteRuntimeVersionSkewTest {
     ImmutableList<MessageLiteDescriptor> withoutChildMessages =
         TestAllTypesCelDescriptor.getDescriptor().getProtoTypeNamesToDescriptors().values().stream()
             .filter(d -> !d.getProtoTypeName().equals(NestedMessage.getDescriptor().getFullName()))
-            .collect(ImmutableList.toImmutableList());
+            .collect(toImmutableList());
     CelLiteRuntime partialRuntime =
         CelLiteRuntimeFactory.newLiteRuntimeBuilder()
             .setStandardFunctions(CelStandardFunctions.ALL_STANDARD_FUNCTIONS)
@@ -2433,6 +2494,456 @@ public final class CelLiteRuntimeVersionSkewTest {
     assertThat(leafSubmessageResult).isEqualTo(expectedV1Msg);
   }
 
+  @Test
+  public void has_unknownProto3OptionalScalars_explicitDefaultVsUnset() throws Exception {
+    CelLiteRuntime runtime = newRuntimeWithoutFieldDescriptor("optional_bool", "optional_string");
+    Program program =
+        runtime.createProgram(
+            serverOptimizer.optimize(
+                serverCompiler
+                    .compile(
+                        "[has(msg.optional_bool), msg.optional_bool,"
+                            + " has(msg.optional_string), msg.optional_string]")
+                    .getAst()));
+    TestAllTypes explicitZeroMsg =
+        TestAllTypes.newBuilder().setOptionalBool(false).setOptionalString("").build();
+
+    Object explicitZeroResult = program.eval(ImmutableMap.of("msg", explicitZeroMsg));
+    Object unsetResult = program.eval(ImmutableMap.of("msg", TestAllTypes.getDefaultInstance()));
+
+    assertThat(explicitZeroResult).isEqualTo(ImmutableList.of(true, false, true, ""));
+    assertThat(unsetResult).isEqualTo(ImmutableList.of(false, false, false, ""));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked") // Program.eval returns Object.
+  public void select_unknownSubmessageContainers_withoutSubmessageDescriptor() throws Exception {
+    CelLiteRuntime runtimeWithoutNestedDesc = newRuntimeWithoutNestedMessageDescriptor();
+    Program repeatedProgram =
+        runtimeWithoutNestedDesc.createProgram(
+            serverOptimizer.optimize(
+                serverCompiler.compile("msg.repeated_nested_message").getAst()));
+    Program mapProgram =
+        runtimeWithoutNestedDesc.createProgram(
+            serverOptimizer.optimize(serverCompiler.compile("msg.map_string_message").getAst()));
+
+    List<WireMessageLite> repeatedResult =
+        (List<WireMessageLite>)
+            repeatedProgram.eval(ImmutableMap.of("msg", POPULATED_SERVER_MESSAGE));
+    Map<String, WireMessageLite> mapResult =
+        (Map<String, WireMessageLite>)
+            mapProgram.eval(ImmutableMap.of("msg", POPULATED_SERVER_MESSAGE));
+
+    assertThat(repeatedResult).hasSize(2);
+    assertThat(repeatedResult.get(0).protoTypeName())
+        .isEqualTo("cel.expr.conformance.proto3.TestAllTypes.NestedMessage");
+    assertThat(repeatedResult.get(0).toByteString())
+        .isEqualTo(NestedMessage.newBuilder().setBb(10).build().toByteString());
+    assertThat(repeatedResult.get(1).toByteString())
+        .isEqualTo(NestedMessage.newBuilder().setBb(20).build().toByteString());
+    assertThat(mapResult).containsKey("m1");
+    assertThat(mapResult.get("m1").protoTypeName())
+        .isEqualTo("cel.expr.conformance.proto3.TestAllTypes.NestedMessage");
+    assertThat(mapResult.get("m1").toByteString())
+        .isEqualTo(NestedMessage.newBuilder().setBb(55).build().toByteString());
+  }
+
+  @Test
+  public void wellKnownTypes_unknownWrapperFields_decodesFromWire() throws Exception {
+    // Encode a map<string, Int64Value> entry with key="omitted_val" and no tag 2 value record,
+    // which must decode to the wrapper's default value (0L) rather than null.
+    ByteString omittedWrapperValueEntry = encodeStringMapEntry("omitted_val", /* value= */ null);
+    TestAllTypes msg =
+        TestAllTypes.newBuilder()
+            .setSingleInt64Wrapper(Int64Value.of(0L))
+            .addRepeatedInt64Wrapper(Int64Value.of(10L))
+            .addRepeatedInt64Wrapper(Int64Value.of(0L))
+            .putMapStringInt64Wrapper("explicit", Int64Value.of(42L))
+            .setUnknownFields(
+                UnknownFieldSet.newBuilder()
+                    .addField(
+                        TestAllTypes.MAP_STRING_INT64_WRAPPER_FIELD_NUMBER,
+                        UnknownFieldSet.Field.newBuilder()
+                            .addLengthDelimited(omittedWrapperValueEntry)
+                            .build())
+                    .build())
+            .build();
+
+    Object result =
+        eval(
+            "has(msg.single_int64_wrapper) && msg.single_int64_wrapper == 0 &&"
+                + " !has(msg.single_string_wrapper) && msg.single_string_wrapper == null &&"
+                + " msg.repeated_int64_wrapper == [10, 0] &&"
+                + " msg.map_string_int64_wrapper['explicit'] == 42 &&"
+                + " msg.map_string_int64_wrapper['omitted_val'] == 0",
+            msg);
+
+    assertThat(result).isEqualTo(true);
+  }
+
+  @Test
+  public void wellKnownTypes_unknownJsonFieldMaskAndEmpty_decodesFromWire() throws Exception {
+    TestAllTypes populatedMsg =
+        TestAllTypes.newBuilder()
+            .setSingleStruct(
+                Struct.newBuilder()
+                    .putFields("k", Value.newBuilder().setStringValue("v").build())
+                    .putFields("n", Value.newBuilder().setNullValue(NullValue.NULL_VALUE).build()))
+            .setSingleValue(Value.newBuilder().setNumberValue(3.5d))
+            .setListValue(
+                ListValue.newBuilder()
+                    .addValues(Value.newBuilder().setBoolValue(true))
+                    .addValues(Value.newBuilder().setNullValue(NullValue.NULL_VALUE)))
+            .setFieldMask(FieldMask.newBuilder().addPaths("a.b").addPaths("c.d"))
+            .setEmpty(Empty.getDefaultInstance())
+            .build();
+
+    Object populatedResult =
+        eval(
+            "has(msg.single_struct) && msg.single_struct.k == 'v' && msg.single_struct.n == null &&"
+                + " has(msg.single_value) && msg.single_value == 3.5 &&"
+                + " has(msg.list_value) && msg.list_value == [true, null] &&"
+                + " has(msg.field_mask) && msg.field_mask.paths == ['a.b', 'c.d'] &&"
+                + " has(msg.empty)",
+            populatedMsg);
+    Object unsetResult =
+        eval(
+            "!has(msg.single_struct) && msg.single_struct == {} &&"
+                + " !has(msg.single_value) && msg.single_value == null &&"
+                + " !has(msg.list_value) && msg.list_value == [] &&"
+                + " !has(msg.field_mask) && msg.field_mask.paths == [] &&"
+                + " !has(msg.empty)",
+            TestAllTypes.getDefaultInstance());
+
+    assertThat(populatedResult).isEqualTo(true);
+    assertThat(unsetResult).isEqualTo(true);
+  }
+
+  @Test
+  public void select_unknownMap_unsignedBoolKeysAndOutOfOrderEntryTags() throws Exception {
+    // Encode a map<int32, int32> entry with tag 2 (value = 99) before tag 1 (key = 7), plus an
+    // unknown tag 3 varint inside the MapEntry message that readMapField must skip.
+    ByteArrayOutputStream outOfOrderEntry = new ByteArrayOutputStream();
+    CodedOutputStream cos = CodedOutputStream.newInstance(outOfOrderEntry);
+    cos.writeInt32(2, 99);
+    cos.writeInt32(3, 12345);
+    cos.writeInt32(1, 7);
+    cos.flush();
+    TestAllTypes msg =
+        TestAllTypes.newBuilder()
+            .putMapUint64String(-1L, "max_u64")
+            .putMapUint32String(-1, "max_u32")
+            .putMapBoolString(true, "yes")
+            .putMapBoolString(false, "no")
+            .setUnknownFields(
+                UnknownFieldSet.newBuilder()
+                    .addField(
+                        TestAllTypes.MAP_INT32_INT32_FIELD_NUMBER,
+                        UnknownFieldSet.Field.newBuilder()
+                            .addLengthDelimited(ByteString.copyFrom(outOfOrderEntry.toByteArray()))
+                            .build())
+                    .build())
+            .build();
+
+    Object result =
+        eval(
+            "msg.map_uint64_string[18446744073709551615u] == 'max_u64' &&"
+                + " msg.map_uint32_string[4294967295u] == 'max_u32' &&"
+                + " msg.map_bool_string[true] == 'yes' &&"
+                + " msg.map_bool_string[false] == 'no' &&"
+                + " msg.map_int32_int32[7] == 99",
+            msg);
+
+    assertThat(result).isEqualTo(true);
+  }
+
+  @Test
+  public void select_unsetKnownProto2Scalar_returnsEvolvedServerDefault() throws Exception {
+    // Server V2 evolves single_int64's [default = -64] to [default = -999], while the V1 client
+    // still knows single_int64 via its V1 CelLiteDescriptor. Because
+    // CelLiteDescriptor.getFieldValue
+    // returns null for unset proto2 scalars (!hasSingleInt64()), SelectOptimizer's V2 baked default
+    // (-999) takes precedence when the field is unset.
+    FileDescriptorProto.Builder v2Proto2FileBuilder =
+        dev.cel.expr.conformance.proto2.TestAllTypes.getDescriptor()
+            .getFile()
+            .toProto()
+            .toBuilder();
+    for (FieldDescriptorProto.Builder fieldBuilder :
+        v2Proto2FileBuilder.getMessageTypeBuilder(0).getFieldBuilderList()) {
+      if (fieldBuilder.getName().equals("single_int64")) {
+        fieldBuilder.setDefaultValue("-999");
+      }
+    }
+    FileDescriptor v2Proto2File =
+        FileDescriptor.buildFrom(
+            v2Proto2FileBuilder.build(),
+            dev.cel.expr.conformance.proto2.TestAllTypes.getDescriptor()
+                .getFile()
+                .getDependencies()
+                .toArray(new FileDescriptor[0]));
+    Program program =
+        createEvolvedServerProgram(
+            v2Proto2File,
+            v2Proto2File.findMessageTypeByName("TestAllTypes"),
+            "proto2_msg",
+            CelContainer.ofName("cel.expr.conformance.proto2"),
+            "[has(proto2_msg.single_int64), proto2_msg.single_int64]",
+            dev.cel.expr.conformance.proto2.TestAllTypesCelDescriptor.getDescriptor());
+
+    Object unsetResult =
+        program.eval(
+            ImmutableMap.of(
+                "proto2_msg", dev.cel.expr.conformance.proto2.TestAllTypes.getDefaultInstance()));
+    Object explicitZeroResult =
+        program.eval(
+            ImmutableMap.of(
+                "proto2_msg",
+                dev.cel.expr.conformance.proto2.TestAllTypes.newBuilder()
+                    .setSingleInt64(0L)
+                    .build()));
+
+    assertThat(unsetResult).isEqualTo(ImmutableList.of(false, -999L));
+    assertThat(explicitZeroResult).isEqualTo(ImmutableList.of(true, 0L));
+  }
+
+  @Test
+  public void select_unknownFieldWithIncompatibleWireType_throws(
+      @TestParameter({"msg.single_string", "has(msg.oneof_type.payload)"}) String expression)
+      throws Exception {
+    // single_string (field 14) and oneof_type (field 400) expect WIRETYPE_LENGTH_DELIMITED, but
+    // wire carries WIRETYPE_VARINT.
+    TestAllTypes corruptedMsg =
+        TestAllTypes.newBuilder()
+            .setUnknownFields(
+                UnknownFieldSet.newBuilder()
+                    .addField(
+                        TestAllTypes.SINGLE_STRING_FIELD_NUMBER,
+                        UnknownFieldSet.Field.newBuilder().addVarint(123L).build())
+                    .addField(
+                        TestAllTypes.ONEOF_TYPE_FIELD_NUMBER,
+                        UnknownFieldSet.Field.newBuilder().addVarint(123L).build())
+                    .build())
+            .build();
+
+    CelEvaluationException thrown =
+        assertThrows(CelEvaluationException.class, () -> eval(expression, corruptedMsg));
+
+    assertThat(thrown).hasCauseThat().isInstanceOf(InvalidProtocolBufferException.class);
+  }
+
+  @Test
+  public void partialVars_unknownAttributeOnSkewedField_shortCircuits() throws Exception {
+    CelAttribute attribute = CelAttribute.fromQualifiedIdentifier("msg.single_int64");
+    CelAttributePattern pattern = CelAttributePattern.fromQualifiedIdentifier("msg.single_int64");
+    Program program =
+        clientRuntime.createProgram(
+            serverOptimizer.optimize(
+                serverCompiler.compile("msg.single_bool || msg.single_int64 > 0").getAst()));
+    PartialVars shortCircuitVars =
+        PartialVars.of(ImmutableMap.of("msg", POPULATED_SERVER_MESSAGE), pattern);
+    PartialVars nonShortCircuitVars =
+        PartialVars.of(ImmutableMap.of("msg", TestAllTypes.getDefaultInstance()), pattern);
+
+    Object shortCircuitResult = program.eval(shortCircuitVars);
+    Object unknownResult = program.eval(nonShortCircuitVars);
+
+    assertThat(shortCircuitResult).isEqualTo(true);
+    assertThat(unknownResult).isInstanceOf(CelUnknownSet.class);
+    assertThat(((CelUnknownSet) unknownResult).attributes()).containsExactly(attribute);
+  }
+
+  @Test
+  public void crossSerialization_fullProtoDynamicMessageToV1Lite() throws Exception {
+    // Evolve TestAllTypes.getDescriptor() into a V2 server schema in memory:
+    // - Rename field 1 (single_int32 -> v2_single_int32)
+    // - Add V2 field v2_note (tag 2) to NestedMessage
+    // - Add V2 root fields: v2_int64 (601), v2_nested (602), v2_tags (603), v2_scores (604), and
+    //   oneof kind variant v2_oneof_str (605, sharing oneof kind with known V1 oneof_msg = 401).
+    FileDescriptorProto.Builder v2FileBuilder =
+        TestAllTypes.getDescriptor().getFile().toProto().toBuilder();
+    DescriptorProto.Builder msgBuilder = v2FileBuilder.getMessageTypeBuilder(0);
+    msgBuilder.getFieldBuilder(0).setName("v2_single_int32");
+    msgBuilder
+        .getNestedTypeBuilder(0)
+        .addField(
+            newFieldProto(
+                "v2_note",
+                2,
+                FieldDescriptorProto.Label.LABEL_OPTIONAL,
+                FieldDescriptorProto.Type.TYPE_STRING));
+    msgBuilder
+        .addNestedType(
+            DescriptorProto.newBuilder()
+                .setName("V2ScoresEntry")
+                .setOptions(MessageOptions.newBuilder().setMapEntry(true))
+                .addField(
+                    newFieldProto(
+                        "key",
+                        1,
+                        FieldDescriptorProto.Label.LABEL_OPTIONAL,
+                        FieldDescriptorProto.Type.TYPE_STRING))
+                .addField(
+                    newFieldProto(
+                        "value",
+                        2,
+                        FieldDescriptorProto.Label.LABEL_OPTIONAL,
+                        FieldDescriptorProto.Type.TYPE_INT64)))
+        .addField(
+            newFieldProto(
+                "v2_int64",
+                601,
+                FieldDescriptorProto.Label.LABEL_OPTIONAL,
+                FieldDescriptorProto.Type.TYPE_INT64))
+        .addField(
+            newFieldProto(
+                    "v2_nested",
+                    602,
+                    FieldDescriptorProto.Label.LABEL_OPTIONAL,
+                    FieldDescriptorProto.Type.TYPE_MESSAGE)
+                .setTypeName(".cel.expr.conformance.proto3.TestAllTypes.NestedMessage"))
+        .addField(
+            newFieldProto(
+                "v2_tags",
+                603,
+                FieldDescriptorProto.Label.LABEL_REPEATED,
+                FieldDescriptorProto.Type.TYPE_STRING))
+        .addField(
+            newFieldProto(
+                    "v2_scores",
+                    604,
+                    FieldDescriptorProto.Label.LABEL_REPEATED,
+                    FieldDescriptorProto.Type.TYPE_MESSAGE)
+                .setTypeName(".cel.expr.conformance.proto3.TestAllTypes.V2ScoresEntry"))
+        .addField(
+            newFieldProto(
+                    "v2_oneof_str",
+                    605,
+                    FieldDescriptorProto.Label.LABEL_OPTIONAL,
+                    FieldDescriptorProto.Type.TYPE_STRING)
+                .setOneofIndex(1));
+    FileDescriptor v2FileDesc =
+        FileDescriptor.buildFrom(
+            v2FileBuilder.build(),
+            TestAllTypes.getDescriptor()
+                .getFile()
+                .getDependencies()
+                .toArray(new FileDescriptor[0]));
+    Descriptor v2RootDesc = v2FileDesc.findMessageTypeByName("TestAllTypes");
+    Descriptor v2NestedDesc = v2RootDesc.findNestedTypeByName("NestedMessage");
+    Descriptor v2ScoresEntryDesc = v2RootDesc.findNestedTypeByName("V2ScoresEntry");
+    DynamicMessage v2FullProtoMsg =
+        DynamicMessage.newBuilder(v2RootDesc)
+            .setField(v2RootDesc.findFieldByName("v2_single_int32"), 77)
+            .setField(v2RootDesc.findFieldByName("single_string"), "known-v1")
+            .setField(
+                v2RootDesc.findFieldByName("standalone_message"),
+                DynamicMessage.newBuilder(v2NestedDesc)
+                    .setField(v2NestedDesc.findFieldByName("bb"), 7)
+                    .setField(v2NestedDesc.findFieldByName("v2_note"), "from-full")
+                    .build())
+            .setField(v2RootDesc.findFieldByName("v2_int64"), -999L)
+            .setField(
+                v2RootDesc.findFieldByName("v2_nested"),
+                DynamicMessage.newBuilder(v2NestedDesc)
+                    .setField(v2NestedDesc.findFieldByName("bb"), 42)
+                    .setField(v2NestedDesc.findFieldByName("v2_note"), "sub-note")
+                    .build())
+            .addRepeatedField(v2RootDesc.findFieldByName("v2_tags"), "t1")
+            .addRepeatedField(v2RootDesc.findFieldByName("v2_tags"), "t2")
+            .addRepeatedField(
+                v2RootDesc.findFieldByName("v2_scores"),
+                DynamicMessage.newBuilder(v2ScoresEntryDesc)
+                    .setField(v2ScoresEntryDesc.findFieldByName("key"), "s1")
+                    .setField(v2ScoresEntryDesc.findFieldByName("value"), 100L)
+                    .build())
+            .setField(v2RootDesc.findFieldByName("v2_oneof_str"), "picked")
+            .build();
+    TestAllTypes v1ClientMsg =
+        TestAllTypes.parseFrom(
+            v2FullProtoMsg.toByteArray(), ExtensionRegistryLite.getEmptyRegistry());
+    Program evalProgram =
+        createEvolvedServerProgram(
+            v2FileDesc,
+            v2RootDesc,
+            "msg",
+            CEL_CONTAINER,
+            "has(msg.v2_single_int32) && msg.v2_single_int32 == 77 &&"
+                + " msg.single_string == 'known-v1' &&"
+                + " msg.standalone_message.bb == 7 &&"
+                + " has(msg.standalone_message.v2_note) &&"
+                + " msg.standalone_message.v2_note == 'from-full' &&"
+                + " has(msg.v2_int64) && msg.v2_int64 == -999 &&"
+                + " msg.v2_nested.bb == 42 &&"
+                + " msg.v2_nested.v2_note == 'sub-note' &&"
+                + " msg.v2_tags == ['t1', 't2'] &&"
+                + " msg.v2_scores['s1'] == 100 &&"
+                + " has(msg.v2_oneof_str) &&"
+                + " msg.v2_oneof_str == 'picked' &&"
+                + " !has(msg.oneof_msg) &&"
+                + " !has(msg.oneof_bool)",
+            TestAllTypesCelDescriptor.getDescriptor(),
+            NestedTestAllTypesCelDescriptor.getDescriptor());
+    Program leafSubmessageProgram =
+        createEvolvedServerProgram(
+            v2FileDesc,
+            v2RootDesc,
+            "msg",
+            CEL_CONTAINER,
+            "msg.v2_nested",
+            TestAllTypesCelDescriptor.getDescriptor(),
+            NestedTestAllTypesCelDescriptor.getDescriptor());
+
+    Object evalResult = evalProgram.eval(ImmutableMap.of("msg", v1ClientMsg));
+    Object v2NestedLeaf = leafSubmessageProgram.eval(ImmutableMap.of("msg", v1ClientMsg));
+
+    assertThat(evalResult).isEqualTo(true);
+    assertThat(v2NestedLeaf).isInstanceOf(NestedMessage.class);
+    assertThat(((NestedMessage) v2NestedLeaf).getBb()).isEqualTo(42);
+  }
+
+  private static FieldDescriptorProto.Builder newFieldProto(
+      String name, int number, FieldDescriptorProto.Label label, FieldDescriptorProto.Type type) {
+    return FieldDescriptorProto.newBuilder()
+        .setName(name)
+        .setNumber(number)
+        .setLabel(label)
+        .setType(type);
+  }
+
+  private static Program createEvolvedServerProgram(
+      FileDescriptor v2File,
+      Descriptor v2RootDesc,
+      String varName,
+      CelContainer container,
+      String expression,
+      CelLiteDescriptor... clientDescriptors)
+      throws Exception {
+    Cel serverV2Compiler =
+        CelFactory.plannerCelBuilder()
+            .setOptions(CEL_OPTIONS)
+            .setStandardMacros(CelStandardMacro.STANDARD_MACROS)
+            .addMessageTypes(v2RootDesc)
+            .addVar(varName, StructTypeReference.create(v2RootDesc.getFullName()))
+            .setContainer(container)
+            .build();
+    CelOptimizer serverV2Optimizer =
+        CelOptimizerFactory.standardCelOptimizerBuilder(serverV2Compiler)
+            .addAstOptimizers(
+                SelectOptimizer.newInstance(
+                    SelectOptimizerOptions.newBuilder().enableLinkedMessageTypes(false).build(),
+                    v2File))
+            .build();
+    CelLiteRuntime clientV1Runtime =
+        CelLiteRuntimeFactory.newLiteRuntimeBuilder()
+            .setStandardFunctions(CelStandardFunctions.ALL_STANDARD_FUNCTIONS)
+            .setValueProvider(ProtoMessageLiteValueProvider.newInstance(clientDescriptors))
+            .setContainer(container)
+            .build();
+    return clientV1Runtime.createProgram(
+        serverV2Optimizer.optimize(serverV2Compiler.compile(expression).getAst()));
+  }
+
   private Program compileScoreModelLateBoundProgram() throws Exception {
     Cel celWithLateFunc =
         serverCompiler
@@ -2551,16 +3062,12 @@ public final class CelLiteRuntimeVersionSkewTest {
   }
 
   private static MessageLiteDescriptor buildClientTestAllTypesDescriptor(
-      MessageLiteDescriptor fullMsgDesc) {
-    return buildClientTestAllTypesDescriptor(fullMsgDesc, /* additionalExcludedField= */ null);
-  }
-
-  private static MessageLiteDescriptor buildClientTestAllTypesDescriptor(
-      MessageLiteDescriptor fullMsgDesc, @Nullable String additionalExcludedField) {
+      MessageLiteDescriptor fullMsgDesc, String... additionalExcludedFields) {
+    ImmutableSet<String> extraExcluded = ImmutableSet.copyOf(additionalExcludedFields);
     ImmutableList.Builder<FieldLiteDescriptor> clientFields = ImmutableList.builder();
     for (FieldLiteDescriptor f : fullMsgDesc.getFieldDescriptors()) {
       if (SERVER_ONLY_FIELD_NAMES.contains(f.getFieldName())
-          || f.getFieldName().equals(additionalExcludedField)) {
+          || extraExcluded.contains(f.getFieldName())) {
         continue;
       }
       String clientFieldName =
@@ -2604,33 +3111,20 @@ public final class CelLiteRuntimeVersionSkewTest {
   }
 
   private static CelLiteRuntime newRuntimeWithoutNestedMessageDescriptor() {
-    CelLiteDescriptor fullDescriptor = TestAllTypesCelDescriptor.getDescriptor();
-    MessageLiteDescriptor clientTestAllTypesDesc =
-        buildClientTestAllTypesDescriptor(
-            fullDescriptor
-                .getProtoTypeNamesToDescriptors()
-                .get(TestAllTypes.getDescriptor().getFullName()));
-    CelLiteDescriptor partialDescriptor =
-        newClientCelLiteDescriptor(
-            "v1_no_nested", fullDescriptor, ImmutableList.of(clientTestAllTypesDesc));
-    return CelLiteRuntimeFactory.newLiteRuntimeBuilder()
-        .setStandardFunctions(CelStandardFunctions.ALL_STANDARD_FUNCTIONS)
-        .setValueProvider(ProtoMessageLiteValueProvider.newInstance(partialDescriptor))
-        .setContainer(CEL_CONTAINER)
-        .build();
+    return newRuntimeWithoutFieldDescriptor();
   }
 
-  private static CelLiteRuntime newRuntimeWithoutFieldDescriptor(String excludedFieldName) {
+  private static CelLiteRuntime newRuntimeWithoutFieldDescriptor(String... excludedFieldNames) {
     CelLiteDescriptor fullDescriptor = TestAllTypesCelDescriptor.getDescriptor();
     MessageLiteDescriptor clientTestAllTypesDesc =
         buildClientTestAllTypesDescriptor(
             fullDescriptor
                 .getProtoTypeNamesToDescriptors()
                 .get(TestAllTypes.getDescriptor().getFullName()),
-            excludedFieldName);
+            excludedFieldNames);
     CelLiteDescriptor partialDescriptor =
         newClientCelLiteDescriptor(
-            "v1_no_" + excludedFieldName, fullDescriptor, ImmutableList.of(clientTestAllTypesDesc));
+            "v1_partial", fullDescriptor, ImmutableList.of(clientTestAllTypesDesc));
     return CelLiteRuntimeFactory.newLiteRuntimeBuilder()
         .setStandardFunctions(CelStandardFunctions.ALL_STANDARD_FUNCTIONS)
         .setValueProvider(ProtoMessageLiteValueProvider.newInstance(partialDescriptor))
@@ -2655,10 +3149,18 @@ public final class CelLiteRuntimeVersionSkewTest {
             /* protoFieldType= */ FieldLiteDescriptor.Type.INT32,
             /* isPacked= */ false,
             /* fieldProtoTypeName= */ "");
+    FieldLiteDescriptor v1RepeatedInt32Field =
+        new FieldLiteDescriptor(
+            /* fieldNumber= */ TestAllTypes.REPEATED_INT32_FIELD_NUMBER,
+            /* fieldName= */ "v1_repeated_int32",
+            /* encodingType= */ FieldLiteDescriptor.EncodingType.LIST,
+            /* protoFieldType= */ FieldLiteDescriptor.Type.INT32,
+            /* isPacked= */ true,
+            /* fieldProtoTypeName= */ "");
     MessageLiteDescriptor v1OlderClassTestAllTypesDesc =
         new MessageLiteDescriptor(
             TestAllTypes.getDescriptor().getFullName(),
-            ImmutableList.of(v1SingleInt32Field),
+            ImmutableList.of(v1SingleInt32Field, v1RepeatedInt32Field),
             NestedMessage::newBuilder);
     CelLiteDescriptor v1OlderClassDescriptor =
         new CelLiteDescriptor("v1_older_class", ImmutableList.of(v1OlderClassTestAllTypesDesc)) {
