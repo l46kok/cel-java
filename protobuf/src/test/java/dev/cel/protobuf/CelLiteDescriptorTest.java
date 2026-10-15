@@ -178,6 +178,30 @@ public class CelLiteDescriptorTest {
         .isEqualTo("cel.expr.conformance.proto3.TestAllTypes.NestedMessage");
   }
 
+  @Test
+  public void mapEntryDescriptor_describesKeyAndValue() {
+    MessageLiteDescriptor mapEntryDescriptor =
+        TEST_ALL_TYPES_CEL_LITE_DESCRIPTOR
+            .getProtoTypeNamesToDescriptors()
+            .get("cel.expr.conformance.proto3.TestAllTypes.MapInt64NestedTypeEntry");
+
+    FieldLiteDescriptor key = mapEntryDescriptor.getByFieldNumberOrThrow(1);
+    FieldLiteDescriptor value = mapEntryDescriptor.getByFieldNumberOrThrow(2);
+
+    assertThat(mapEntryDescriptor.newMessageBuilder()).isNull();
+    assertThat(key.getFieldName()).isEqualTo("key");
+    assertThat(key.getEncodingType()).isEqualTo(EncodingType.SINGULAR);
+    assertThat(key.getProtoFieldType()).isEqualTo(FieldLiteDescriptor.Type.INT64);
+    assertThat(key.getIsPacked()).isFalse();
+    assertThat(key.getFieldProtoTypeName()).isEmpty();
+    assertThat(value.getFieldName()).isEqualTo("value");
+    assertThat(value.getEncodingType()).isEqualTo(EncodingType.SINGULAR);
+    assertThat(value.getProtoFieldType()).isEqualTo(FieldLiteDescriptor.Type.MESSAGE);
+    assertThat(value.getIsPacked()).isFalse();
+    assertThat(value.getFieldProtoTypeName())
+        .isEqualTo("cel.expr.conformance.proto3.NestedTestAllTypes");
+  }
+
   private enum ProtoFieldTypeTestCase {
     DOUBLE(FieldLiteDescriptor.Type.DOUBLE, 1, WireFormat.FieldType.DOUBLE),
     FLOAT(FieldLiteDescriptor.Type.FLOAT, 2, WireFormat.FieldType.FLOAT),

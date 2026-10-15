@@ -397,6 +397,27 @@ public abstract class CelLiteDescriptor {
     return defaultScalarValues.contains(value) ? null : value;
   }
 
+  /** Describes map entry type {@code fullName}, whose key and value are fields 1 and 2. */
+  protected static MessageLiteDescriptor mapEntry(
+      String fullName,
+      FieldLiteDescriptor.Type keyType,
+      FieldLiteDescriptor.Type valueType,
+      String valueTypeName) {
+    return new MessageLiteDescriptor(
+        fullName,
+        Arrays.asList(
+            new FieldLiteDescriptor(
+                1, "key", FieldLiteDescriptor.EncodingType.SINGULAR, keyType, false, ""),
+            new FieldLiteDescriptor(
+                2,
+                "value",
+                FieldLiteDescriptor.EncodingType.SINGULAR,
+                valueType,
+                false,
+                valueTypeName)),
+        () -> null);
+  }
+
   protected CelLiteDescriptor(String version, List<MessageLiteDescriptor> messageInfoList) {
     Map<String, MessageLiteDescriptor> protoFqnMap =
         new HashMap<>(getMapInitialCapacity(messageInfoList.size()));

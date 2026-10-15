@@ -40,6 +40,7 @@ public final class ${descriptor_class_name} extends CelLiteDescriptor {
     List<MessageLiteDescriptor> descriptors = new ArrayList<>(${descriptor_metadata_list?size});
     List<FieldLiteDescriptor> fieldDescriptors;
     <#list descriptor_metadata_list as descriptor_metadata>
+    <#if descriptor_metadata.javaClassName??>
 
     fieldDescriptors = new ArrayList<>(${descriptor_metadata.fieldDescriptors?size});
       <#list descriptor_metadata.fieldDescriptors as field_descriptor>
@@ -57,13 +58,17 @@ public final class ${descriptor_class_name} extends CelLiteDescriptor {
       new MessageLiteDescriptor(
         "${descriptor_metadata.protoTypeName}",
         fieldDescriptors,
-        <#if descriptor_metadata.javaClassName??>
         ${descriptor_metadata.javaClassName}::newBuilder
-        <#else>
-        () -> null
-        </#if>
         )
     );
+    <#else>
+
+    descriptors.add(mapEntry(
+      "${descriptor_metadata.protoTypeName}",
+      ${descriptor_metadata.fieldDescriptors[0].protoFieldTypeEnumName},
+      ${descriptor_metadata.fieldDescriptors[1].protoFieldTypeEnumName},
+      "${descriptor_metadata.fieldDescriptors[1].fieldProtoTypeName}"));
+    </#if>
     </#list>
 
     return Collections.unmodifiableList(descriptors);
