@@ -81,11 +81,8 @@ public final class ProgramPlanner {
   private static final String JSON_NAME_EXTENSION = "json_name";
   private static final String SELECT_OPTIMIZATION_EXTENSION = "select_optimization";
 
-  private static final ImmutableMap<String, Version> SUPPORTED_RUNTIME_EXTENSIONS =
-      ImmutableMap.of(
-          CEL_BLOCK_EXTENSION, Version.of(1, 1),
-          JSON_NAME_EXTENSION, Version.of(1, 1),
-          SELECT_OPTIMIZATION_EXTENSION, Version.of(1, 0));
+  private static final ImmutableSet<String> SUPPORTED_RUNTIME_EXTENSIONS =
+      ImmutableSet.of(CEL_BLOCK_EXTENSION, JSON_NAME_EXTENSION, SELECT_OPTIMIZATION_EXTENSION);
 
   private final CelTypeProvider typeProvider;
   private final CelValueProvider valueProvider;
@@ -865,11 +862,8 @@ public final class ProgramPlanner {
           continue;
         }
         Version version = extension.version();
-        Version supportedVersion = SUPPORTED_RUNTIME_EXTENSIONS.get(extension.id());
         checkArgument(
-            supportedVersion != null
-                && version.major() == supportedVersion.major()
-                && version.minor() <= supportedVersion.minor(),
+            SUPPORTED_RUNTIME_EXTENSIONS.contains(extension.id()) && version.major() == 1,
             "unsupported CEL extension: %s@%s.%s",
             extension.id(),
             version.major(),

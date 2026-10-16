@@ -355,10 +355,8 @@ public final class ProgramPlannerTest {
   @Test
   @TestParameters("{id: 'unknown', major: 1, minor: 0}")
   @TestParameters("{id: 'select_optimization', major: 2, minor: 0}")
-  @TestParameters("{id: 'select_optimization', major: 1, minor: 1}")
   @TestParameters("{id: 'cel_block', major: 0, minor: 0}")
-  @TestParameters("{id: 'cel_block', major: 1, minor: 2}")
-  @TestParameters("{id: 'json_name', major: 1, minor: 2}")
+  @TestParameters("{id: 'json_name', major: 2, minor: 0}")
   public void plan_unsupportedRuntimeExtension_throws(String id, int major, int minor) {
     CelAbstractSyntaxTree ast =
         newAstWithExtensions(
@@ -377,9 +375,9 @@ public final class ProgramPlannerTest {
     CelAbstractSyntaxTree ast =
         newAstWithExtensions(
             Extension.create("cel_block", Version.of(1, 0), Component.COMPONENT_RUNTIME),
-            Extension.create("cel_block", Version.of(1, 1), Component.COMPONENT_RUNTIME),
-            Extension.create("json_name", Version.of(1, 1), Component.COMPONENT_RUNTIME),
-            Extension.create("select_optimization", Version.of(1, 0), Component.COMPONENT_RUNTIME),
+            Extension.create("cel_block", Version.of(1, 2), Component.COMPONENT_RUNTIME),
+            Extension.create("json_name", Version.of(1, 2), Component.COMPONENT_RUNTIME),
+            Extension.create("select_optimization", Version.of(1, 1), Component.COMPONENT_RUNTIME),
             // Extensions not affecting the runtime are ignored.
             Extension.create("unknown", Version.of(2, 0), Component.COMPONENT_PARSER));
     ProgramPlanner planner =
