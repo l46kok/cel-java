@@ -18,51 +18,41 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.errorprone.annotations.Immutable;
 import dev.cel.common.ast.CelExpr;
-import dev.cel.common.exceptions.CelRuntimeException;
 import dev.cel.common.values.MutableMapValue;
 import dev.cel.runtime.AccumulatedUnknowns;
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.ConcatenatedListView;
 import dev.cel.runtime.GlobalResolver;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
+import java.util.RandomAccess;
 import org.jspecify.annotations.Nullable;
 
 @Immutable
 final class EvalFold extends PlannedInterpretable {
 
-  private final String accuVar;
+  private final int accuSlot;
   private final PlannedInterpretable accuInit;
-  private final String iterVar;
-  private final String iterVar2;
+  private final int iterSlot;
+  private final int iter2Slot;
   private final PlannedInterpretable iterRange;
   private final PlannedInterpretable condition;
   private final PlannedInterpretable loopStep;
   private final PlannedInterpretable result;
-  private final boolean mutableAccu;
 
   static EvalFold create(
       CelExpr expr,
-      String accuVar,
+      int accuSlot,
       PlannedInterpretable accuInit,
-      String iterVar,
-      String iterVar2,
+      int iterSlot,
+      int iter2Slot,
       PlannedInterpretable iterRange,
       PlannedInterpretable loopCondition,
       PlannedInterpretable loopStep,
-      PlannedInterpretable result,
-      boolean mutableAccu) {
+      PlannedInterpretable result) {
     return new EvalFold(
-        expr,
-        accuVar,
-        accuInit,
-        iterVar,
-        iterVar2,
-        iterRange,
-        loopCondition,
-        loopStep,
-        result,
-        mutableAccu);
+        expr, accuSlot, accuInit, iterSlot, iter2Slot, iterRange, loopCondition, loopStep, result);
   }
 
   @Override
@@ -71,79 +61,90 @@ final class EvalFold extends PlannedInterpretable {
     if (iterRangeRaw instanceof AccumulatedUnknowns) {
       return iterRangeRaw;
     }
-    Folder folder = new Folder(resolver, frame, accuInit, accuVar, iterVar, iterVar2, mutableAccu);
-
+    frame.setComprehensionSlot(accuSlot, accuInit);
     if (iterRangeRaw instanceof Map) {
-      return evalMap((Map<?, ?>) iterRangeRaw, folder, frame);
-    } else if (iterRangeRaw instanceof Collection) {
-      return evalList((Collection<?>) iterRangeRaw, folder, frame);
+      return evalMap((Map<?, ?>) iterRangeRaw, resolver, frame);
+    } else if (iterRangeRaw instanceof List) {
+      List<?> list = (List<?>) iterRangeRaw;
+      // ConcatenatedListView (a mutable accumulator) does not support get(int).
+      return evalList(
+          list instanceof RandomAccess ? list : ImmutableList.copyOf(list), resolver, frame);
     } else {
       throw new IllegalArgumentException("Unexpected iter_range type: " + iterRangeRaw.getClass());
     }
   }
 
-  private Object evalMap(Map<?, ?> iterRange, Folder folder, ExecutionFrame frame)
+  private Object evalMap(Map<?, ?> iterRange, GlobalResolver resolver, ExecutionFrame frame)
       throws CelEvaluationException {
     for (Map.Entry<?, ?> entry : iterRange.entrySet()) {
       frame.incrementIterations();
 
-      folder.iterVarVal = entry.getKey();
-      if (!iterVar2.isEmpty()) {
-        folder.iterVar2Val = entry.getValue();
+      frame.setComprehensionSlot(iterSlot, entry.getKey());
+      if (iter2Slot >= 0) {
+        frame.setComprehensionSlot(iter2Slot, entry.getValue());
       }
 
-      Object condResult = condition.eval(folder, frame);
+      Object condResult = condition.eval(resolver, frame);
       if (condResult instanceof AccumulatedUnknowns) {
-        return mergeAccumulator(folder.accuVal, condResult);
+        return mergeAccumulator(frame.getComprehensionSlot(accuSlot), condResult);
       }
       if (!(condResult instanceof Boolean)) {
         throw new IllegalArgumentException(
             String.format("Expected boolean value, found :%s", condResult));
       }
-      boolean cond = (boolean) condResult;
-      if (!cond) {
+      if (!(boolean) condResult) {
         break;
       }
 
-      Object stepResult = loopStep.eval(folder, frame);
-      folder.accuVal = mergeAccumulator(folder.accuVal, stepResult);
-      folder.initialized = true;
+      Object stepResult = loopStep.eval(resolver, frame);
+      frame.setComprehensionSlot(
+          accuSlot, mergeAccumulator(frame.getComprehensionSlot(accuSlot), stepResult));
     }
-    return folder.evalResult(result);
+    return evalResult(resolver, frame);
   }
 
-  private Object evalList(Collection<?> iterRange, Folder folder, ExecutionFrame frame)
+  private Object evalList(List<?> iterRange, GlobalResolver resolver, ExecutionFrame frame)
       throws CelEvaluationException {
-    int index = 0;
-    for (Object item : iterRange) {
+    for (int index = 0; index < iterRange.size(); index++) {
       frame.incrementIterations();
 
-      if (iterVar2.isEmpty()) {
-        folder.iterVarVal = item;
+      Object item = iterRange.get(index);
+      if (iter2Slot < 0) {
+        frame.setComprehensionSlot(iterSlot, item);
       } else {
-        folder.iterVarVal = (long) index;
-        folder.iterVar2Val = item;
+        frame.setComprehensionSlot(iterSlot, (long) index);
+        frame.setComprehensionSlot(iter2Slot, item);
       }
 
-      Object condResult = condition.eval(folder, frame);
+      Object condResult = condition.eval(resolver, frame);
       if (condResult instanceof AccumulatedUnknowns) {
-        return mergeAccumulator(folder.accuVal, condResult);
+        return mergeAccumulator(frame.getComprehensionSlot(accuSlot), condResult);
       }
       if (!(condResult instanceof Boolean)) {
         throw new IllegalArgumentException(
             String.format("Expected boolean value, found :%s", condResult));
       }
-      boolean cond = (boolean) condResult;
-      if (!cond) {
+      if (!(boolean) condResult) {
         break;
       }
 
-      Object stepResult = loopStep.eval(folder, frame);
-      folder.accuVal = mergeAccumulator(folder.accuVal, stepResult);
-      folder.initialized = true;
-      index++;
+      Object stepResult = loopStep.eval(resolver, frame);
+      frame.setComprehensionSlot(
+          accuSlot, mergeAccumulator(frame.getComprehensionSlot(accuSlot), stepResult));
     }
-    return folder.evalResult(result);
+    return evalResult(resolver, frame);
+  }
+
+  private Object evalResult(GlobalResolver resolver, ExecutionFrame frame)
+      throws CelEvaluationException {
+    Object accuVal = frame.getComprehensionSlot(accuSlot);
+    // Materialize the mutable accumulator so the result expr never observes in-place mutation.
+    if (accuVal instanceof ConcatenatedListView) {
+      frame.setComprehensionSlot(accuSlot, ImmutableList.copyOf((ConcatenatedListView<?>) accuVal));
+    } else if (accuVal instanceof MutableMapValue) {
+      frame.setComprehensionSlot(accuSlot, ImmutableMap.copyOf((MutableMapValue) accuVal));
+    }
+    return result.eval(resolver, frame);
   }
 
   private static Object mergeAccumulator(@Nullable Object currentAccu, Object newVal) {
@@ -163,117 +164,55 @@ final class EvalFold extends PlannedInterpretable {
     return val;
   }
 
+  /** Evaluates a comprehension variable stored in an {@link ExecutionFrame} slot. */
+  @Immutable
+  static final class EvalComprehensionSlot extends PlannedInterpretable {
+    private final int slotIndex;
+    private final boolean wrapMutableAccu;
+
+    @Override
+    Object evalInternal(GlobalResolver resolver, ExecutionFrame frame)
+        throws CelEvaluationException {
+      Object val = frame.getComprehensionSlot(slotIndex);
+      if (val instanceof PlannedInterpretable) {
+        val = ((PlannedInterpretable) val).eval(resolver, frame);
+        if (wrapMutableAccu && frame.enableShortCircuiting()) {
+          val = maybeWrapAccumulator(val);
+        }
+        frame.setComprehensionSlot(slotIndex, val);
+      }
+      return val;
+    }
+
+    static EvalComprehensionSlot create(CelExpr expr, int slotIndex, boolean wrapMutableAccu) {
+      return new EvalComprehensionSlot(expr, slotIndex, wrapMutableAccu);
+    }
+
+    private EvalComprehensionSlot(CelExpr expr, int slotIndex, boolean wrapMutableAccu) {
+      super(expr);
+      this.slotIndex = slotIndex;
+      this.wrapMutableAccu = wrapMutableAccu;
+    }
+  }
+
   private EvalFold(
       CelExpr expr,
-      String accuVar,
+      int accuSlot,
       PlannedInterpretable accuInit,
-      String iterVar,
-      String iterVar2,
+      int iterSlot,
+      int iter2Slot,
       PlannedInterpretable iterRange,
       PlannedInterpretable condition,
       PlannedInterpretable loopStep,
-      PlannedInterpretable result,
-      boolean mutableAccu) {
+      PlannedInterpretable result) {
     super(expr);
-    this.accuVar = accuVar;
+    this.accuSlot = accuSlot;
     this.accuInit = accuInit;
-    this.iterVar = iterVar;
-    this.iterVar2 = iterVar2;
+    this.iterSlot = iterSlot;
+    this.iter2Slot = iter2Slot;
     this.iterRange = iterRange;
     this.condition = condition;
     this.loopStep = loopStep;
     this.result = result;
-    this.mutableAccu = mutableAccu;
-  }
-
-  private static final class Folder implements ActivationWrapper {
-    private final GlobalResolver resolver;
-    private final ExecutionFrame frame;
-    private final PlannedInterpretable accuInit;
-    private final String accuVar;
-    private final String iterVar;
-    private final String iterVar2;
-    private final boolean mutableAccu;
-
-    private @Nullable Object iterVarVal;
-    private @Nullable Object iterVar2Val;
-    private @Nullable Object accuVal;
-    private boolean initialized = false;
-    private boolean computeResult = false;
-
-    @Override
-    public GlobalResolver unwrap() {
-      return resolver;
-    }
-
-    @Override
-    public boolean isLocallyBound(String name) {
-      return name.equals(accuVar) || name.equals(iterVar) || name.equals(iterVar2);
-    }
-
-    @Override
-    public @Nullable Object resolve(String name) {
-      if (name.equals(accuVar)) {
-        if (!initialized) {
-          initialized = true;
-          try {
-            Object initVal = accuInit.eval(resolver, frame);
-            accuVal =
-                mutableAccu && !computeResult && frame.enableShortCircuiting()
-                    ? maybeWrapAccumulator(initVal)
-                    : initVal;
-          } catch (CelEvaluationException e) {
-            throw new LazyEvaluationRuntimeException(e);
-          }
-        }
-        return accuVal;
-      }
-
-      if (!computeResult) {
-        if (name.equals(iterVar)) {
-          return this.iterVarVal;
-        }
-
-        if (name.equals(iterVar2)) {
-          return this.iterVar2Val;
-        }
-      }
-
-      return resolver.resolve(name);
-    }
-
-    private Object evalResult(PlannedInterpretable result) throws CelEvaluationException {
-      computeResult = true;
-      // Materialize the mutable accumulator so the result expr never observes in-place mutation.
-      if (accuVal instanceof ConcatenatedListView) {
-        accuVal = ImmutableList.copyOf((ConcatenatedListView<?>) accuVal);
-      } else if (accuVal instanceof MutableMapValue) {
-        accuVal = ImmutableMap.copyOf((MutableMapValue) accuVal);
-      }
-      return result.eval(this, frame);
-    }
-
-    private Folder(
-        GlobalResolver resolver,
-        ExecutionFrame frame,
-        PlannedInterpretable accuInit,
-        String accuVar,
-        String iterVar,
-        String iterVar2,
-        boolean mutableAccu) {
-      this.resolver = resolver;
-      this.frame = frame;
-      this.accuInit = accuInit;
-      this.accuVar = accuVar;
-      this.iterVar = iterVar;
-      this.iterVar2 = iterVar2;
-      this.mutableAccu = mutableAccu;
-    }
-  }
-
-  private static final class LazyEvaluationRuntimeException extends CelRuntimeException {
-    private LazyEvaluationRuntimeException(CelEvaluationException cause) {
-      super(cause, cause.getErrorCode());
-    }
   }
 }

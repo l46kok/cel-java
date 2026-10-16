@@ -135,7 +135,6 @@ java_library(
         "StringQualifier.java",
     ],
     deps = [
-        ":activation_wrapper",
         ":eval_helpers",
         ":planned_interpretable",
         "//common:container",
@@ -276,12 +275,6 @@ java_library(
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
     ],
-)
-
-java_library(
-    name = "activation_wrapper",
-    srcs = ["ActivationWrapper.java"],
-    deps = ["//runtime:interpretable"],
 )
 
 java_library(
@@ -431,10 +424,8 @@ java_library(
     name = "eval_fold",
     srcs = ["EvalFold.java"],
     deps = [
-        ":activation_wrapper",
         ":planned_interpretable",
         "//common/ast",
-        "//common/exceptions:runtime_exception",
         "//common/values:mutable_map_value",
         "//runtime:accumulated_unknowns",
         "//runtime:concatenated_list_view",
@@ -807,7 +798,6 @@ cel_android_library(
         "StringQualifier.java",
     ],
     deps = [
-        ":activation_wrapper_android",
         ":eval_helpers_android",
         ":planned_interpretable_android",
         "//common:container_android",
@@ -950,12 +940,6 @@ cel_android_library(
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven_android//:com_google_guava_guava",
     ],
-)
-
-cel_android_library(
-    name = "activation_wrapper_android",
-    srcs = ["ActivationWrapper.java"],
-    deps = ["//runtime:interpretable_android"],
 )
 
 cel_android_library(
@@ -1105,10 +1089,8 @@ cel_android_library(
     name = "eval_fold_android",
     srcs = ["EvalFold.java"],
     deps = [
-        ":activation_wrapper_android",
         ":planned_interpretable_android",
         "//common/ast:ast_android",
-        "//common/exceptions:runtime_exception",
         "//common/values:mutable_map_value_android",
         "//runtime:concatenated_list_view",
         "//runtime:evaluation_exception",

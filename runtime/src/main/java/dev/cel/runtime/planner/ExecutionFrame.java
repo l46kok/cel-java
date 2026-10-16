@@ -31,6 +31,7 @@ import org.jspecify.annotations.Nullable;
 
 /** Tracks execution context within a planned program. */
 final class ExecutionFrame {
+  private static final Object[] EMPTY_COMPREHENSION_SLOTS = new Object[0];
 
   private final int comprehensionIterationLimit;
   private final boolean enableShortCircuiting;
@@ -38,6 +39,7 @@ final class ExecutionFrame {
   private final @Nullable PartialVars partialVars;
   private final @Nullable CelEvaluationListener listener;
   private final @Nullable AsyncCallStateTracker asyncTracker;
+  private final Object[] comprehensionSlots;
   private int iterationCount;
   private @Nullable BlockMemoizer blockMemoizer;
   // The last select chain root that adapted to a new object in this evaluation, and that object.
@@ -48,9 +50,15 @@ final class ExecutionFrame {
       CelFunctionResolver functionResolver,
       CelOptions celOptions,
       @Nullable PartialVars partialVars,
-      @Nullable CelEvaluationListener listener) {
+      @Nullable CelEvaluationListener listener,
+      int maxComprehensionSlots) {
     return new ExecutionFrame(
-        functionResolver, celOptions, partialVars, listener, /* asyncTracker= */ null);
+        functionResolver,
+        celOptions,
+        partialVars,
+        listener,
+        /* asyncTracker= */ null,
+        maxComprehensionSlots);
   }
 
   static ExecutionFrame createForAsync(
@@ -58,9 +66,11 @@ final class ExecutionFrame {
       CelOptions celOptions,
       @Nullable PartialVars partialVars,
       @Nullable CelEvaluationListener listener,
-      AsyncCallStateTracker asyncTracker) {
+      AsyncCallStateTracker asyncTracker,
+      int maxComprehensionSlots) {
     checkNotNull(asyncTracker, "asyncTracker");
-    return new ExecutionFrame(functionResolver, celOptions, partialVars, listener, asyncTracker);
+    return new ExecutionFrame(
+        functionResolver, celOptions, partialVars, listener, asyncTracker, maxComprehensionSlots);
   }
 
   private static int getComprehensionMaxIterations(CelOptions celOptions) {
@@ -94,6 +104,14 @@ final class ExecutionFrame {
 
   BlockMemoizer getBlockMemoizer() {
     return blockMemoizer;
+  }
+
+  Object getComprehensionSlot(int index) {
+    return comprehensionSlots[index];
+  }
+
+  void setComprehensionSlot(int index, Object value) {
+    comprehensionSlots[index] = value;
   }
 
   /** Adapts a select chain root, reusing the last adaptation if the root is the same object. */
@@ -138,12 +156,15 @@ final class ExecutionFrame {
       CelOptions celOptions,
       @Nullable PartialVars partialVars,
       @Nullable CelEvaluationListener listener,
-      @Nullable AsyncCallStateTracker asyncTracker) {
+      @Nullable AsyncCallStateTracker asyncTracker,
+      int maxComprehensionSlots) {
     this.comprehensionIterationLimit = getComprehensionMaxIterations(celOptions);
     this.enableShortCircuiting = celOptions.enableShortCircuiting();
     this.functionResolver = functionResolver;
     this.partialVars = partialVars;
     this.listener = listener;
     this.asyncTracker = asyncTracker;
+    this.comprehensionSlots =
+        maxComprehensionSlots == 0 ? EMPTY_COMPREHENSION_SLOTS : new Object[maxComprehensionSlots];
   }
 }

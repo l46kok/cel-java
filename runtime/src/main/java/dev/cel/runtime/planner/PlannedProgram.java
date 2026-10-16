@@ -73,20 +73,24 @@ public abstract class PlannedProgram implements Program {
   @AutoValue.CopyAnnotations
   abstract Optional<ListeningExecutorService> asyncExecutor();
 
+  abstract int maxComprehensionSlots();
+
   static PlannedProgram create(
       PlannedInterpretable interpretable,
       ErrorMetadata metadata,
       CelOptions options,
       RuntimeEquality runtimeEquality,
       CelAsyncEvaluationOptions asyncOptions,
-      @Nullable ListeningExecutorService asyncExecutor) {
+      @Nullable ListeningExecutorService asyncExecutor,
+      int maxComprehensionSlots) {
     return new AutoValue_PlannedProgram(
         interpretable,
         metadata,
         options,
         runtimeEquality,
         asyncOptions,
-        Optional.ofNullable(asyncExecutor));
+        Optional.ofNullable(asyncExecutor),
+        maxComprehensionSlots);
   }
 
   @Override
@@ -224,7 +228,8 @@ public abstract class PlannedProgram implements Program {
       throws CelEvaluationException {
     try {
       ExecutionFrame frame =
-          ExecutionFrame.create(functionResolver, options(), partialVars, listener);
+          ExecutionFrame.create(
+              functionResolver, options(), partialVars, listener, maxComprehensionSlots());
       Object evalResult = interpretable().eval(resolver, frame);
       if (evalResult instanceof ErrorValue) {
         ErrorValue errorValue = (ErrorValue) evalResult;
@@ -294,7 +299,12 @@ public abstract class PlannedProgram implements Program {
 
           ExecutionFrame frame =
               ExecutionFrame.createForAsync(
-                  lateBoundResolver, options(), partialVars, /* listener= */ null, tracker);
+                  lateBoundResolver,
+                  options(),
+                  partialVars,
+                  /* listener= */ null,
+                  tracker,
+                  maxComprehensionSlots());
           Object evalResult = interpretable().eval(resolver, frame);
 
           if (evalResult instanceof AccumulatedUnknowns) {

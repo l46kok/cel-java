@@ -1136,6 +1136,9 @@ public final class ProgramPlannerTest {
   @TestParameters("{expression: '[1,2,3].map(x, x + 1) == [2,3,4]'}")
   @TestParameters(
       "{expression: 'cel.bind(x, [1, 2], [x + [3], x + [4]]) == [[1, 2, 3], [1, 2, 4]]'}")
+  @TestParameters(
+      "{expression: 'cel.bind(x, [1, 2, 3].map(y, y + 1), [4, 5, 6].map(z, x[0] + z)) == [6, 7,"
+          + " 8]'}")
   @TestParameters("{expression: 'cel.bind(m, {\"a\": 1}, [m]) == [{\"a\": 1}]'}")
   @TestParameters(
       "{expression: 'compre(i, acc, [1, 2], [], true, acc + [size(acc + [0])], acc) == [1, 2]'}")
@@ -2291,7 +2294,88 @@ public final class ProgramPlannerTest {
     boolean result = (boolean) program.eval();
 
     assertThat(result).isTrue();
-    assertThat(containerConversions[0]).isEqualTo(1);
+    assertThat(containerConversions[0]).isEqualTo(0);
+  }
+
+  @Test
+  public void plan_comprehension_lazyBlockSlotWithInnerComprehension_preservesSlots()
+      throws Exception {
+    CelCompiler compilerWithSlotMacro =
+        CEL_COMPILER
+            .toCompilerBuilder()
+            .addMacros(
+                CelMacro.newGlobalMacro(
+                    "slot0",
+                    0,
+                    (factory, unused, args) -> Optional.of(factory.newIdentifier("@index0"))))
+            .build();
+    CelAbstractSyntaxTree subExprAst =
+        compilerWithSlotMacro
+            .parse("cel.bind(x, [1, 2, 3].map(y, y + 1), [4, 5, 6].map(z, slot0()[0] + z))")
+            .getAst();
+    CelExpr bindComprehension = subExprAst.getExpr().comprehension().accuInit();
+    CelExpr mainComprehension = subExprAst.getExpr().comprehension().result();
+    CelExpr blockExpr =
+        CelExpr.ofCall(
+            100L,
+            Optional.empty(),
+            "cel.@block",
+            ImmutableList.of(
+                CelExpr.ofList(101L, ImmutableList.of(bindComprehension), ImmutableList.of()),
+                mainComprehension));
+    CelAbstractSyntaxTree blockAst =
+        CelAbstractSyntaxTree.newParsedAst(
+            blockExpr,
+            CelSource.newBuilder()
+                .addAllExtensions(
+                    Extension.create("cel_block", Version.of(1, 1), Component.COMPONENT_RUNTIME))
+                .build());
+    PlannedProgram program = PLANNER.plan(blockAst);
+
+    Object result = program.eval();
+
+    assertThat(result).isEqualTo(ImmutableList.of(6L, 7L, 8L));
+  }
+
+  @Test
+  public void plan_comprehension_nestedShadowingWithOuterVarInInnerResult() throws Exception {
+    CelAbstractSyntaxTree ast =
+        compile(
+            "compre(x, acc, [1, 2], 0, true, acc + compre(x, innerAcc, [10, 20], 0, true,"
+                + " innerAcc + x, innerAcc + x), acc)");
+    PlannedProgram program = PLANNER.plan(ast);
+
+    Object result = program.eval();
+
+    // Outer x=1: innerAcc sums 10+20=30, inner result is innerAcc + outer x = 31.
+    // Outer x=2: innerAcc sums 10+20=30, inner result is innerAcc + outer x = 32.
+    // Total acc = 31 + 32 = 63.
+    assertThat(result).isEqualTo(63L);
+    assertThat(program.maxComprehensionSlots()).isEqualTo(4);
+  }
+
+  @Test
+  public void plan_comprehension_iterRangeIsMutableAccumulator_iteratesElements() throws Exception {
+    // '@'-prefixed accumulators are accumulated in place as a ConcatenatedListView.
+    CelCompiler compilerWithAccuMacro =
+        CEL_COMPILER
+            .toCompilerBuilder()
+            .addMacros(
+                CelMacro.newGlobalMacro(
+                    "accu",
+                    0,
+                    (factory, unused, args) -> Optional.of(factory.newIdentifier("@accu"))))
+            .build();
+    CelAbstractSyntaxTree ast =
+        compile(
+            compilerWithAccuMacro,
+            "compre(i, accu(), [1, 2, 3], [], true,"
+                + " accu() + [compre(j, n, accu(), 0, true, n + 1, n)], accu())");
+    Program program = PLANNER.plan(ast);
+
+    Object result = program.eval();
+
+    assertThat(result).isEqualTo(ImmutableList.of(0L, 1L, 2L));
   }
 
   @Test

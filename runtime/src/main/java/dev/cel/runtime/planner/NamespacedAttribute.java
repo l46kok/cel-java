@@ -37,7 +37,6 @@ import org.jspecify.annotations.Nullable;
 
 @Immutable
 final class NamespacedAttribute implements Attribute {
-  private final boolean disambiguateNames;
   private final ImmutableMap<String, CelAttribute> candidateAttributes;
   private final ImmutableList<Qualifier> qualifiers;
   private final CelValueConverter celValueConverter;
@@ -53,29 +52,20 @@ final class NamespacedAttribute implements Attribute {
 
   @Override
   public Object resolve(long exprId, GlobalResolver ctx, ExecutionFrame frame) {
-    GlobalResolver inputVars = ctx;
-    // Unwrap any local activations to ensure that we reach the variables provided as input
-    // to the expression in the event that we need to disambiguate between global and local
-    // variables.
-    if (disambiguateNames) {
-      inputVars = unwrapToNonLocal(ctx);
-    }
-
-    for (Map.Entry<String, CelAttribute> entry : candidateAttributes.entrySet()) {
+    ImmutableList<Map.Entry<String, CelAttribute>> candidateEntries =
+        candidateAttributes.entrySet().asList();
+    // Avoid enhanced for loop to prevent UnmodifiableIterator from being allocated
+    for (int entryIndex = 0; entryIndex < candidateEntries.size(); entryIndex++) {
+      Map.Entry<String, CelAttribute> entry = candidateEntries.get(entryIndex);
       String name = entry.getKey();
       CelAttribute attr = entry.getValue();
 
-      GlobalResolver resolver = ctx;
-      if (disambiguateNames) {
-        resolver = inputVars;
-      }
-
-      Object value = resolver.resolve(name);
+      Object value = ctx.resolve(name);
       value = InterpreterUtil.maybeAdaptToAccumulatedUnknowns(value);
 
       PartialVars partialVars = frame.partialVars().orElse(null);
 
-      if (partialVars != null && !isLocallyBound(resolver, name)) {
+      if (partialVars != null) {
         ImmutableList<CelAttributePattern> patterns = partialVars.unknowns();
         // Avoid enhanced for loop to prevent UnmodifiableIterator from being allocated
         for (int i = 0; i < qualifiers.size(); i++) {
@@ -151,31 +141,12 @@ final class NamespacedAttribute implements Attribute {
                     String.format("Field %s was not found on enum %s", enumType.name(), field)));
   }
 
-  private boolean isLocallyBound(GlobalResolver resolver, String name) {
-    while (resolver instanceof ActivationWrapper) {
-      ActivationWrapper wrapper = (ActivationWrapper) resolver;
-      if (wrapper.isLocallyBound(name)) {
-        return true;
-      }
-      resolver = wrapper.unwrap();
-    }
-    return false;
-  }
-
-  private GlobalResolver unwrapToNonLocal(GlobalResolver resolver) {
-    while (resolver instanceof ActivationWrapper) {
-      resolver = ((ActivationWrapper) resolver).unwrap();
-    }
-    return resolver;
-  }
-
   @Override
   public NamespacedAttribute addQualifier(Qualifier qualifier) {
     return new NamespacedAttribute(
         typeProvider,
         celValueConverter,
         candidateAttributes,
-        disambiguateNames,
         ImmutableList.<Qualifier>builderWithExpectedSize(qualifiers.size() + 1)
             .addAll(qualifiers)
             .add(qualifier)
@@ -219,35 +190,24 @@ final class NamespacedAttribute implements Attribute {
       CelValueConverter celValueConverter,
       ImmutableSet<String> namespacedNames) {
     ImmutableMap.Builder<String, CelAttribute> attributesBuilder = ImmutableMap.builder();
-    boolean disambiguateNames = false;
 
     for (String name : namespacedNames) {
-      String baseName = name;
-      if (name.startsWith(".")) {
-        disambiguateNames = true;
-        baseName = name.substring(1);
-      }
+      String baseName = name.startsWith(".") ? name.substring(1) : name;
       attributesBuilder.put(baseName, CelAttribute.fromQualifiedIdentifier(baseName));
     }
 
     return new NamespacedAttribute(
-        typeProvider,
-        celValueConverter,
-        attributesBuilder.buildOrThrow(),
-        disambiguateNames,
-        ImmutableList.of());
+        typeProvider, celValueConverter, attributesBuilder.buildOrThrow(), ImmutableList.of());
   }
 
   private NamespacedAttribute(
       CelTypeProvider typeProvider,
       CelValueConverter celValueConverter,
       ImmutableMap<String, CelAttribute> candidateAttributes,
-      boolean disambiguateNames,
       ImmutableList<Qualifier> qualifiers) {
     this.typeProvider = typeProvider;
     this.celValueConverter = celValueConverter;
     this.candidateAttributes = candidateAttributes;
-    this.disambiguateNames = disambiguateNames;
     this.qualifiers = qualifiers;
   }
 }

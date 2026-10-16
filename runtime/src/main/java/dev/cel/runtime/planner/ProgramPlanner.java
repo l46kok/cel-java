@@ -19,10 +19,10 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.auto.value.AutoValue;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.errorprone.annotations.CheckReturnValue;
 import com.google.errorprone.annotations.Immutable;
@@ -62,9 +62,9 @@ import dev.cel.runtime.CelEvaluationExceptionBuilder;
 import dev.cel.runtime.CelResolvedOverload;
 import dev.cel.runtime.DefaultDispatcher;
 import dev.cel.runtime.RuntimeEquality;
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -113,10 +113,11 @@ public final class ProgramPlanner {
    */
   public PlannedProgram plan(CelAbstractSyntaxTree ast) throws CelEvaluationException {
     PlannedInterpretable plannedInterpretable;
+    PlannerContext ctx;
     ErrorMetadata errorMetadata =
         ErrorMetadata.create(ast.getSource().getPositionsMap(), ast.getSource().getDescription());
     try {
-      PlannerContext ctx = PlannerContext.create(ast, options);
+      ctx = PlannerContext.create(ast, options);
       plannedInterpretable =
           CelBlock.extract(ast)
               .map(celBlock -> planBlock(celBlock, ctx))
@@ -134,7 +135,13 @@ public final class ProgramPlanner {
     }
 
     return PlannedProgram.create(
-        plannedInterpretable, errorMetadata, options, runtimeEquality, asyncOptions, asyncExecutor);
+        plannedInterpretable,
+        errorMetadata,
+        options,
+        runtimeEquality,
+        asyncOptions,
+        asyncExecutor,
+        ctx.maxComprehensionSlots());
   }
 
   private PlannedInterpretable plan(CelExpr celExpr, PlannerContext ctx) {
@@ -185,29 +192,22 @@ public final class ProgramPlanner {
   private PlannedInterpretable planIdent(CelExpr celExpr, PlannerContext ctx) {
     CelReference ref = ctx.referenceMap().get(celExpr.id());
     if (ref != null) {
-      return planCheckedIdent(celExpr, ref, ctx.typeMap());
+      return planCheckedIdent(celExpr, ref, ctx);
     }
 
     String identName = celExpr.ident().name();
-    PlannedInterpretable blockSlot = maybeInterceptBlockSlot(celExpr, identName).orElse(null);
-    if (blockSlot != null) {
-      return blockSlot;
-    }
-
-    if (ctx.isLocalVar(identName)) {
-      return EvalAttribute.create(celExpr, attributeFactory.newAbsoluteAttribute(identName));
-    }
-
-    return EvalAttribute.create(celExpr, attributeFactory.newMaybeAttribute(identName));
+    return planLocalIdent(celExpr, identName, ctx)
+        .orElseGet(
+            () -> EvalAttribute.create(celExpr, attributeFactory.newMaybeAttribute(identName)));
   }
 
   private PlannedInterpretable planCheckedIdent(
-      CelExpr expr, CelReference identRef, ImmutableMap<Long, CelType> typeMap) {
+      CelExpr expr, CelReference identRef, PlannerContext ctx) {
     if (identRef.value().isPresent()) {
       return planConstant(expr, identRef.value().get());
     }
 
-    CelType type = typeMap.get(expr.id());
+    CelType type = ctx.typeMap().get(expr.id());
     if (type.kind().equals(CelKind.TYPE)) {
       TypeType identType =
           typeProvider
@@ -227,12 +227,18 @@ public final class ProgramPlanner {
     }
 
     String identName = identRef.name();
-    PlannedInterpretable blockSlot = maybeInterceptBlockSlot(expr, identName).orElse(null);
-    if (blockSlot != null) {
+    return planLocalIdent(expr, identName, ctx)
+        .orElseGet(
+            () -> EvalAttribute.create(expr, attributeFactory.newAbsoluteAttribute(identName)));
+  }
+
+  private Optional<PlannedInterpretable> planLocalIdent(
+      CelExpr expr, String identName, PlannerContext ctx) {
+    Optional<PlannedInterpretable> blockSlot = maybeInterceptBlockSlot(expr, identName);
+    if (blockSlot.isPresent()) {
       return blockSlot;
     }
-
-    return EvalAttribute.create(expr, attributeFactory.newAbsoluteAttribute(identRef.name()));
+    return ctx.lookupComprehensionSlot(expr, identName);
   }
 
   private Optional<PlannedInterpretable> maybeInterceptBlockSlot(CelExpr expr, String identName) {
@@ -528,31 +534,34 @@ public final class ProgramPlanner {
   private PlannedInterpretable planComprehension(CelExpr expr, PlannerContext ctx) {
     CelComprehension comprehension = expr.comprehension();
 
-    PlannedInterpretable accuInit = plan(comprehension.accuInit(), ctx);
     PlannedInterpretable iterRange = plan(comprehension.iterRange(), ctx);
+    PlannedInterpretable accuInit = plan(comprehension.accuInit(), ctx);
 
-    ctx.pushLocalVars(comprehension.accuVar(), comprehension.iterVar(), comprehension.iterVar2());
+    boolean mutableAccu = isMutableAccuSafe(comprehension);
+    int accuSlot = ctx.allocateSlot();
+    int iterSlot = ctx.allocateSlot();
+    int iter2Slot = comprehension.iterVar2().isEmpty() ? -1 : ctx.allocateSlot();
+
+    ctx.pushComprehensionScope(
+        comprehension.accuVar(),
+        accuSlot,
+        comprehension.iterVar(),
+        iterSlot,
+        comprehension.iterVar2(),
+        iter2Slot,
+        mutableAccu);
 
     PlannedInterpretable loopCondition = plan(comprehension.loopCondition(), ctx);
     PlannedInterpretable loopStep = plan(comprehension.loopStep(), ctx);
 
-    ctx.popLocalVars(comprehension.iterVar(), comprehension.iterVar2());
+    ctx.exitComprehensionLoop();
 
     PlannedInterpretable result = plan(comprehension.result(), ctx);
 
-    ctx.popLocalVars(comprehension.accuVar());
+    ctx.popComprehensionScope();
 
     return EvalFold.create(
-        expr,
-        comprehension.accuVar(),
-        accuInit,
-        comprehension.iterVar(),
-        comprehension.iterVar2(),
-        iterRange,
-        loopCondition,
-        loopStep,
-        result,
-        isMutableAccuSafe(comprehension));
+        expr, accuSlot, accuInit, iterSlot, iter2Slot, iterRange, loopCondition, loopStep, result);
   }
 
   @VisibleForTesting
@@ -740,10 +749,40 @@ public final class ProgramPlanner {
     }
   }
 
+  private static final class ComprehensionScope {
+    private final String accuVar;
+    private final int accuSlot;
+    private final String iterVar;
+    private final int iterSlot;
+    private final String iterVar2;
+    private final int iter2Slot;
+    private final boolean mutableAccu;
+    private boolean loopActive;
+
+    private ComprehensionScope(
+        String accuVar,
+        int accuSlot,
+        String iterVar,
+        int iterSlot,
+        String iterVar2,
+        int iter2Slot,
+        boolean mutableAccu) {
+      this.accuVar = accuVar;
+      this.accuSlot = accuSlot;
+      this.iterVar = iterVar;
+      this.iterSlot = iterSlot;
+      this.iterVar2 = iterVar2;
+      this.iter2Slot = iter2Slot;
+      this.mutableAccu = mutableAccu;
+      this.loopActive = true;
+    }
+  }
+
   private static final class PlannerContext {
     private final CelAbstractSyntaxTree ast;
     private final ImmutableSet<String> runtimeExtensions;
-    private final Map<String, Integer> localVars;
+    private final List<ComprehensionScope> comprehensionScopes;
+    private int maxComprehensionSlots;
 
     private ImmutableMap<Long, CelReference> referenceMap() {
       return ast.getReferenceMap();
@@ -757,34 +796,66 @@ public final class ProgramPlanner {
       return ast.isChecked();
     }
 
-    private void pushLocalVars(String... names) {
-      for (String name : names) {
-        if (Strings.isNullOrEmpty(name)) {
-          continue;
-        }
-        localVars.merge(name, 1, Integer::sum);
-      }
+    private int maxComprehensionSlots() {
+      return maxComprehensionSlots;
     }
 
-    private void popLocalVars(String... names) {
-      for (String name : names) {
-        if (Strings.isNullOrEmpty(name)) {
-          continue;
+    private int allocateSlot() {
+      return maxComprehensionSlots++;
+    }
+
+    private void pushComprehensionScope(
+        String accuVar,
+        int accuSlot,
+        String iterVar,
+        int iterSlot,
+        String iterVar2,
+        int iter2Slot,
+        boolean mutableAccu) {
+      comprehensionScopes.add(
+          new ComprehensionScope(
+              accuVar, accuSlot, iterVar, iterSlot, iterVar2, iter2Slot, mutableAccu));
+    }
+
+    private void exitComprehensionLoop() {
+      Iterables.getLast(comprehensionScopes).loopActive = false;
+    }
+
+    private void popComprehensionScope() {
+      comprehensionScopes.remove(comprehensionScopes.size() - 1);
+    }
+
+    /**
+     * Resolves an identifier against active comprehension scopes from innermost to outermost.
+     *
+     * <p>Leading-dot identifiers (e.g. {@code .x}) explicitly disambiguate to the global scope and
+     * never match comprehension slots.
+     */
+    private Optional<PlannedInterpretable> lookupComprehensionSlot(CelExpr expr, String name) {
+      if (name.startsWith(".")) {
+        return Optional.empty();
+      }
+      for (int i = comprehensionScopes.size() - 1; i >= 0; i--) {
+        ComprehensionScope scope = comprehensionScopes.get(i);
+        if (name.equals(scope.accuVar)) {
+          return Optional.of(
+              EvalFold.EvalComprehensionSlot.create(
+                  expr, scope.accuSlot, scope.mutableAccu && scope.loopActive));
         }
-        Integer count = localVars.get(name);
-        if (count != null) {
-          if (count == 1) {
-            localVars.remove(name);
-          } else {
-            localVars.put(name, count - 1);
+        if (scope.loopActive) {
+          if (name.equals(scope.iterVar)) {
+            return Optional.of(
+                EvalFold.EvalComprehensionSlot.create(
+                    expr, scope.iterSlot, /* wrapMutableAccu= */ false));
+          }
+          if (scope.iter2Slot >= 0 && name.equals(scope.iterVar2)) {
+            return Optional.of(
+                EvalFold.EvalComprehensionSlot.create(
+                    expr, scope.iter2Slot, /* wrapMutableAccu= */ false));
           }
         }
       }
-    }
-
-    /** Checks if the given name is a local variable in the current scope. */
-    private boolean isLocalVar(String name) {
-      return localVars.containsKey(name);
+      return Optional.empty();
     }
 
     private static PlannerContext create(CelAbstractSyntaxTree ast, CelOptions options) {
@@ -815,7 +886,7 @@ public final class ProgramPlanner {
     private PlannerContext(CelAbstractSyntaxTree ast, ImmutableSet<String> runtimeExtensions) {
       this.ast = checkNotNull(ast);
       this.runtimeExtensions = runtimeExtensions;
-      this.localVars = new HashMap<>();
+      this.comprehensionScopes = new ArrayList<>();
     }
   }
 

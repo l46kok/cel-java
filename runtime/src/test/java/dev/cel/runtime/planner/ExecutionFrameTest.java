@@ -35,7 +35,8 @@ public final class ExecutionFrameTest {
             CelFunctionResolver.EMPTY,
             CelOptions.DEFAULT,
             /* partialVars= */ null,
-            /* listener= */ null);
+            /* listener= */ null,
+            /* maxComprehensionSlots= */ 0);
     CelValueConverter converter = CelValueConverter.getDefaultInstance();
     // Adapts to a new OptionalValue each time, while a map adapts to itself.
     Optional<String> root = Optional.of("a");
