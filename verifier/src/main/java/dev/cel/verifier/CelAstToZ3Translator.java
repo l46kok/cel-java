@@ -22,6 +22,7 @@ import com.microsoft.z3.ArrayExpr;
 import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Context;
 import com.microsoft.z3.Expr;
+import com.microsoft.z3.FPExpr;
 import com.microsoft.z3.FuncDecl;
 import com.microsoft.z3.IntExpr;
 import com.microsoft.z3.Quantifier;
@@ -82,6 +83,7 @@ final class CelAstToZ3Translator {
   private static final String EMPTY_LIST_PREFIX = "!empty_list";
   private static final String EMPTY_MAP_PREFIX = "!empty_map";
   private static final String NULL_VALUE_FIELD = "null_value";
+  private static final long MAX_UINT32 = 0xFFFFFFFFL;
   private final Context ctx;
   private final CelZ3TypeSystem typeSystem;
   private final CelZ3OperatorTranslator operatorTranslator;
@@ -401,6 +403,10 @@ final class CelAstToZ3Translator {
     if (isJsonWkt(createStruct.messageName())) {
       return translateJsonWktStruct(celExpr, createStruct, ast);
     }
+    if (CelTypes.isWrapperType(createStruct.messageName())) {
+      return translateWrapperWktStruct(celExpr, createStruct, ast);
+    }
+    // TODO: Support google.protobuf.Timestamp and google.protobuf.Duration.
 
     // Bypass SMT when the struct is empty (return the cached SMT default pointer)
     if (createStruct.entries().isEmpty()) {
@@ -517,7 +523,12 @@ final class CelAstToZ3Translator {
             && entry.fieldKey().equals(NULL_VALUE_FIELD);
 
     if (entry.optionalEntry()) {
-      Expr<?> optRef = typeSystem.getOptionalRef(finalVal);
+      Expr<?> checkedVal =
+          typeSystem.withRuntimeError(finalVal, ctx.mkNot(typeSystem.isOptional(finalVal)));
+      entryTv =
+          TranslatedValue.create(
+              checkedVal, entry.value(), typeSystem, entryTv.isApproximate());
+      Expr<?> optRef = typeSystem.getOptionalRef(checkedVal);
       BoolExpr hasValue = typeSystem.optHasValue(optRef);
 
       Expr<?> unpackedVal = typeSystem.getOptionalValue(optRef);
@@ -531,6 +542,61 @@ final class CelAstToZ3Translator {
 
     return TranslatedValue.propagateStrict(
         ctx, typeSystem, finalVal, celExpr, ImmutableList.of(entryTv));
+  }
+
+  private TranslatedValue translateWrapperWktStruct(
+      CelExpr celExpr, CelExpr.CelStruct createStruct, CelAbstractSyntaxTree ast) {
+    String typeName = createStruct.messageName();
+    CelType wrapperType =
+        CelTypes.getWellKnownCelType(typeName)
+            .orElseThrow(
+                () -> new IllegalArgumentException("Unexpected wrapper type: " + typeName));
+    CelType targetType = ((NullableType) wrapperType).targetType();
+    Expr<?> currentVal = getDefaultValueForType(targetType);
+
+    List<TranslatedValue> entryTvs = new ArrayList<>();
+    for (CelExpr.CelStruct.Entry entry : createStruct.entries()) {
+      TranslatedValue entryTv = translateExpr(entry.value(), ast);
+      Expr<?> val = entryTv.z3Expr();
+      if (entry.optionalEntry()) {
+        Expr<?> checkedVal =
+            typeSystem.withRuntimeError(val, ctx.mkNot(typeSystem.isOptional(val)));
+        entryTv =
+            TranslatedValue.create(
+                checkedVal, entry.value(), typeSystem, entryTv.isApproximate());
+        Expr<?> optRef = typeSystem.getOptionalRef(checkedVal);
+        BoolExpr hasValue = typeSystem.optHasValue(optRef);
+        currentVal = ctx.mkITE(hasValue, typeSystem.getOptionalValue(optRef), currentVal);
+      } else {
+        currentVal = val;
+      }
+      entryTvs.add(entryTv);
+    }
+    BoolExpr validValue = createTypeConstraintForType(currentVal, targetType);
+    if (typeName.equals(CelTypes.INT32_WRAPPER_MESSAGE)) {
+      IntExpr intVal = typeSystem.getInt(currentVal);
+      validValue =
+          ctx.mkAnd(
+              validValue,
+              ctx.mkGe(intVal, ctx.mkInt(Integer.MIN_VALUE)),
+              ctx.mkLe(intVal, ctx.mkInt(Integer.MAX_VALUE)));
+    } else if (typeName.equals(CelTypes.UINT32_WRAPPER_MESSAGE)) {
+      IntExpr uintVal = typeSystem.getUint(currentVal);
+      validValue =
+          ctx.mkAnd(
+              validValue,
+              ctx.mkGe(uintVal, ctx.mkInt(0)),
+              ctx.mkLe(uintVal, ctx.mkInt(MAX_UINT32)));
+    } else if (typeName.equals(CelTypes.FLOAT_WRAPPER_MESSAGE)) {
+      FPExpr doubleVal = typeSystem.getDouble(currentVal);
+      FPExpr narrowedFloat =
+          ctx.mkFPToFP(ctx.mkFPRoundNearestTiesToEven(), doubleVal, ctx.mkFPSortSingle());
+      FPExpr widenedDouble =
+          ctx.mkFPToFP(ctx.mkFPRoundNearestTiesToEven(), narrowedFloat, ctx.mkFPSortDouble());
+      currentVal = typeSystem.wrapDouble(widenedDouble);
+    }
+    currentVal = typeSystem.withRuntimeError(currentVal, ctx.mkNot(validValue));
+    return TranslatedValue.propagateStrict(ctx, typeSystem, currentVal, celExpr, entryTvs);
   }
 
   private Expr<?> getDefaultValueForType(CelType type) {

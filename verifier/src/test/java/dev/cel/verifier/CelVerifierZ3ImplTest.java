@@ -132,8 +132,7 @@ public final class CelVerifierZ3ImplTest {
                   TestAllTypes.getDescriptor(), TestAllTypes.NestedMessage.getDescriptor()))
           .build();
 
-  private static final CelVerifier VERIFIER =
-      CelVerifierFactory.newVerifier(CEL).setTypeProvider(TYPE_PROVIDER).build();
+  private static final CelVerifier VERIFIER = CelVerifierFactory.newVerifier(CEL).build();
 
   @Before
   public void setUp() {
@@ -2159,6 +2158,54 @@ public final class CelVerifierZ3ImplTest {
     JSON_VALUE_OPTIONAL_NULL_VALUE_NONE(
         "google.protobuf.Value{?null_value: optional.none()}", "null"),
     JSON_VALUE_OPTIONAL_NULL_VALUE_OF("google.protobuf.Value{?null_value: optional.of(0)}", "null"),
+    WRAPPER_INT64_VALUE("google.protobuf.Int64Value{value: 42}", "42"),
+    WRAPPER_INT64_EMPTY("google.protobuf.Int64Value{}", "0"),
+    WRAPPER_INT32_VALUE("google.protobuf.Int32Value{value: 42}", "42"),
+    WRAPPER_INT32_EMPTY("google.protobuf.Int32Value{}", "0"),
+    WRAPPER_UINT64_VALUE("google.protobuf.UInt64Value{value: 42u}", "42u"),
+    WRAPPER_UINT64_EMPTY("google.protobuf.UInt64Value{}", "0u"),
+    WRAPPER_UINT32_VALUE("google.protobuf.UInt32Value{value: 42u}", "42u"),
+    WRAPPER_UINT32_EMPTY("google.protobuf.UInt32Value{}", "0u"),
+    WRAPPER_DOUBLE_VALUE("google.protobuf.DoubleValue{value: 1.5}", "1.5"),
+    WRAPPER_DOUBLE_EMPTY("google.protobuf.DoubleValue{}", "0.0"),
+    WRAPPER_FLOAT_VALUE("google.protobuf.FloatValue{value: 1.5}", "1.5"),
+    WRAPPER_FLOAT_EMPTY("google.protobuf.FloatValue{}", "0.0"),
+    WRAPPER_BOOL_VALUE("google.protobuf.BoolValue{value: true}", "true"),
+    WRAPPER_BOOL_EMPTY("google.protobuf.BoolValue{}", "false"),
+    WRAPPER_STRING_VALUE("google.protobuf.StringValue{value: 'hello'}", "'hello'"),
+    WRAPPER_STRING_EMPTY("google.protobuf.StringValue{}", "''"),
+    WRAPPER_BYTES_VALUE("google.protobuf.BytesValue{value: b'abc'}", "b'abc'"),
+    WRAPPER_BYTES_EMPTY("google.protobuf.BytesValue{}", "b''"),
+    WRAPPER_INT64_OPTIONAL_NONE("google.protobuf.Int64Value{?value: optional.none()}", "0"),
+    WRAPPER_INT64_OPTIONAL_OF("google.protobuf.Int64Value{?value: optional.of(7)}", "7"),
+    WRAPPER_INT64_VARIABLE("google.protobuf.Int64Value{value: x}", "x"),
+    WRAPPER_INT32_BOUNDED_VARIABLE(
+        "x >= -2147483648 && x <= 2147483647 ? google.protobuf.Int32Value{value: x} == x : true",
+        "true"),
+    WRAPPER_UINT32_BOUNDED_VARIABLE(
+        "u <= 4294967295u ? google.protobuf.UInt32Value{value: u} == u : true", "true"),
+    WRAPPER_FLOAT_EXACT_MAX_VALUE(
+        "google.protobuf.FloatValue{value: 3.4028234663852886e38}", "3.4028234663852886e38"),
+    WRAPPER_FLOAT_EXACT_MIN_VALUE(
+        "google.protobuf.FloatValue{value: -3.4028234663852886e38}", "-3.4028234663852886e38"),
+    WRAPPER_FLOAT_PRECISION_LOSS_WIDENED(
+        "google.protobuf.FloatValue{value: 0.1}", "0.10000000149011612"),
+    WRAPPER_FLOAT_PRECISION_LOSS_NOT_EQUAL_ORIGINAL(
+        "google.protobuf.FloatValue{value: 0.1} == 0.1", "false"),
+    WRAPPER_FLOAT_IDEMPOTENT_LITERAL(
+        "google.protobuf.FloatValue{value: google.protobuf.FloatValue{value: 0.1}}",
+        "google.protobuf.FloatValue{value: 0.1}"),
+    WRAPPER_FLOAT_SYMBOLIC_EXACT_VALUE(
+        "d == 1.5 ? google.protobuf.FloatValue{value: d} == d : true", "true"),
+    WRAPPER_FLOAT_OVERFLOW_TO_POSITIVE_INFINITY(
+        "google.protobuf.FloatValue{value: 1.0e39} == 1.0e39", "false"),
+    WRAPPER_FLOAT_OVERFLOW_TO_NEGATIVE_INFINITY(
+        "google.protobuf.FloatValue{value: -1.0e39} == -1.0e39", "false"),
+    WRAPPER_FLOAT_UNDERFLOW_TO_ZERO("google.protobuf.FloatValue{value: 1.0e-46} == 0.0", "true"),
+    JSON_VALUE_OPTIONAL_DYN_NON_OPTIONAL_ERROR(
+        "google.protobuf.Value{?string_value: dyn('hello')} == null", "1 / 0 == 1"),
+    WRAPPER_OPTIONAL_DYN_NON_OPTIONAL_ERROR(
+        "google.protobuf.Int64Value{?value: dyn(42)} == 0", "1 / 0 == 1"),
     OPTIONAL_INDEX_LIST_UNWRAPPING("optional.of([1, 2, 3])[?0]", "optional.of(1)"),
     OPTIONAL_INDEX_MAP_UNWRAPPING("optional.of({'a': 1})[?'a']", "optional.of(1)"),
     OPTIONAL_INDEX_UNWRAPPING_NONE("optional.none()[?0]", "optional.none()"),
@@ -2259,7 +2306,18 @@ public final class CelVerifierZ3ImplTest {
         "TestAllTypes{single_int64_wrapper: 0}.?single_int64_wrapper", "optional.none()"),
     OPTIONAL_DYNAMIC_TARGET_TYPE_MISMATCH("dyn_var.?a == optional.none()", "false"),
     OPTIONAL_NESTED_NONE_VS_MISSING(
-        "{'a': optional.none()}.?a.orValue(optional.of(1))", "optional.of(1)");
+        "{'a': optional.none()}.?a.orValue(optional.of(1))", "optional.of(1)"),
+    WRAPPER_INT32_UNBOUNDED_OVERFLOW("google.protobuf.Int32Value{value: x}", "x"),
+    WRAPPER_UINT32_UNBOUNDED_OVERFLOW("google.protobuf.UInt32Value{value: u}", "u"),
+    WRAPPER_FLOAT_UNBOUNDED_OVERFLOW("google.protobuf.FloatValue{value: d}", "d"),
+    WRAPPER_FLOAT_PRECISION_LOSS_VIOLATION("google.protobuf.FloatValue{value: 0.1}", "0.1"),
+    WRAPPER_FLOAT_BOUNDED_VARIABLE_PRECISION_LOSS(
+        "d >= -3.4028234663852886e38 && d <= 3.4028234663852886e38 ?"
+            + " google.protobuf.FloatValue{value: d} == d : true",
+        "true"),
+    WRAPPER_FLOAT_DYN_NON_DOUBLE_FAILS(
+        "google.protobuf.FloatValue{value: dyn('bad')} == 0.0", "false"),
+    WRAPPER_INT64_DYN_NULL_FAILS("google.protobuf.Int64Value{value: dyn(null)} == null", "true");
 
     final String exprA;
     final String exprB;
