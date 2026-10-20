@@ -368,32 +368,35 @@ public final class ProtoMessageLiteValueTest {
                 + " 'cel.expr.conformance.proto3.TestAllTypes'");
   }
 
-  @SuppressWarnings("ImmutableEnumChecker") // Test only
-  private enum FindFieldTestCase {
-    PRESENT("single_string", Optional.of("foo")),
-    ABSENT("single_int64", Optional.empty()),
-    UNDECLARED("undeclared_field", Optional.empty());
+  @Test
+  public void find_undeclaredField_throwsCelAttributeNotFoundException() {
+    ProtoMessageLiteValue messageLiteValue =
+        ProtoMessageLiteValue.create(
+            TestAllTypes.getDefaultInstance(),
+            TEST_ALL_TYPES_DESCRIPTOR,
+            PROTO_LITE_CEL_VALUE_CONVERTER);
 
-    private final String fieldName;
-    private final Optional<Object> expected;
+    CelAttributeNotFoundException thrown =
+        assertThrows(
+            CelAttributeNotFoundException.class, () -> messageLiteValue.find("undeclared_field"));
 
-    FindFieldTestCase(String fieldName, Optional<Object> expected) {
-      this.fieldName = fieldName;
-      this.expected = expected;
-    }
+    assertThat(thrown)
+        .hasMessageThat()
+        .isEqualTo(
+            "field 'undeclared_field' is not declared in message"
+                + " 'cel.expr.conformance.proto3.TestAllTypes'");
   }
 
   @Test
-  public void find_returnsValueOnlyIfFieldIsPresent(@TestParameter FindFieldTestCase testCase) {
+  public void find_returnsValueOnlyIfFieldIsPresent() {
     ProtoMessageLiteValue messageLiteValue =
         ProtoMessageLiteValue.create(
             TestAllTypes.newBuilder().setSingleString("foo").build(),
             TEST_ALL_TYPES_DESCRIPTOR,
             PROTO_LITE_CEL_VALUE_CONVERTER);
 
-    Optional<Object> result = messageLiteValue.find(testCase.fieldName);
-
-    assertThat(result).isEqualTo(testCase.expected);
+    assertThat(messageLiteValue.find("single_string")).hasValue("foo");
+    assertThat(messageLiteValue.find("single_int64")).isEmpty();
   }
 
   @SuppressWarnings("ImmutableEnumChecker") // Test only
