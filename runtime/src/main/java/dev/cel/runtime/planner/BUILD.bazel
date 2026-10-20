@@ -556,8 +556,11 @@ java_library(
         "//common/values:cel_byte_string",
         "//common/values:optimized_select_traversal",
         "//common/values:select_field",
+        "//runtime:runtime_equality",
+        "//runtime:runtime_helpers",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
+        "@maven//:org_jspecify_jspecify",
     ],
 )
 
@@ -1225,7 +1228,10 @@ cel_android_library(
         "//common/values:optimized_select_traversal_android",
         "//common/values:select_field_android",
         "//common/values:values_android",
+        "//runtime:runtime_equality_android",
+        "//runtime:runtime_helpers_android",
         "@maven//:com_google_errorprone_error_prone_annotations",
+        "@maven//:org_jspecify_jspecify",
         "@maven_android//:com_google_guava_guava",
     ],
 )
