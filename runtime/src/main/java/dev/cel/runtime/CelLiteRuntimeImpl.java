@@ -189,17 +189,24 @@ final class CelLiteRuntimeImpl implements CelLiteRuntime {
         }
       }
 
+      CelTypeProvider celTypeProvider = DefaultTypeProvider.getInstance();
+      if (this.celTypeProvider != null) {
+        celTypeProvider =
+            new CelTypeProvider.CombinedCelTypeProvider(celTypeProvider, this.celTypeProvider);
+      }
+
       ImmutableMap.Builder<String, CelFunctionBinding> functionBindingsBuilder =
           ImmutableMap.builder();
 
       ImmutableSet<CelStandardFunction> standardFunctions = standardFunctionBuilder.build();
-      if (!standardFunctions.isEmpty()) {
-        for (CelStandardFunction standardFunction : standardFunctions) {
-          ImmutableSet<CelFunctionBinding> standardFunctionBinding =
-              standardFunction.newFunctionBindings(celOptions, runtimeEquality);
-          for (CelFunctionBinding func : standardFunctionBinding) {
-            functionBindingsBuilder.put(func.getOverloadId(), func);
-          }
+      for (CelStandardFunction standardFunction : standardFunctions) {
+        for (CelFunctionBinding func :
+            standardFunction.newFunctionBindings(
+                celOptions,
+                runtimeEquality,
+                celTypeProvider,
+                celValueProvider.celValueConverter())) {
+          functionBindingsBuilder.put(func.getOverloadId(), func);
         }
       }
 
@@ -221,12 +228,6 @@ final class CelLiteRuntimeImpl implements CelLiteRuntime {
                     func.isStrict(),
                     func.getDefinition());
               });
-
-      CelTypeProvider celTypeProvider = DefaultTypeProvider.getInstance();
-      if (this.celTypeProvider != null) {
-        celTypeProvider =
-            new CelTypeProvider.CombinedCelTypeProvider(celTypeProvider, this.celTypeProvider);
-      }
 
       ProgramPlanner planner =
           ProgramPlanner.newPlanner(

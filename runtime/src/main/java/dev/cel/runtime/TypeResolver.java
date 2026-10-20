@@ -28,6 +28,7 @@ import com.google.protobuf.NullValue;
 import com.google.protobuf.Timestamp;
 import dev.cel.common.annotations.Internal;
 import dev.cel.common.types.CelType;
+import dev.cel.common.types.CelTypeProvider;
 import dev.cel.common.types.ListType;
 import dev.cel.common.types.MapType;
 import dev.cel.common.types.OptionalType;
@@ -55,10 +56,12 @@ import java.util.Optional;
 @Internal
 public class TypeResolver {
 
+  private final CelTypeProvider celTypeProvider;
   private final CelValueConverter celValueConverter;
 
-  static TypeResolver create(CelValueConverter celValueConverter) {
-    return new TypeResolver(celValueConverter);
+  public static TypeResolver create(
+      CelTypeProvider celTypeProvider, CelValueConverter celValueConverter) {
+    return new TypeResolver(celTypeProvider, celValueConverter);
   }
 
   // Sentinel runtime value representing the special "type" ident. This ensures following to be
@@ -121,11 +124,7 @@ public class TypeResolver {
     }
   }
 
-  Optional<TypeType> resolveWellKnownObjectType(Object obj) {
-    return findWellKnownObjectType(obj);
-  }
-
-  private static Optional<TypeType> findWellKnownObjectType(Object obj) {
+  static Optional<TypeType> resolveWellKnownObjectType(Object obj) {
     if (obj instanceof TypeType) {
       return Optional.of(RUNTIME_TYPE_TYPE);
     }
@@ -157,7 +156,7 @@ public class TypeResolver {
    */
   public static String resolveTypeName(Object obj) {
     checkNotNull(obj);
-    Optional<TypeType> resolvedType = findWellKnownObjectType(obj);
+    Optional<TypeType> resolvedType = resolveWellKnownObjectType(obj);
     if (!resolvedType.isPresent()) {
       resolvedType = resolveExtendableObjectType(obj.getClass());
     }
@@ -195,11 +194,10 @@ public class TypeResolver {
       return wellKnownTypeType.get();
     }
 
-    if (celValueConverter != null) {
-      Object celVal = celValueConverter.toRuntimeValue(obj);
-      if (celVal instanceof CelValue) {
-        return TypeType.create(((CelValue) celVal).celType());
-      }
+    Object celVal = celValueConverter.toRuntimeValue(obj);
+    if (celVal instanceof CelValue) {
+      CelType celType = ((CelValue) celVal).celType();
+      return TypeType.create(celTypeProvider.findType(celType.name()).orElse(celType));
     }
 
     if (obj instanceof MessageLiteOrBuilder) {
@@ -234,7 +232,8 @@ public class TypeResolver {
     return newTypeOfType;
   }
 
-  protected TypeResolver(CelValueConverter celValueConverter) {
+  TypeResolver(CelTypeProvider celTypeProvider, CelValueConverter celValueConverter) {
+    this.celTypeProvider = checkNotNull(celTypeProvider);
     this.celValueConverter = checkNotNull(celValueConverter);
   }
 }

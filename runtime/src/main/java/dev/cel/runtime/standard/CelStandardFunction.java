@@ -21,6 +21,8 @@ import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
 import com.google.errorprone.annotations.Immutable;
 import dev.cel.common.CelOptions;
+import dev.cel.common.types.CelTypeProvider;
+import dev.cel.common.values.CelValueConverter;
 import dev.cel.runtime.CelFunctionBinding;
 import dev.cel.runtime.RuntimeEquality;
 
@@ -41,6 +43,14 @@ public abstract class CelStandardFunction {
             .collect(toImmutableSet());
 
     return CelFunctionBinding.fromOverloads(name, overloadBindings);
+  }
+
+  public ImmutableSet<CelFunctionBinding> newFunctionBindings(
+      CelOptions celOptions,
+      RuntimeEquality runtimeEquality,
+      CelTypeProvider celTypeProvider,
+      CelValueConverter celValueConverter) {
+    return newFunctionBindings(celOptions, runtimeEquality);
   }
 
   CelStandardFunction(String name, ImmutableSet<CelStandardOverload> overloads) {

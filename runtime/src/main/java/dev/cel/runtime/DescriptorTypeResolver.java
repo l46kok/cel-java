@@ -21,6 +21,7 @@ import com.google.protobuf.MessageOrBuilder;
 import dev.cel.common.annotations.Internal;
 import dev.cel.common.types.CelType;
 import dev.cel.common.types.CelTypeProvider;
+import dev.cel.common.types.DefaultTypeProvider;
 import dev.cel.common.types.StructTypeReference;
 import dev.cel.common.types.TypeType;
 import dev.cel.common.values.CelValueConverter;
@@ -89,7 +90,8 @@ public final class DescriptorTypeResolver extends TypeResolver {
 
   private DescriptorTypeResolver(
       @Nullable CelTypeProvider typeProvider, CelValueConverter celValueConverter) {
-    super(celValueConverter);
+    super(
+        typeProvider != null ? typeProvider : DefaultTypeProvider.getInstance(), celValueConverter);
     this.typeProvider = typeProvider;
   }
 }

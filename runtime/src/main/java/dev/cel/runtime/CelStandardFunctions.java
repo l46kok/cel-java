@@ -105,6 +105,7 @@ import dev.cel.runtime.standard.SubtractOperator;
 import dev.cel.runtime.standard.SubtractOperator.SubtractOverload;
 import dev.cel.runtime.standard.TimestampFunction;
 import dev.cel.runtime.standard.TimestampFunction.TimestampOverload;
+import dev.cel.runtime.standard.TypeFunction;
 import dev.cel.runtime.standard.UintFunction;
 import dev.cel.runtime.standard.UintFunction.UintOverload;
 import java.util.Collection;
@@ -186,6 +187,7 @@ public final class CelStandardFunctions {
           StringFunction.create(),
           SubtractOperator.create(),
           TimestampFunction.create(),
+          TypeFunction.create(),
           UintFunction.create(),
           NotStrictlyFalseFunction.create());
 

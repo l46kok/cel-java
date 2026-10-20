@@ -23,6 +23,7 @@ import dev.cel.common.CelAbstractSyntaxTree;
 import dev.cel.common.CelFunctionDecl;
 import dev.cel.common.CelOptions;
 import dev.cel.common.CelOverloadDecl;
+import dev.cel.common.types.DefaultTypeProvider;
 import dev.cel.common.types.SimpleType;
 import dev.cel.common.values.CelValueConverter;
 import dev.cel.compiler.CelCompiler;
@@ -99,7 +100,8 @@ public class DefaultInterpreterTest {
         notStrictlyFalseBinding.getDefinition());
     DefaultInterpreter defaultInterpreter =
         new DefaultInterpreter(
-            TypeResolver.create(CelValueConverter.getDefaultInstance()),
+            TypeResolver.create(
+                DefaultTypeProvider.getInstance(), CelValueConverter.getDefaultInstance()),
             emptyProvider,
             dispatcherBuilder.build(),
             CelOptions.DEFAULT);

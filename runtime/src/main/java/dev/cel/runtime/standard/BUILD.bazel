@@ -17,6 +17,8 @@ java_library(
     deps = [
         ":standard_overload",
         "//common:options",
+        "//common/types:type_providers",
+        "//common/values",
         "//runtime:function_binding",
         "//runtime:runtime_equality",
         "@maven//:com_google_errorprone_error_prone_annotations",
@@ -32,6 +34,8 @@ cel_android_library(
     deps = [
         ":standard_overload_android",
         "//common:options",
+        "//common/types:type_providers_android",
+        "//common/values:values_android",
         "//runtime:function_binding_android",
         "//runtime:runtime_equality_android",
         "@maven//:com_google_errorprone_error_prone_annotations",
@@ -1407,10 +1411,14 @@ java_library(
         ":standard_overload",
         "//common:options",
         "//common/types",
+        "//common/types:type_providers",
+        "//common/values",
         "//runtime:function_binding",
         "//runtime:runtime_equality",
         "//runtime:type_resolver",
+        "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
+        "@maven//:org_jspecify_jspecify",
     ],
 )
 
@@ -1423,10 +1431,14 @@ cel_android_library(
         ":standard_function_android",
         ":standard_overload_android",
         "//common:options",
+        "//common/types:type_providers_android",
         "//common/types:types_android",
+        "//common/values:values_android",
         "//runtime:function_binding_android",
         "//runtime:runtime_equality_android",
         "//runtime:type_resolver_android",
+        "@maven//:com_google_errorprone_error_prone_annotations",
+        "@maven//:org_jspecify_jspecify",
         "@maven_android//:com_google_guava_guava",
     ],
 )
