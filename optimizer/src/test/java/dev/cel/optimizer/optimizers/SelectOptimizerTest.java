@@ -417,6 +417,16 @@ public final class SelectOptimizerTest {
         "msg.map_string_any['k'].value",
         "cel.@attribute(msg, [[311, \"map_string_any\", -1, [9, 11]]],"
             + " {\"\": google.protobuf.Any{}})[\"k\"].value"),
+    ANY_FIELD(
+        "msg.single_any",
+        "cel.@attribute(msg, [[100, \"single_any\", 11]], google.protobuf.Any{})"),
+    ANY_FIELD_HAS("has(msg.single_any)", "cel.@hasField(msg, [[100, \"single_any\"]])"),
+    REPEATED_ANY_FIELD(
+        "msg.repeated_any",
+        "cel.@attribute(msg, [[120, \"repeated_any\", 11]], [google.protobuf.Any{}])"),
+    ANY_FIELD_SELECT_STOPS_AT_ANY_BOUNDARY(
+        "msg.single_any.single_int64",
+        "cel.@attribute(msg, [[100, \"single_any\", 11]], google.protobuf.Any{}).single_int64"),
 
     MIXED_BOOLEAN_EXPRESSION(
         "msg.single_int64 > 0 && has(msg.single_nested_message)",
@@ -877,6 +887,26 @@ public final class SelectOptimizerTest {
             "msg",
             TestAllTypes.newBuilder().putMapStringAny("k", Any.pack(Int64Value.of(5))).build()),
         5L),
+    PROTO3_ANY_UNPACKS_VALUE(
+        "msg.single_any",
+        ImmutableMap.of(
+            "msg", TestAllTypes.newBuilder().setSingleAny(Any.pack(Int64Value.of(5))).build()),
+        5L),
+    PROTO3_REPEATED_ANY_UNPACKS_VALUES(
+        "msg.repeated_any",
+        ImmutableMap.of(
+            "msg", TestAllTypes.newBuilder().addRepeatedAny(Any.pack(Int64Value.of(5))).build()),
+        ImmutableList.of(5L)),
+    PROTO3_UNSET_ANY_HAS_IS_FALSE(
+        "has(msg.single_any)", ImmutableMap.of("msg", TestAllTypes.getDefaultInstance()), false),
+    PROTO3_ANY_PACKED_MESSAGE_SELECTS_BY_NAME(
+        "msg.single_any.single_int64",
+        ImmutableMap.of(
+            "msg",
+            TestAllTypes.newBuilder()
+                .setSingleAny(Any.pack(TestAllTypes.newBuilder().setSingleInt64(7L).build()))
+                .build()),
+        7L),
     PROTO3_MAP_OF_WRAPPER_UNWRAPS_MAP_VALUES(
         "msg.map_string_int64_wrapper",
         ImmutableMap.of(
@@ -1200,8 +1230,9 @@ public final class SelectOptimizerTest {
   }
 
   @Test
-  public void optimizeAndEvaluate_missingIndexedElement_throwsSameErrorAsUnoptimized(
+  public void optimizeAndEvaluate_evaluationError_throwsSameErrorAsUnoptimized(
       @TestParameter({
+            "msg.single_any",
             "msg.repeated_nested_message[1].bb",
             "msg.repeated_nested_message[5000000000].bb",
             "msg.map_int64_message[2].bb",
@@ -1315,20 +1346,6 @@ public final class SelectOptimizerTest {
         assertThrows(IllegalStateException.class, () -> optimizer.optimize(ast, cel));
 
     assertThat(e).hasMessageThat().isEqualTo("Max iteration count reached.");
-  }
-
-  @Test
-  public void optimize_unsupportedWellKnownField_throwsUnsupportedOperationException()
-      throws Exception {
-    CelAbstractSyntaxTree ast = cel.compile("msg.single_any").getAst();
-    SelectOptimizer optimizer = SelectOptimizer.newInstance(TestAllTypes.getDescriptor().getFile());
-
-    UnsupportedOperationException e =
-        assertThrows(UnsupportedOperationException.class, () -> optimizer.optimize(ast, cel));
-
-    assertThat(e)
-        .hasMessageThat()
-        .contains("Optimization of Any fields is currently unimplemented");
   }
 
   @Test

@@ -192,8 +192,6 @@ final class OptimizedSelectPlanner {
     CelMap.Entry entry = dummyExpr.map().entries().get(0);
     validateScalarDummy(mapEntrySpec.keyTypeCode(), entry.key());
     if (mapEntrySpec.valueTypeCode() == SelectField.MESSAGE_TYPE_CODE) {
-      // Unlike leaf fields, map values of unsupported well-known types are permitted: the
-      // traversal only produces the map, and indexing it applies standard CEL conversion.
       return SelectField.createMap(
           fieldNumber, fieldName, mapEntrySpec, parseMessageProtoTypeName(entry.value()));
     }
@@ -233,7 +231,7 @@ final class OptimizedSelectPlanner {
           fieldName,
           typeCode,
           /* defaultValue= */ ImmutableList.of(),
-          parseLeafMessageProtoTypeName(elemExpr));
+          parseMessageProtoTypeName(elemExpr));
     }
     validateScalarDummy(typeCode, elemExpr);
     return SelectField.create(
@@ -246,7 +244,7 @@ final class OptimizedSelectPlanner {
       return SelectField.create(
           fieldNumber, fieldName, typeCode, resolveScalarDefaultValue(typeCode, defaultExpr));
     }
-    String protoTypeName = parseLeafMessageProtoTypeName(defaultExpr);
+    String protoTypeName = parseMessageProtoTypeName(defaultExpr);
     Object defaultValue = null;
     if (protoTypeName.equals(CelTypes.DURATION_MESSAGE)) {
       defaultValue = Duration.ZERO;
@@ -338,16 +336,6 @@ final class OptimizedSelectPlanner {
         expr.getKind() == Kind.STRUCT, "Expected struct for message type, found: %s", expr);
     String protoTypeName = expr.struct().messageName();
     checkArgument(!protoTypeName.isEmpty(), "Protobuf message type name must not be empty");
-    return protoTypeName;
-  }
-
-  private static String parseLeafMessageProtoTypeName(CelExpr expr) {
-    String protoTypeName = parseMessageProtoTypeName(expr);
-    // TODO: Support Any.
-    checkArgument(
-        !protoTypeName.equals(CelTypes.ANY_MESSAGE),
-        "Leaf well-known type '%s' is not supported by the select-optimized runtime",
-        protoTypeName);
     return protoTypeName;
   }
 

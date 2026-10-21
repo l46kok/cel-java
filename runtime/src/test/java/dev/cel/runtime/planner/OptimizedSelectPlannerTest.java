@@ -561,37 +561,6 @@ public final class OptimizedSelectPlannerTest {
   }
 
   @Test
-  public void plan_invalidAst_unsupportedWellKnownType_throwsEvaluationException() {
-    CelAbstractSyntaxTree ast =
-        CelAbstractSyntaxTree.newParsedAst(
-            CelExpr.ofCall(
-                1L,
-                OptimizedSelectPlanner.CEL_ATTRIBUTE_FUNCTION_NAME,
-                ImmutableList.of(
-                    CelExpr.ofIdent(2L, "msg"),
-                    CelExpr.ofList(
-                        3L,
-                        ImmutableList.of(
-                            CelExpr.ofList(
-                                4L,
-                                ImmutableList.of(
-                                    CelExpr.ofConstant(5L, CelConstant.ofValue(100L)),
-                                    CelExpr.ofConstant(6L, CelConstant.ofValue("single_any")),
-                                    CelExpr.ofConstant(7L, CelConstant.ofValue(11L))),
-                                ImmutableList.of())),
-                        ImmutableList.of()),
-                    CelExpr.ofStruct(8L, "google.protobuf.Any", ImmutableList.of()))),
-            SELECT_OPTIMIZED_SOURCE);
-
-    CelEvaluationException e = assertThrows(CelEvaluationException.class, () -> PLANNER.plan(ast));
-
-    assertThat(e).hasCauseThat().isInstanceOf(IllegalArgumentException.class);
-    assertThat(e)
-        .hasMessageThat()
-        .contains("Leaf well-known type 'google.protobuf.Any' is not supported");
-  }
-
-  @Test
   public void plan_invalidAst_nonMapHopWithFourElements_throwsEvaluationException() {
     CelAbstractSyntaxTree ast =
         CelAbstractSyntaxTree.newParsedAst(
@@ -849,43 +818,6 @@ public final class OptimizedSelectPlannerTest {
     assertThat(e)
         .hasMessageThat()
         .contains("Expected map dummy/default value with a single entry, found:");
-  }
-
-  @Test
-  public void
-      plan_invalidAst_repeatedMessageWithUnsupportedWellKnownType_throwsEvaluationException() {
-    CelAbstractSyntaxTree ast =
-        CelAbstractSyntaxTree.newParsedAst(
-            CelExpr.ofCall(
-                1L,
-                OptimizedSelectPlanner.CEL_ATTRIBUTE_FUNCTION_NAME,
-                ImmutableList.of(
-                    CelExpr.ofIdent(2L, "msg"),
-                    CelExpr.ofList(
-                        3L,
-                        ImmutableList.of(
-                            CelExpr.ofList(
-                                4L,
-                                ImmutableList.of(
-                                    CelExpr.ofConstant(5L, CelConstant.ofValue(51L)),
-                                    CelExpr.ofConstant(
-                                        6L, CelConstant.ofValue("repeated_nested_message")),
-                                    CelExpr.ofConstant(7L, CelConstant.ofValue(11L))),
-                                ImmutableList.of())),
-                        ImmutableList.of()),
-                    CelExpr.ofList(
-                        8L,
-                        ImmutableList.of(
-                            CelExpr.ofStruct(9L, "google.protobuf.Any", ImmutableList.of())),
-                        ImmutableList.of()))),
-            SELECT_OPTIMIZED_SOURCE);
-
-    CelEvaluationException e = assertThrows(CelEvaluationException.class, () -> PLANNER.plan(ast));
-
-    assertThat(e).hasCauseThat().isInstanceOf(IllegalArgumentException.class);
-    assertThat(e)
-        .hasMessageThat()
-        .contains("Leaf well-known type 'google.protobuf.Any' is not supported");
   }
 
   @Test

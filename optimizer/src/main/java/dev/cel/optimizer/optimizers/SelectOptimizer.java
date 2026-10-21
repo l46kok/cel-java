@@ -62,7 +62,6 @@ import dev.cel.common.navigation.CelNavigableMutableExpr;
 import dev.cel.common.navigation.TraversalOrder;
 import dev.cel.common.types.CelKind;
 import dev.cel.common.types.CelType;
-import dev.cel.common.types.CelTypes;
 import dev.cel.common.types.ListType;
 import dev.cel.common.types.OptionalType;
 import dev.cel.common.types.SimpleType;
@@ -139,6 +138,10 @@ import java.util.Optional;
  *       from {@code google.protobuf.Any}, or evaluated via classless wire payloads ({@code
  *       RawProtoMessageLiteValue}), no cross-check between the embedded field number and field name
  *       is performed at runtime.
+ *   <li><b>Selection through {@code google.protobuf.Any}:</b> The optimized chain ends at an {@code
+ *       Any} field, whose packed type is only known at runtime. Fields selected past it ({@code
+ *       msg.any_field.foo}) are resolved by name, so they are not rename-resilient and {@code
+ *       CelLiteRuntime} needs the packed message's {@code CelLiteDescriptor}.
  *   <li><b>Oneofs:</b> The lite runtime reads fields from the wire, so it reports every serialized
  *       member of a oneof as present. Protobuf serializes at most one, unless an older-schema
  *       binary merges or mutates the message, or the bytes are concatenated or altered by hand.
@@ -322,12 +325,6 @@ public final class SelectOptimizer implements CelAstOptimizer {
     if (field.getType() == FieldDescriptor.Type.GROUP) {
       throw new UnsupportedOperationException(
           "Optimization of Group fields is unsupported: " + field.getFullName());
-    }
-    // TODO: Support Any.
-    if (field.getType() == FieldDescriptor.Type.MESSAGE
-        && field.getMessageType().getFullName().equals(CelTypes.ANY_MESSAGE)) {
-      throw new UnsupportedOperationException(
-          "Optimization of Any fields is currently unimplemented: " + field.getFullName());
     }
 
     CelMutableList qualifierElements =

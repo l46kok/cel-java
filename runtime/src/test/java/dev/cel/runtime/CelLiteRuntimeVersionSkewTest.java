@@ -2300,6 +2300,23 @@ public final class CelLiteRuntimeVersionSkewTest {
             .addRepeatedValue(Value.newBuilder().setNullValue(NullValue.NULL_VALUE))
             .build(),
         true),
+    ANY_FIELDS(
+        "msg.single_any == 5 && msg.repeated_any == [5] && has(msg.single_any)"
+            + " && msg.map_string_any['k'] == 5 && msg.oneof_type.payload.single_any == 5"
+            + " && has(msg.oneof_type.payload.single_any)",
+        TestAllTypes.newBuilder()
+            .setSingleAny(Any.pack(Int64Value.of(5)))
+            .addRepeatedAny(Any.pack(Int64Value.of(5)))
+            .putMapStringAny("k", Any.pack(Int64Value.of(5)))
+            .setOneofType(
+                NestedTestAllTypes.newBuilder()
+                    .setPayload(TestAllTypes.newBuilder().setSingleAny(Any.pack(Int64Value.of(5)))))
+            .build(),
+        true),
+    UNSET_ANY_FIELDS(
+        "!has(msg.single_any) && msg.repeated_any == [] && !has(msg.oneof_type.payload.single_any)",
+        TestAllTypes.getDefaultInstance(),
+        true),
     ;
 
     private final String expression;
@@ -2338,6 +2355,42 @@ public final class CelLiteRuntimeVersionSkewTest {
     Object result = program.eval(ImmutableMap.of("msg", Any.pack(testCase.message)));
 
     assertThat(result).isEqualTo(testCase.expectedResult);
+  }
+
+  @Test
+  public void descriptorlessRuntime_selectThroughAnyField_throwsFieldSelectionByNameError()
+      throws Exception {
+    CelLiteRuntime descriptorlessRuntime = newDescriptorlessRuntime();
+    CelAbstractSyntaxTree optimizedAst =
+        serverOptimizer.optimize(serverCompiler.compile("msg.single_any.single_int64").getAst());
+    Program program = descriptorlessRuntime.createProgram(optimizedAst);
+    TestAllTypes msg =
+        TestAllTypes.newBuilder()
+            .setSingleAny(Any.pack(TestAllTypes.newBuilder().setSingleInt64(7L).build()))
+            .build();
+
+    CelEvaluationException thrown =
+        assertThrows(CelEvaluationException.class, () -> program.eval(ImmutableMap.of("msg", msg)));
+
+    assertThat(thrown)
+        .hasCauseThat()
+        .hasMessageThat()
+        .isEqualTo(
+            "Error resolving field 'single_int64' on 'cel.expr.conformance.proto3.TestAllTypes'."
+                + " Field selection by name is not supported on raw proto wire bytes; register its"
+                + " CelLiteDescriptor or enable SelectOptimizer.");
+  }
+
+  @Test
+  public void select_throughAnyFieldWithPackedTypeDescriptor_resolvesByName() throws Exception {
+    TestAllTypes msg =
+        TestAllTypes.newBuilder()
+            .setSingleAny(Any.pack(NestedMessage.newBuilder().setBb(7).build()))
+            .build();
+
+    Object result = eval("msg.single_any.bb", msg);
+
+    assertThat(result).isEqualTo(7L);
   }
 
   @Test
