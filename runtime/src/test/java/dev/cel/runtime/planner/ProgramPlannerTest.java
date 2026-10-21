@@ -87,7 +87,6 @@ import dev.cel.runtime.CelStandardFunctions;
 import dev.cel.runtime.CelStandardFunctions.StandardFunction;
 import dev.cel.runtime.CelUnknownSet;
 import dev.cel.runtime.DefaultDispatcher;
-import dev.cel.runtime.DescriptorTypeResolver;
 import dev.cel.runtime.InternalCelFunctionBinding;
 import dev.cel.runtime.PartialVars;
 import dev.cel.runtime.Program;
@@ -246,11 +245,10 @@ public final class ProgramPlannerTest {
     addBindingsToDispatcher(
         builder, stdFunctions.newFunctionBindings(RUNTIME_EQUALITY, celOptions));
 
-    TypeFunction typeFunction =
-        TypeFunction.create(
-            DescriptorTypeResolver.create(TYPE_PROVIDER, CelValueConverter.getDefaultInstance()));
     addBindingsToDispatcher(
-        builder, typeFunction.newFunctionBindings(celOptions, RUNTIME_EQUALITY));
+        builder,
+        TypeFunction.create()
+            .newFunctionBindings(celOptions, RUNTIME_EQUALITY, TYPE_PROVIDER, CEL_VALUE_CONVERTER));
     addBindingsToDispatcher(
         builder,
         CelFunctionBinding.fromOverloads(

@@ -50,7 +50,6 @@ java_library(
         "//parser:macro",
         "//runtime",
         "//runtime:accumulated_unknowns",
-        "//runtime:descriptor_type_resolver",
         "//runtime:dispatcher",
         "//runtime:function_binding",
         "//runtime:function_resolver",

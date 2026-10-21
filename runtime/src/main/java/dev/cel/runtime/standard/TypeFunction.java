@@ -14,8 +14,6 @@
 
 package dev.cel.runtime.standard;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-
 import com.google.common.collect.ImmutableSet;
 import com.google.errorprone.annotations.Immutable;
 import dev.cel.common.CelOptions;
@@ -27,14 +25,11 @@ import dev.cel.runtime.CelFunctionBinding;
 import dev.cel.runtime.RuntimeEquality;
 import dev.cel.runtime.TypeResolver;
 import java.util.Arrays;
-import org.jspecify.annotations.Nullable;
 
 /** Standard function for the {@code type} function. */
 @Immutable
 public final class TypeFunction extends CelStandardFunction {
   private static final TypeFunction ALL_OVERLOADS = create(TypeOverload.values());
-
-  private final @Nullable TypeResolver typeResolver;
 
   public static TypeFunction create() {
     return ALL_OVERLOADS;
@@ -45,11 +40,7 @@ public final class TypeFunction extends CelStandardFunction {
   }
 
   public static TypeFunction create(Iterable<TypeFunction.TypeOverload> overloads) {
-    return new TypeFunction(ImmutableSet.copyOf(overloads), /* typeResolver= */ null);
-  }
-
-  public static TypeFunction create(TypeResolver typeResolver) {
-    return new TypeFunction(ImmutableSet.copyOf(TypeOverload.values()), checkNotNull(typeResolver));
+    return new TypeFunction(ImmutableSet.copyOf(overloads));
   }
 
   /** Overloads for the standard {@code type} function. */
@@ -69,20 +60,11 @@ public final class TypeFunction extends CelStandardFunction {
 
   @Override
   public ImmutableSet<CelFunctionBinding> newFunctionBindings(
-      CelOptions celOptions, RuntimeEquality runtimeEquality) {
-    return newFunctionBindings(checkNotNull(typeResolver));
-  }
-
-  @Override
-  public ImmutableSet<CelFunctionBinding> newFunctionBindings(
       CelOptions celOptions,
       RuntimeEquality runtimeEquality,
       CelTypeProvider celTypeProvider,
       CelValueConverter celValueConverter) {
-    return newFunctionBindings(TypeResolver.create(celTypeProvider, celValueConverter));
-  }
-
-  private static ImmutableSet<CelFunctionBinding> newFunctionBindings(TypeResolver typeResolver) {
+    TypeResolver typeResolver = TypeResolver.create(celTypeProvider, celValueConverter);
     CelFunctionBinding binding =
         CelFunctionBinding.from(
             "type",
@@ -92,9 +74,7 @@ public final class TypeFunction extends CelStandardFunction {
     return CelFunctionBinding.fromOverloads("type", binding);
   }
 
-  private TypeFunction(
-      ImmutableSet<CelStandardOverload> overloads, @Nullable TypeResolver typeResolver) {
+  private TypeFunction(ImmutableSet<CelStandardOverload> overloads) {
     super("type", overloads);
-    this.typeResolver = typeResolver;
   }
 }

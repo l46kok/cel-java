@@ -558,14 +558,12 @@ public abstract class CelRuntimeImpl implements CelRuntime {
             new CelTypeProvider.CombinedCelTypeProvider(combinedTypeProvider, typeProvider());
       }
 
-      DescriptorTypeResolver descriptorTypeResolver =
-          DescriptorTypeResolver.create(combinedTypeProvider, celValueConverter);
-      TypeFunction typeFunction = TypeFunction.create(descriptorTypeResolver);
-
       mutableFunctionBindings.putAll(functionBindings());
 
       for (CelFunctionBinding binding :
-          typeFunction.newFunctionBindings(options(), runtimeEquality)) {
+          TypeFunction.create()
+              .newFunctionBindings(
+                  options(), runtimeEquality, combinedTypeProvider, celValueConverter)) {
         mutableFunctionBindings.put(binding.getOverloadId(), binding);
       }
 

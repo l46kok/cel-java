@@ -239,6 +239,7 @@ java_library(
     name = "descriptor_type_resolver",
     srcs = ["DescriptorTypeResolver.java"],
     tags = [
+        "avoid_dep",
     ],
     deps = [
         ":type_resolver",
@@ -250,7 +251,6 @@ java_library(
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
         "@maven//:com_google_protobuf_protobuf_java",
-        "@maven//:org_jspecify_jspecify",
     ],
 )
 
@@ -828,7 +828,6 @@ java_library(
     ],
     deps = [
         ":async_options",
-        ":descriptor_type_resolver",
         ":dispatcher",
         ":evaluation_exception",
         ":evaluation_listener",
