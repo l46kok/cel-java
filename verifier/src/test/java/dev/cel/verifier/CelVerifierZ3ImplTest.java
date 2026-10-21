@@ -2802,6 +2802,57 @@ public final class CelVerifierZ3ImplTest {
     assertThat(result.status()).isEqualTo(VerificationStatus.VERIFIED);
   }
 
+  // Each pair of calls looks alike but may have different implementations, so equating them would
+  // be a false VERIFIED. Any counterexample depends on the values the functions return.
+  @Test
+  public void isAlwaysTrue_distinctFunctionSymbols_inconclusive(
+      @TestParameter({
+            // Member and global overloads of the same name.
+            "fx(role, country) == role.fx(country)",
+            // Overloads whose argument values coincide (empty lists of different element types).
+            "size(int_list) == 0 && size(string_list) == 0 ? f(int_list) == f(string_list) : true"
+          })
+          String expression)
+      throws Exception {
+    CelCompiler celCompiler =
+        CEL.toCompilerBuilder()
+            .addVar("string_list", ListType.create(SimpleType.STRING))
+            .addFunctionDeclarations(
+                CelFunctionDecl.newFunctionDeclaration(
+                    "fx",
+                    CelOverloadDecl.newGlobalOverload(
+                        "fx_global", SimpleType.BOOL, SimpleType.STRING, SimpleType.STRING),
+                    CelOverloadDecl.newMemberOverload(
+                        "fx_member", SimpleType.BOOL, SimpleType.STRING, SimpleType.STRING)),
+                CelFunctionDecl.newFunctionDeclaration(
+                    "f",
+                    CelOverloadDecl.newGlobalOverload(
+                        "f_list_int", SimpleType.INT, ListType.create(SimpleType.INT)),
+                    CelOverloadDecl.newGlobalOverload(
+                        "f_list_string", SimpleType.INT, ListType.create(SimpleType.STRING))))
+            .build();
+    CelAbstractSyntaxTree ast = celCompiler.compile(expression).getAst();
+    CelVerificationResult result = VERIFIER.isAlwaysTrue(ast);
+
+    assertThat(result.status()).isEqualTo(VerificationStatus.INCONCLUSIVE);
+  }
+
+  @Test
+  public void isAlwaysTrue_zeroArityFunctionAndSameNamedVariable_inconclusive() throws Exception {
+    CelCompiler celCompiler =
+        CEL.toCompilerBuilder()
+            .addVar("g", SimpleType.INT)
+            .addFunctionDeclarations(
+                CelFunctionDecl.newFunctionDeclaration(
+                    "g", CelOverloadDecl.newGlobalOverload("g_zero", SimpleType.INT)))
+            .build();
+    CelAbstractSyntaxTree ast = celCompiler.compile("g() == g").getAst();
+
+    CelVerificationResult result = VERIFIER.isAlwaysTrue(ast);
+
+    assertThat(result.status()).isEqualTo(VerificationStatus.INCONCLUSIVE);
+  }
+
   @Test
   public void verifyEquivalence_identicalFunctionCalls_equivalent() throws Exception {
     // Identical calls to an uninterpreted function always produce identical results.

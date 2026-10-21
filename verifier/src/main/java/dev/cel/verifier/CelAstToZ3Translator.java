@@ -16,6 +16,7 @@ package dev.cel.verifier;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Streams;
 import com.microsoft.z3.ArithExpr;
@@ -83,6 +84,7 @@ final class CelAstToZ3Translator {
   private static final String EMPTY_MSG_REF_PREFIX = "!empty_msg_ref_";
   private static final String EMPTY_LIST_PREFIX = "!empty_list";
   private static final String EMPTY_MAP_PREFIX = "!empty_map";
+  private static final String FUNCTION_PREFIX = "!fn_";
   private static final String NULL_VALUE_FIELD = "null_value";
   private static final String SECONDS_FIELD = "seconds";
   private static final String NANOS_FIELD = "nanos";
@@ -927,7 +929,10 @@ final class CelAstToZ3Translator {
               Sort[] argSorts = new Sort[args.size()];
               Arrays.fill(argSorts, 0, args.size(), typeSystem.celValueSort());
               FuncDecl<?> funcDecl =
-                  typeSystem.internFuncDecl(functionName, argSorts, typeSystem.celValueSort());
+                  typeSystem.internFuncDecl(
+                      uninterpretedFunctionSymbol(exprId, ast),
+                      argSorts,
+                      typeSystem.celValueSort());
 
               Expr<?>[] exprArgs = args.stream().map(TranslatedValue::z3Expr).toArray(Expr[]::new);
               Expr<?> callRes = ctx.mkApp(funcDecl, exprArgs);
@@ -945,6 +950,17 @@ final class CelAstToZ3Translator {
                   /* baseTaint= */ ctx.mkTrue(),
                   args);
             });
+  }
+
+  /**
+   * Returns the Z3 symbol for an uninterpreted call. Each set of candidate overloads gets its own
+   * symbol, since distinct overloads may have different implementations even on equal values (e.g.
+   * empty lists of different element types). The prefix keeps it apart from variables and internal
+   * symbols.
+   */
+  private static String uninterpretedFunctionSymbol(long exprId, CelAbstractSyntaxTree ast) {
+    ImmutableList<String> overloadIds = ast.getReferenceOrThrow(exprId).overloadIds();
+    return FUNCTION_PREFIX + String.join("|", ImmutableSortedSet.copyOf(overloadIds));
   }
 
   /**
