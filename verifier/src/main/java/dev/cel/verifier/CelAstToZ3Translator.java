@@ -17,6 +17,7 @@ package dev.cel.verifier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Streams;
 import com.microsoft.z3.ArithExpr;
 import com.microsoft.z3.ArrayExpr;
 import com.microsoft.z3.BoolExpr;
@@ -83,6 +84,8 @@ final class CelAstToZ3Translator {
   private static final String EMPTY_LIST_PREFIX = "!empty_list";
   private static final String EMPTY_MAP_PREFIX = "!empty_map";
   private static final String NULL_VALUE_FIELD = "null_value";
+  private static final String SECONDS_FIELD = "seconds";
+  private static final String NANOS_FIELD = "nanos";
   private static final long MAX_UINT32 = 0xFFFFFFFFL;
   private final Context ctx;
   private final CelZ3TypeSystem typeSystem;
@@ -406,7 +409,12 @@ final class CelAstToZ3Translator {
     if (CelTypes.isWrapperType(createStruct.messageName())) {
       return translateWrapperWktStruct(celExpr, createStruct, ast);
     }
-    // TODO: Support google.protobuf.Timestamp and google.protobuf.Duration.
+    if (createStruct.messageName().equals(CelTypes.TIMESTAMP_MESSAGE)) {
+      return translateTimestampWktStruct(celExpr, createStruct, ast);
+    }
+    if (createStruct.messageName().equals(CelTypes.DURATION_MESSAGE)) {
+      return translateDurationWktStruct(celExpr, createStruct, ast);
+    }
 
     // Bypass SMT when the struct is empty (return the cached SMT default pointer)
     if (createStruct.entries().isEmpty()) {
@@ -597,6 +605,105 @@ final class CelAstToZ3Translator {
     }
     currentVal = typeSystem.withRuntimeError(currentVal, ctx.mkNot(validValue));
     return TranslatedValue.propagateStrict(ctx, typeSystem, currentVal, celExpr, entryTvs);
+  }
+
+  @FunctionalInterface
+  private interface TimeWktValueFactory {
+    Expr<?> create(IntExpr seconds, IntExpr nanos, IntExpr totalNanos);
+  }
+
+  private TranslatedValue translateTimestampWktStruct(
+      CelExpr celExpr, CelExpr.CelStruct createStruct, CelAbstractSyntaxTree ast) {
+    return translateTimeWktStruct(
+        celExpr,
+        createStruct,
+        ast,
+        /* minNanos= */ 0,
+        (seconds, nanos, totalNanos) ->
+            typeSystem.withRuntimeError(
+                typeSystem.wrapTimestamp(totalNanos),
+                typeSystem.checkTimestampOverflow(totalNanos)));
+  }
+
+  private TranslatedValue translateDurationWktStruct(
+      CelExpr celExpr, CelExpr.CelStruct createStruct, CelAbstractSyntaxTree ast) {
+    return translateTimeWktStruct(
+        celExpr,
+        createStruct,
+        ast,
+        CelZ3TypeSystem.MIN_DURATION_NANOS,
+        (seconds, nanos, totalNanos) -> {
+          BoolExpr signMismatch =
+              ctx.mkOr(
+                  ctx.mkAnd(ctx.mkGt(seconds, ctx.mkInt(0)), ctx.mkLt(nanos, ctx.mkInt(0))),
+                  ctx.mkAnd(ctx.mkLt(seconds, ctx.mkInt(0)), ctx.mkGt(nanos, ctx.mkInt(0))));
+          return typeSystem.withRuntimeError(
+              typeSystem.wrapDuration(totalNanos),
+              signMismatch,
+              typeSystem.checkDurationOverflow(totalNanos));
+        });
+  }
+
+  private TranslatedValue translateTimeWktStruct(
+      CelExpr celExpr,
+      CelExpr.CelStruct createStruct,
+      CelAbstractSyntaxTree ast,
+      int minNanos,
+      TimeWktValueFactory valueFactory) {
+    List<TranslatedValue> entryTvs = new ArrayList<>();
+    Expr<?> secondsVal =
+        resolveStructFieldValue(createStruct, SECONDS_FIELD, typeSystem.mkInt(0), ast, entryTvs);
+    Expr<?> nanosVal =
+        resolveStructFieldValue(createStruct, NANOS_FIELD, typeSystem.mkInt(0), ast, entryTvs);
+
+    IntExpr seconds = typeSystem.getInt(secondsVal);
+    IntExpr nanos = typeSystem.getInt(nanosVal);
+    IntExpr totalNanos =
+        (IntExpr)
+            ctx.mkAdd(ctx.mkMul(seconds, ctx.mkInt(CelZ3TypeSystem.NANOS_PER_SECOND)), nanos);
+
+    BoolExpr typeError =
+        ctx.mkOr(ctx.mkNot(typeSystem.isInt(secondsVal)), ctx.mkNot(typeSystem.isInt(nanosVal)));
+    BoolExpr nanosOutOfRange =
+        ctx.mkOr(
+            ctx.mkLt(nanos, ctx.mkInt(minNanos)),
+            ctx.mkGe(nanos, ctx.mkInt(CelZ3TypeSystem.NANOS_PER_SECOND)));
+
+    Expr<?> result =
+        typeSystem.withRuntimeError(
+            valueFactory.create(seconds, nanos, totalNanos), typeError, nanosOutOfRange);
+    return TranslatedValue.propagateStrict(ctx, typeSystem, result, celExpr, entryTvs);
+  }
+
+  private Expr<?> resolveStructFieldValue(
+      CelExpr.CelStruct createStruct,
+      String fieldName,
+      Expr<?> defaultValue,
+      CelAbstractSyntaxTree ast,
+      List<TranslatedValue> entryTvs) {
+    return Streams.findLast(
+            createStruct.entries().stream().filter(entry -> entry.fieldKey().equals(fieldName)))
+        .<Expr<?>>map(
+            entry -> {
+              TranslatedValue entryTv = translateExpr(entry.value(), ast);
+              Expr<?> val = entryTv.z3Expr();
+              if (entry.optionalEntry()) {
+                Expr<?> checkedVal =
+                    typeSystem.withRuntimeError(val, ctx.mkNot(typeSystem.isOptional(val)));
+                entryTv =
+                    TranslatedValue.create(
+                        checkedVal, entry.value(), typeSystem, entryTv.isApproximate());
+                Expr<?> optRef = typeSystem.getOptionalRef(checkedVal);
+                val =
+                    ctx.mkITE(
+                        typeSystem.optHasValue(optRef),
+                        typeSystem.getOptionalValue(optRef),
+                        defaultValue);
+              }
+              entryTvs.add(entryTv);
+              return val;
+            })
+        .orElse(defaultValue);
   }
 
   private Expr<?> getDefaultValueForType(CelType type) {
@@ -1392,14 +1499,14 @@ final class CelAstToZ3Translator {
       return typeSystem.isBytes(val);
     }
     if (type.equals(SimpleType.TIMESTAMP)) {
-      IntExpr seconds = typeSystem.getTimestamp(val);
+      IntExpr nanos = typeSystem.getTimestamp(val);
       return ctx.mkAnd(
-          typeSystem.isTimestamp(val), ctx.mkNot(typeSystem.checkTimestampOverflow(seconds)));
+          typeSystem.isTimestamp(val), ctx.mkNot(typeSystem.checkTimestampOverflow(nanos)));
     }
     if (type.equals(SimpleType.DURATION)) {
-      IntExpr seconds = typeSystem.getDuration(val);
+      IntExpr nanos = typeSystem.getDuration(val);
       return ctx.mkAnd(
-          typeSystem.isDuration(val), ctx.mkNot(typeSystem.checkDurationOverflow(seconds)));
+          typeSystem.isDuration(val), ctx.mkNot(typeSystem.checkDurationOverflow(nanos)));
     }
 
     if (type instanceof ListType) {

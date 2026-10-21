@@ -70,10 +70,11 @@ final class CelVerifierZ3Impl implements CelVerifier {
 
   private static final ImmutableList<Descriptor> WELL_KNOWN_DESCRIPTORS =
       ImmutableList.of(
-              // TODO: Support WellKnownProto.DURATION and WellKnownProto.TIMESTAMP.
+              WellKnownProto.DURATION,
               WellKnownProto.JSON_LIST_VALUE,
               WellKnownProto.JSON_STRUCT_VALUE,
               WellKnownProto.JSON_VALUE,
+              WellKnownProto.TIMESTAMP,
               WellKnownProto.FLOAT_VALUE,
               WellKnownProto.INT32_VALUE,
               WellKnownProto.INT64_VALUE,
