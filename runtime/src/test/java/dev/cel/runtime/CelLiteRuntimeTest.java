@@ -227,7 +227,7 @@ public class CelLiteRuntimeTest {
   }
 
   @Test
-  @SuppressWarnings("unchecked") // Program.eval returns untyped Object.
+  @SuppressWarnings("unchecked") // Test only
   public void fieldSelection_repeatedBoolWrappers() throws Exception {
     CelAbstractSyntaxTree ast = CEL_COMPILER.compile("msg.repeated_bool_wrapper").getAst();
     TestAllTypes msg =
@@ -246,7 +246,7 @@ public class CelLiteRuntimeTest {
   @Test
   @TestParameters("{expression: 'msg.map_string_int32'}")
   @TestParameters("{expression: 'msg.map_string_int64'}")
-  @SuppressWarnings("unchecked") // Program.eval returns untyped Object.
+  @SuppressWarnings("unchecked") // Test only
   public void fieldSelection_map(String expression) throws Exception {
     CelAbstractSyntaxTree ast = CEL_COMPILER.compile(expression).getAst();
     TestAllTypes msg =
@@ -341,7 +341,7 @@ public class CelLiteRuntimeTest {
   }
 
   @Test
-  @SuppressWarnings("unchecked") // Program.eval returns untyped Object.
+  @SuppressWarnings("unchecked") // Test only
   public void fieldSelection_jsonStruct() throws Exception {
     String expression = "msg.single_struct";
     CelAbstractSyntaxTree ast = CEL_COMPILER.compile(expression).getAst();
@@ -371,7 +371,7 @@ public class CelLiteRuntimeTest {
   }
 
   @Test
-  @SuppressWarnings("unchecked") // Program.eval returns untyped Object.
+  @SuppressWarnings("unchecked") // Test only
   public void fieldSelection_jsonListValue() throws Exception {
     String expression = "msg.list_value";
     CelAbstractSyntaxTree ast = CEL_COMPILER.compile(expression).getAst();
