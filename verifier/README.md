@@ -370,14 +370,12 @@ public class InvariantsExample {
 
 ### Limitations
 
-*   **Unsupported Standard Functions (Uninterpreted Functions):** Not all
-    CEL standard library functions have SMT axioms defined yet. Unsupported
-    functions are treated as *uninterpreted functions* by Z3 (the solver
-    only guarantees that identical inputs yield identical outputs, but does
-    not understand the function's internal logic or return types).
-    Consequently, verifications that rely on the specific semantics of
-    these functions may return `VerificationStatus.INCONCLUSIVE`. Support for
-    more standard library functions will be added incrementally.
+*   **Uninterpreted Functions:** Custom functions, and standard library
+    functions that don't have SMT axioms yet, are treated as uninterpreted:
+    the solver only knows that identical inputs yield identical outputs.
+    Results that depend on their return values are `INCONCLUSIVE`, and a
+    `VERIFIED` result assumes they return a value of their declared type
+    rather than an error.
 
 ### Best Practices & Performance
 

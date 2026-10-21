@@ -2750,9 +2750,9 @@ public final class CelVerifierZ3ImplTest {
   }
 
   @Test
-  public void isAlwaysTrue_dynamicFunction_nan_violated() throws Exception {
-    // request() == request() is a tautology only if request() does not evaluate to NaN.
-    // Since request() returns DYN, Z3 can assign NaN to its return value, and NaN == NaN is false.
+  public void isAlwaysTrue_dynamicFunction_inconclusive() throws Exception {
+    // request() == request() fails only if request() returns NaN. The solver may pick NaN for an
+    // uninterpreted function, but the actual function may never return it.
     CelCompiler celCompiler =
         CEL.toCompilerBuilder()
             .setContainer(CelContainer.ofName("cel.expr.conformance.proto3"))
@@ -2764,8 +2764,26 @@ public final class CelVerifierZ3ImplTest {
     CelAbstractSyntaxTree ast = celCompiler.compile("request() == request()").getAst();
     CelVerificationResult result = VERIFIER.isAlwaysTrue(ast);
 
+    assertThat(result.status()).isEqualTo(VerificationStatus.INCONCLUSIVE);
+    assertThat(result.message()).contains("depends on approximations");
+  }
+
+  @Test
+  public void isAlwaysTrue_dynamicFunctionShortCircuited_violated() throws Exception {
+    // x == 0 falsifies the condition regardless of request()'s value.
+    CelCompiler celCompiler =
+        CEL.toCompilerBuilder()
+            .setContainer(CelContainer.ofName("cel.expr.conformance.proto3"))
+            .addFunctionDeclarations(
+                CelFunctionDecl.newFunctionDeclaration(
+                    "request",
+                    CelOverloadDecl.newGlobalOverload("request_overload", SimpleType.DYN)))
+            .build();
+    CelAbstractSyntaxTree ast = celCompiler.compile("x != 0 && request() == 1").getAst();
+    CelVerificationResult result = VERIFIER.isAlwaysTrue(ast);
+
     assertThat(result.status()).isEqualTo(VerificationStatus.VIOLATED);
-    assertThat(result.message()).contains("request = NaN");
+    assertThat(result.message()).contains("x = 0");
   }
 
   @Test
@@ -2785,9 +2803,8 @@ public final class CelVerifierZ3ImplTest {
   }
 
   @Test
-  public void verifyEquivalence_functionError_equivalent() throws Exception {
-    // request() and request() are equivalent, even if request() throws an Error,
-    // because Error == Error structurally in Z3 equivalence.
+  public void verifyEquivalence_identicalFunctionCalls_equivalent() throws Exception {
+    // Identical calls to an uninterpreted function always produce identical results.
     CelCompiler celCompiler =
         CEL.toCompilerBuilder()
             .setContainer(CelContainer.ofName("cel.expr.conformance.proto3"))

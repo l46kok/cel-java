@@ -935,10 +935,15 @@ final class CelAstToZ3Translator {
               typeConstraints.add(ctx.mkNot(typeSystem.isUnknown(callRes)));
               typeConstraints.add(ctx.mkNot(typeSystem.isError(callRes)));
 
-              boolean isDynamic = ast.getTypeOrThrow(exprId).equals(SimpleType.DYN);
-              BoolExpr isApprox = ctx.mkBool(!isDynamic);
+              // The solver picks the result freely, so a model depending on it is never exact.
               return TranslatedValue.propagateStrict(
-                  ctx, typeSystem, functionName, callRes, Optional.of(expr), isApprox, args);
+                  ctx,
+                  typeSystem,
+                  functionName,
+                  callRes,
+                  Optional.of(expr),
+                  /* baseTaint= */ ctx.mkTrue(),
+                  args);
             });
   }
 
