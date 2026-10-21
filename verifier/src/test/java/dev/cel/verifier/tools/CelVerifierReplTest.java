@@ -249,6 +249,26 @@ public final class CelVerifierReplTest {
   }
 
   @Test
+  public void repl_wellKnownTypeQueries() throws Exception {
+    String[] output =
+        runReplWithCommands(
+            ":help var",
+            ":var count google.protobuf.Int64Value",
+            ":var payload google.protobuf.Struct",
+            ":vars",
+            "equiv google.protobuf.Int64Value{value: 42} == count <=> count == 42",
+            "equiv google.protobuf.Struct{fields: {'k': google.protobuf.Value{string_value: 'v'}}}"
+                + " <=> {'k': 'v'}",
+            ":quit");
+
+    assertThat(output[0]).contains("Value, Struct, ListValue, *Value (google.protobuf.*)");
+    assertThat(output[0]).contains("Variable declared: count : wrapper(int)");
+    assertThat(output[0]).contains("Variable declared: payload : map(string, dyn)");
+    assertThat(output[0]).contains("[VERIFIED]");
+    assertThat(output[1]).isEmpty();
+  }
+
+  @Test
   public void repl_unknownCommandsAndErrors() throws Exception {
     String[] output =
         runReplWithCommands(

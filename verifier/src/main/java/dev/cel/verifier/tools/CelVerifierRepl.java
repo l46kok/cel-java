@@ -315,7 +315,9 @@ final class CelVerifierRepl {
         out.println();
         out.println("Supported Types:");
         out.println("  - Primitive types:  int, uint, string, bool, double, bytes, dyn");
-        out.println("  - Well-known types: timestamp, duration");
+        out.println(
+            "  - Well-known types: timestamp, duration, Value, Struct, ListValue, *Value"
+                + " (google.protobuf.*)");
         out.println("  - List types:       list<T> (e.g., list<int>, list<string>)");
         out.println("  - Map types:        map<K,V> (e.g., map<string,int>, map<string,string>)");
         out.println("  - Optional types:   optional<T> (e.g., optional<string>, optional<int>)");
@@ -329,6 +331,7 @@ final class CelVerifierRepl {
         out.println("  cel-verifier> :var created_at timestamp");
         out.println("  cel-verifier> :var timeout duration");
         out.println("  cel-verifier> :var opt_flag optional<bool>");
+        out.println("  cel-verifier> :var count google.protobuf.Int64Value");
         break;
       case "unknown":
         out.println("Command: :unknown <identifier>");

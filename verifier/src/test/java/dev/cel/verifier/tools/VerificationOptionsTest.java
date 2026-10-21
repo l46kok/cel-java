@@ -22,6 +22,7 @@ import com.google.common.collect.ImmutableMap;
 import dev.cel.common.types.CelType;
 import dev.cel.common.types.ListType;
 import dev.cel.common.types.MapType;
+import dev.cel.common.types.NullableType;
 import dev.cel.common.types.OptionalType;
 import dev.cel.common.types.SimpleType;
 import dev.cel.verifier.tools.VerificationOptions.OutputFormat;
@@ -121,6 +122,36 @@ public final class VerificationOptionsTest {
         .isEqualTo(SimpleType.DURATION);
     assertThat(VerificationOptions.parseCelType("google.protobuf.Duration"))
         .isEqualTo(SimpleType.DURATION);
+  }
+
+  @Test
+  public void parseCelType_wellKnownTypes() {
+    assertThat(VerificationOptions.parseCelType("google.protobuf.Value")).isEqualTo(SimpleType.DYN);
+    assertThat(VerificationOptions.parseCelType("google.protobuf.Struct"))
+        .isEqualTo(MapType.create(SimpleType.STRING, SimpleType.DYN));
+    assertThat(VerificationOptions.parseCelType("google.protobuf.ListValue"))
+        .isEqualTo(ListType.create(SimpleType.DYN));
+    assertThat(VerificationOptions.parseCelType("google.protobuf.BoolValue"))
+        .isEqualTo(NullableType.create(SimpleType.BOOL));
+    assertThat(VerificationOptions.parseCelType("google.protobuf.BytesValue"))
+        .isEqualTo(NullableType.create(SimpleType.BYTES));
+    assertThat(VerificationOptions.parseCelType("google.protobuf.DoubleValue"))
+        .isEqualTo(NullableType.create(SimpleType.DOUBLE));
+    assertThat(VerificationOptions.parseCelType("google.protobuf.FloatValue"))
+        .isEqualTo(NullableType.create(SimpleType.DOUBLE));
+    assertThat(VerificationOptions.parseCelType("google.protobuf.Int32Value"))
+        .isEqualTo(NullableType.create(SimpleType.INT));
+    assertThat(VerificationOptions.parseCelType("google.protobuf.Int64Value"))
+        .isEqualTo(NullableType.create(SimpleType.INT));
+    assertThat(VerificationOptions.parseCelType("google.protobuf.UInt32Value"))
+        .isEqualTo(NullableType.create(SimpleType.UINT));
+    assertThat(VerificationOptions.parseCelType("google.protobuf.UInt64Value"))
+        .isEqualTo(NullableType.create(SimpleType.UINT));
+    assertThat(VerificationOptions.parseCelType("google.protobuf.StringValue"))
+        .isEqualTo(NullableType.create(SimpleType.STRING));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> VerificationOptions.parseCelType("google.protobuf.Any"));
   }
 
   @Test

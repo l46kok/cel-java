@@ -329,6 +329,79 @@ public final class CelVerifierToolTest {
   }
 
   @Test
+  public void verifyEquivalence_wellKnownTypesSupportedByDefault() throws Exception {
+    VerificationOptions options =
+        VerificationOptions.builder().setTimeout(Duration.ofSeconds(5)).build();
+    ImmutableMap<String, CelType> vars =
+        VerificationOptions.parseVariables(
+            Arrays.asList("x:int", "w:google.protobuf.Int64Value", "s:google.protobuf.Struct"));
+
+    assertThat(
+            CelVerifierToolCore.verifyEquivalence(
+                    "google.protobuf.Struct{fields: {'a': google.protobuf.Value{number_value: 1.0},"
+                        + " ?'b': optional.none()}}",
+                    "{'a': 1.0}",
+                    vars,
+                    options)
+                .status())
+        .isEqualTo(VerificationStatus.VERIFIED);
+    assertThat(
+            CelVerifierToolCore.verifyEquivalence(
+                    "google.protobuf.ListValue{values: [google.protobuf.Value{string_value: 'x'}]}",
+                    "['x']",
+                    vars,
+                    options)
+                .status())
+        .isEqualTo(VerificationStatus.VERIFIED);
+    assertThat(
+            CelVerifierToolCore.verifyEquivalence(
+                    "google.protobuf.Int64Value{value: x} == x"
+                        + " && google.protobuf.Int64Value{} == 0"
+                        + " && google.protobuf.StringValue{value: 'hi'} == 'hi'",
+                    "true",
+                    vars,
+                    options)
+                .status())
+        .isEqualTo(VerificationStatus.VERIFIED);
+    assertThat(
+            CelVerifierToolCore.verifyEquivalence(
+                    "google.protobuf.Timestamp{seconds: 100} == timestamp(100)"
+                        + " && google.protobuf.Timestamp{seconds: 100, nanos: 500} > timestamp(100)"
+                        + " && google.protobuf.Duration{seconds: 50}"
+                        + " == timestamp(150) - timestamp(100)",
+                    "true",
+                    vars,
+                    options)
+                .status())
+        .isEqualTo(VerificationStatus.VERIFIED);
+    assertThat(
+            CelVerifierToolCore.verifyEquivalence(
+                    "w == null || w == google.protobuf.Int64Value{value: w}",
+                    "true",
+                    vars,
+                    options)
+                .status())
+        .isEqualTo(VerificationStatus.VERIFIED);
+    String yamlPolicy =
+        "name: wkt_policy\n"
+            + "rule:\n"
+            + "  match:\n"
+            + "    - condition: \"w == google.protobuf.Int64Value{value: 10}\"\n"
+            + "      output: 'true'\n"
+            + "    - output: 'false'\n"
+            + "verification:\n"
+            + "  invariants:\n"
+            + "    - id: wkt_check\n"
+            + "      assert:\n"
+            + "        - \"w != 10 || w == google.protobuf.Int64Value{value: 10}\"\n";
+    assertThat(
+            CelVerifierToolCore.verifyPolicyInvariants(yamlPolicy, vars, options)
+                .get("wkt_check")
+                .status())
+        .isEqualTo(VerificationStatus.VERIFIED);
+  }
+
+  @Test
   public void verifyPolicyInvariants_success() throws Exception {
     String yamlPolicy =
         "name: secure_access_policy\n"
