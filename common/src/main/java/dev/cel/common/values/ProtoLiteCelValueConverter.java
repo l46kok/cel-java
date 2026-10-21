@@ -22,12 +22,14 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.primitives.UnsignedLong;
 import com.google.errorprone.annotations.Immutable;
+import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.ExtensionRegistryLite;
 import com.google.protobuf.Internal.EnumLite;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.MessageLite;
+import com.google.protobuf.MessageLiteOrBuilder;
 import com.google.protobuf.WireFormat;
 import dev.cel.common.annotations.Internal;
 import dev.cel.common.internal.CelLiteDescriptorPool;
@@ -62,6 +64,9 @@ public final class ProtoLiteCelValueConverter extends BaseProtoCelValueConverter
   private static final String MAP_VALUE_FIELD_NAME = "value";
   private static final int MAP_KEY_FIELD_NUMBER = 1;
   private static final int MAP_VALUE_FIELD_NUMBER = 2;
+  // Protobuf's default recursion limit. Nested Anys are unwrapped in a loop since each payload is
+  // parsed afresh, outside that limit.
+  private static final int MAX_ANY_NESTING_DEPTH = 100;
 
   private final CelLiteDescriptorPool descriptorPool;
 
@@ -216,6 +221,34 @@ public final class ProtoLiteCelValueConverter extends BaseProtoCelValueConverter
     }
 
     return fromWellKnownProto(msg, checkNotNull(wellKnownProto));
+  }
+
+  @Override
+  protected Object fromWellKnownProto(MessageLiteOrBuilder msg, WellKnownProto wellKnownProto) {
+    if (wellKnownProto != WellKnownProto.ANY_VALUE) {
+      return super.fromWellKnownProto(msg, wellKnownProto);
+    }
+    Any any = (Any) msg;
+    for (int depth = 0; depth < MAX_ANY_NESTING_DEPTH; depth++) {
+      String typeUrl = any.getTypeUrl();
+      int pos = typeUrl.lastIndexOf('/');
+      if (pos < 0 || pos == typeUrl.length() - 1) {
+        throw new IllegalArgumentException(
+            "Unpacking failed for message: google.protobuf.Any (malformed type URL: '"
+                + typeUrl
+                + "')");
+      }
+      // Same path as a message field.
+      Object unpacked = readMessageField(any.getValue(), typeUrl.substring(pos + 1));
+      if (!(unpacked instanceof Any)) {
+        return finalizeFieldValue(unpacked);
+      }
+      any = (Any) unpacked;
+    }
+    throw new IllegalArgumentException(
+        "Unpacking failed for message: google.protobuf.Any (nesting exceeds "
+            + MAX_ANY_NESTING_DEPTH
+            + ")");
   }
 
   private Object getDefaultValue(FieldLiteDescriptor fieldDescriptor) {

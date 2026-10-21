@@ -24,6 +24,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.primitives.UnsignedLong;
+import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.CodedOutputStream;
 import com.google.protobuf.DescriptorProtos.DescriptorProto;
@@ -389,6 +390,14 @@ public final class CelLiteRuntimeVersionSkewTest {
   public void select_populatedUnknownScalar_decodesFromWireBytes(
       @TestParameter UnknownScalarTestCase testCase) throws Exception {
     Object result = eval(testCase.expression, POPULATED_SERVER_MESSAGE);
+
+    assertThat(result).isEqualTo(testCase.expectedPopulated);
+  }
+
+  @Test
+  public void select_populatedUnknownScalarInRootAny_decodesFromPackedWireBytes(
+      @TestParameter UnknownScalarTestCase testCase) throws Exception {
+    Object result = eval(testCase.expression, Any.pack(POPULATED_SERVER_MESSAGE));
 
     assertThat(result).isEqualTo(testCase.expectedPopulated);
   }
@@ -2319,6 +2328,19 @@ public final class CelLiteRuntimeVersionSkewTest {
   }
 
   @Test
+  public void descriptorlessRuntime_rootAny_evaluatesFromPackedWireBytes(
+      @TestParameter DescriptorlessEvaluationTestCase testCase) throws Exception {
+    CelLiteRuntime descriptorlessRuntime = newDescriptorlessRuntime();
+    CelAbstractSyntaxTree optimizedAst =
+        serverOptimizer.optimize(serverCompiler.compile(testCase.expression).getAst());
+    Program program = descriptorlessRuntime.createProgram(optimizedAst);
+
+    Object result = program.eval(ImmutableMap.of("msg", Any.pack(testCase.message)));
+
+    assertThat(result).isEqualTo(testCase.expectedResult);
+  }
+
+  @Test
   public void partialDescriptorRuntime_missingChildDescriptor_evaluatesFromWireBytes(
       @TestParameter DescriptorlessEvaluationTestCase testCase) throws Exception {
     ImmutableList<MessageLiteDescriptor> withoutChildMessages =
@@ -3002,7 +3024,7 @@ public final class CelLiteRuntimeVersionSkewTest {
             }));
   }
 
-  private Object eval(String expression, TestAllTypes message) throws Exception {
+  private Object eval(String expression, MessageLite message) throws Exception {
     CelAbstractSyntaxTree ast = serverCompiler.compile(expression).getAst();
     CelAbstractSyntaxTree optimizedAst = serverOptimizer.optimize(ast);
     Program program = clientRuntime.createProgram(optimizedAst);

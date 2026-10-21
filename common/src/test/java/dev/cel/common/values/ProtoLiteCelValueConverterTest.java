@@ -22,6 +22,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.primitives.UnsignedLong;
 import com.google.common.truth.Expect;
+import com.google.protobuf.Any;
 import com.google.protobuf.BoolValue;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.BytesValue;
@@ -33,6 +34,7 @@ import com.google.protobuf.FieldMask;
 import com.google.protobuf.FloatValue;
 import com.google.protobuf.Int32Value;
 import com.google.protobuf.Int64Value;
+import com.google.protobuf.Message;
 import com.google.protobuf.MessageLite;
 import com.google.protobuf.StringValue;
 import com.google.protobuf.TextFormat;
@@ -148,10 +150,10 @@ public final class ProtoLiteCelValueConverterTest {
     UINT64(UInt64Value.of(1L), UnsignedLong.valueOf(1L)),
     ;
 
-    private final MessageLite msg;
+    private final Message msg;
     private final Object value;
 
-    WellKnownProtoTestCase(MessageLite msg, Object value) {
+    WellKnownProtoTestCase(Message msg, Object value) {
       this.msg = msg;
       this.value = value;
     }
@@ -174,6 +176,87 @@ public final class ProtoLiteCelValueConverterTest {
     assertThat(adaptedValue).isInstanceOf(ProtoMessageLiteValue.class);
     assertThat(((ProtoMessageLiteValue) adaptedValue).select("paths"))
         .isEqualTo(ImmutableList.of("foo", "bar"));
+  }
+
+  @Test
+  public void toRuntimeValue_anyWithWellKnownProto_unpacksToCelValue(
+      @TestParameter WellKnownProtoTestCase testCase) {
+    Object adaptedValue = PROTO_LITE_CEL_VALUE_CONVERTER.toRuntimeValue(Any.pack(testCase.msg));
+
+    assertThat(adaptedValue).isEqualTo(testCase.value);
+  }
+
+  @Test
+  public void toRuntimeValue_anyWithRegisteredMessage_returnsProtoMessageLiteValue() {
+    TestAllTypes msg = TestAllTypes.newBuilder().setSingleInt64(42L).build();
+
+    Object adaptedValue = PROTO_LITE_CEL_VALUE_CONVERTER.toRuntimeValue(Any.pack(msg));
+
+    assertThat(adaptedValue).isInstanceOf(ProtoMessageLiteValue.class);
+    assertThat(((ProtoMessageLiteValue) adaptedValue).value()).isEqualTo(msg);
+  }
+
+  @Test
+  public void toRuntimeValue_anyWithUnregisteredMessage_returnsRawValueOfPackedType() {
+    ProtoLiteCelValueConverter wellKnownOnlyConverter =
+        ProtoLiteCelValueConverter.newInstance(DefaultLiteDescriptorPool.newInstance());
+    TestAllTypes msg = TestAllTypes.newBuilder().setSingleInt64(42L).build();
+
+    Object adaptedValue = wellKnownOnlyConverter.toRuntimeValue(Any.pack(msg));
+
+    assertThat(adaptedValue).isInstanceOf(RawProtoMessageLiteValue.class);
+    RawProtoMessageLiteValue rawValue = (RawProtoMessageLiteValue) adaptedValue;
+    assertThat(rawValue.protoTypeName()).isEqualTo(PROTO3_TEST_ALL_TYPES);
+    assertThat(rawValue.toByteString()).isEqualTo(msg.toByteString());
+  }
+
+  @Test
+  public void toRuntimeValue_anyNestedToMaxDepth_unpacks() {
+    Object adaptedValue = PROTO_LITE_CEL_VALUE_CONVERTER.toRuntimeValue(nestedAny(100));
+
+    assertThat(adaptedValue).isEqualTo(42L);
+  }
+
+  @Test
+  public void toRuntimeValue_anyNestedBeyondMaxDepth_throws() {
+    Any any = nestedAny(101);
+
+    IllegalArgumentException thrown =
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> PROTO_LITE_CEL_VALUE_CONVERTER.toRuntimeValue(any));
+
+    assertThat(thrown)
+        .hasMessageThat()
+        .isEqualTo("Unpacking failed for message: google.protobuf.Any (nesting exceeds 100)");
+  }
+
+  @Test
+  public void toRuntimeValue_anyWithMalformedTypeUrl_throws(
+      @TestParameter({"", "type.googleapis.com/"}) String typeUrl) {
+    Any any =
+        Any.newBuilder().setTypeUrl(typeUrl).setValue(Int64Value.of(1L).toByteString()).build();
+
+    IllegalArgumentException thrown =
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> PROTO_LITE_CEL_VALUE_CONVERTER.toRuntimeValue(any));
+
+    assertThat(thrown)
+        .hasMessageThat()
+        .isEqualTo(
+            "Unpacking failed for message: google.protobuf.Any (malformed type URL: '"
+                + typeUrl
+                + "')");
+  }
+
+  /** Returns {@code layers} Anys nested around an {@code Int64Value} of 42. */
+  private static Any nestedAny(int layers) {
+    Any any = Any.pack(Int64Value.of(42L));
+    for (int i = 1; i < layers; i++) {
+      any = Any.pack(any);
+    }
+    return any;
   }
 
   /** Test cases for repeated_int64: 1L,2L,3L */

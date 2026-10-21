@@ -426,6 +426,9 @@ public final class ProtoMessageLiteValueTest {
     DOUBLE_WRAPPER("single_double_wrapper", 8.5d),
     STRING_WRAPPER("single_string_wrapper", "hello"),
     BYTES_WRAPPER("single_bytes_wrapper", CelByteString.of(new byte[] {0x02})),
+    ANY("single_any", true),
+    REPEATED_ANY("repeated_any", ImmutableList.of(true)),
+    MAP_STRING_ANY("map_string_any", ImmutableMap.of("key", true)),
     REPEATED_INT64("repeated_int64", ImmutableList.of(5L, 6L)),
     REPEATED_UINT64(
         "repeated_uint64", ImmutableList.of(UnsignedLong.valueOf(7L), UnsignedLong.valueOf(8L))),
@@ -473,8 +476,6 @@ public final class ProtoMessageLiteValueTest {
 
   @Test
   public void selectField_success(@TestParameter SelectFieldTestCase testCase) {
-    // Converting Any isn't supported in lite yet, so it's set in a singular, a repeated and a map
-    // field to verify that selecting any other field doesn't attempt to convert it.
     Any any = Any.pack(DynamicMessage.newBuilder(BoolValue.of(true)).build());
     TestAllTypes testAllTypes =
         TestAllTypes.newBuilder()
