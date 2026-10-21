@@ -38,11 +38,12 @@ def _expand_tests_to_skip(tests_to_skip):
             result.append(test_to_skip[0:slash] + part)
     return result
 
-def _conformance_test_args(data, skip_tests, runtime):
+def _conformance_test_args(data, skip_tests, runtime, enable_select_optimization):
     return [
         "-Ddev.cel.conformance.ConformanceTests.skip_tests={}".format(",".join(_expand_tests_to_skip(skip_tests))),
         "-Ddev.cel.conformance.ConformanceTests.tests={}".format(",".join(["$(location {})".format(t) for t in data])),
         "-Ddev.cel.conformance.ConformanceTests.runtime={}".format(runtime),
+        "-Ddev.cel.conformance.ConformanceTests.enable_select_optimization={}".format(enable_select_optimization),
     ]
 
 MODE = struct(
@@ -60,7 +61,13 @@ RUNTIME = struct(
     LITE = "LITE",
 )
 
-def conformance_test(name, data, mode = MODE.TEST, skip_tests = [], runtime = RUNTIME.LEGACY):
+def conformance_test(
+        name,
+        data,
+        mode = MODE.TEST,
+        skip_tests = [],
+        runtime = RUNTIME.LEGACY,
+        enable_select_optimization = False):
     """Executes conformance tests
 
     Args:
@@ -74,11 +81,12 @@ def conformance_test(name, data, mode = MODE.TEST, skip_tests = [], runtime = RU
                    exclude from the run.
        runtime: The CEL runtime implementation to evaluate against (`RUNTIME.LEGACY`,
                 `RUNTIME.PLANNER`, or `RUNTIME.LITE`).
+       enable_select_optimization: Whether to optimize checked ASTs with `SelectOptimizer`.
     """
     if mode == MODE.DASHBOARD:
         java_test(
             name = "_" + name,
-            jvm_flags = _conformance_test_args(data, skip_tests, runtime),
+            jvm_flags = _conformance_test_args(data, skip_tests, runtime, enable_select_optimization),
             data = data,
             size = "small",
             test_class = "dev.cel.conformance.ConformanceTests",
@@ -104,7 +112,7 @@ def conformance_test(name, data, mode = MODE.TEST, skip_tests = [], runtime = RU
     elif mode == MODE.TEST:
         java_test(
             name = name,
-            jvm_flags = _conformance_test_args(data, skip_tests, runtime),
+            jvm_flags = _conformance_test_args(data, skip_tests, runtime, enable_select_optimization),
             data = data,
             size = "small",
             test_class = "dev.cel.conformance.ConformanceTests",
@@ -113,7 +121,7 @@ def conformance_test(name, data, mode = MODE.TEST, skip_tests = [], runtime = RU
     elif mode == MODE.MAVEN_TEST:
         java_test(
             name = name,
-            jvm_flags = _conformance_test_args(data, skip_tests, runtime),
+            jvm_flags = _conformance_test_args(data, skip_tests, runtime, enable_select_optimization),
             data = data,
             size = "small",
             test_class = "dev.cel.conformance.ConformanceTests",

@@ -62,6 +62,8 @@ import dev.cel.extensions.CelMathRuntimeLibrary;
 import dev.cel.extensions.CelOptionalLibrary;
 import dev.cel.extensions.CelSetsRuntimeLibrary;
 import dev.cel.extensions.CelStringRuntimeLibrary;
+import dev.cel.optimizer.CelOptimizerFactory;
+import dev.cel.optimizer.optimizers.SelectOptimizer;
 import dev.cel.parser.CelMacro;
 import dev.cel.parser.CelMacroExpander;
 import dev.cel.parser.CelMacroExprFactory;
@@ -72,6 +74,7 @@ import dev.cel.parser.CelStandardMacro;
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelLiteRuntimeFactory;
 import dev.cel.runtime.CelLiteRuntimeLibrary;
+import dev.cel.runtime.CelRuntime;
 import dev.cel.runtime.CelRuntimeBuilder;
 import dev.cel.runtime.CelRuntimeFactory;
 import dev.cel.runtime.CelRuntimeImpl;
@@ -144,6 +147,12 @@ public final class ConformanceTest extends Statement {
       ProtoMessageTypeProvider.newBuilder()
           .addFileDescriptors(CONFORMANCE_FILE_DESCRIPTORS)
           .build();
+
+  private static final SelectOptimizer SELECT_OPTIMIZER =
+      SelectOptimizer.newInstance(CONFORMANCE_FILE_DESCRIPTORS);
+
+  private static final CelRuntime UNUSED_RUNTIME =
+      CelRuntimeFactory.plannerRuntimeBuilder().build();
 
   enum RuntimeType {
     LEGACY,
@@ -230,6 +239,7 @@ public final class ConformanceTest extends Statement {
   private final SimpleTest test;
   private final boolean skip;
   private final RuntimeType runtimeType;
+  private final boolean enableSelectOptimization;
 
   public String getName() {
     return name;
@@ -241,23 +251,22 @@ public final class ConformanceTest extends Statement {
 
   @Override
   public void evaluate() throws Throwable {
-    CelValidationResult response = getParser(test).parse(test.getExpr(), test.getName());
-    assertThat(response.getErrors()).isEmpty();
-    if (!test.getDisableCheck()) {
-      response = getChecker(test).check(response.getAst());
-    }
+    CelParser parser = getParser(test);
+    CelValidationResult response = parser.parse(test.getExpr(), test.getName());
     assertThat(response.getErrors()).isEmpty();
     CelAbstractSyntaxTree ast = response.getAst();
-    if (ast.getExpr().callOrDefault().function().equals(CelBlock.FUNCTION_NAME)) {
-      ast =
-          CelAbstractSyntaxTree.newCheckedAst(
-              ast.getExpr(),
-              ast.getSource().toBuilder()
-                  .addAllExtensions(
-                      Extension.create("cel_block", Version.of(1, 1), Component.COMPONENT_RUNTIME))
-                  .build(),
-              ast.getReferenceMap(),
-              ast.getTypeMap());
+    if (!test.getDisableCheck()) {
+      CelChecker checker = getChecker(test);
+      response = checker.check(ast);
+      assertThat(response.getErrors()).isEmpty();
+      ast = response.getAst();
+      if (enableSelectOptimization) {
+        ast =
+            CelOptimizerFactory.standardCelOptimizerBuilder(parser, checker, UNUSED_RUNTIME)
+                .addAstOptimizers(SELECT_OPTIMIZER)
+                .build()
+                .optimize(ast);
+      }
     }
     Type resultType = CelProtoTypes.celTypeToType(ast.getResultType());
 
@@ -270,6 +279,18 @@ public final class ConformanceTest extends Statement {
     if (runtimeType.equals(RuntimeType.LEGACY) && test.getDisableCheck()) {
       // Only planner and lite runtime support parsed-only evaluation
       return;
+    }
+
+    if (ast.getExpr().callOrDefault().function().equals(CelBlock.FUNCTION_NAME)) {
+      ast =
+          CelAbstractSyntaxTree.newCheckedAst(
+              ast.getExpr(),
+              ast.getSource().toBuilder()
+                  .addAllExtensions(
+                      Extension.create("cel_block", Version.of(1, 1), Component.COMPONENT_RUNTIME))
+                  .build(),
+              ast.getReferenceMap(),
+              ast.getTypeMap());
     }
 
     ExprValue result = null;
@@ -343,11 +364,17 @@ public final class ConformanceTest extends Statement {
     return builder.build().createProgram(ast);
   }
 
-  ConformanceTest(String name, SimpleTest test, boolean skip, RuntimeType runtimeType) {
+  ConformanceTest(
+      String name,
+      SimpleTest test,
+      boolean skip,
+      RuntimeType runtimeType,
+      boolean enableSelectOptimization) {
     this.name = checkNotNull(name);
     this.test = defaultTestMatcherToTrueIfUnset(checkNotNull(test));
     this.skip = skip;
     this.runtimeType = checkNotNull(runtimeType);
+    this.enableSelectOptimization = enableSelectOptimization;
   }
 
   /**

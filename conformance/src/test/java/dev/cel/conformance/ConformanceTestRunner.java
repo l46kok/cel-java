@@ -44,6 +44,7 @@ public final class ConformanceTestRunner extends ParentRunner<ConformanceTest> {
   private final ImmutableSortedMap<String, SimpleTestFile> testFiles;
   private final ImmutableList<String> testsToSkip;
   private final RuntimeType runtimeType;
+  private final boolean enableSelectOptimization;
 
   private static ImmutableSortedMap<String, SimpleTestFile> loadTestFiles() {
     List<String> testPaths =
@@ -89,7 +90,9 @@ public final class ConformanceTestRunner extends ParentRunner<ConformanceTest> {
         for (SimpleTest test : testSection.getTestList()) {
           String name =
               String.format("%s/%s/%s", testFile.getName(), testSection.getName(), test.getName());
-          tests.add(new ConformanceTest(name, test, shouldSkipTest(name), runtimeType));
+          tests.add(
+              new ConformanceTest(
+                  name, test, shouldSkipTest(name), runtimeType, enableSelectOptimization));
         }
       }
     }
@@ -128,5 +131,9 @@ public final class ConformanceTestRunner extends ParentRunner<ConformanceTest> {
     runtimeType =
         RuntimeType.valueOf(
             System.getProperty("dev.cel.conformance.ConformanceTests.runtime", "LEGACY"));
+    enableSelectOptimization =
+        Boolean.parseBoolean(
+            System.getProperty(
+                "dev.cel.conformance.ConformanceTests.enable_select_optimization", "false"));
   }
 }

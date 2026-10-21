@@ -41,6 +41,8 @@ java_library(
         "//extensions:optional_library",
         "//extensions:sets_runtime_library",
         "//extensions:strings_runtime_library",
+        "//optimizer",
+        "//optimizer/optimizers:select_optimizer",
         "//parser:macro",
         "//parser:parser_builder",
         "//parser:parser_factory",
@@ -81,6 +83,8 @@ java_library(
         "//:java_truth",
         "//common/values:proto_message_lite_value_provider",
         "//compiler:compiler_builder",
+        "//optimizer",
+        "//optimizer/optimizers:select_optimizer",
         "//parser:parser_factory",
         "//runtime:lite_runtime",
         "//runtime:lite_runtime_factory",
@@ -189,7 +193,13 @@ _TESTS_TO_SKIP_PLANNER = [
     "enums/strong_proto3",
 ]
 
-_TESTS_TO_SKIP_LITE = _TESTS_TO_SKIP_PLANNER + [
+_TESTS_TO_SKIP_PLANNER_SELECT_OPT = _TESTS_TO_SKIP_PLANNER + [
+    # TODO: Optional field selection on proto messages is not yet supported by
+    # SelectOptimizer.
+    "optionals",
+]
+
+_TESTS_TO_SKIP_LITE_SELECT_OPT = _TESTS_TO_SKIP_PLANNER + [
     # Optionals are not supported in CelLiteRuntime.
     "optionals",
     "block_ext/basic/optional_list,optional_map,optional_map_chained,optional_message",
@@ -199,17 +209,11 @@ _TESTS_TO_SKIP_LITE = _TESTS_TO_SKIP_PLANNER + [
     "proto2/extensions_has",
     "proto2/extensions_get",
 
-    # Custom proto2 default values on unset fields require SelectOptimization in CelLiteRuntime.
-    "proto2/empty_field/scalar_with_default",
-
     # TODO: Proto equality after dyn() unwrapping is not yet supported in
     # CelLiteRuntime.
     "comparisons/eq_literal/not_eq_dyn_proto2_msg_null,not_eq_dyn_proto3_msg_null",
     "comparisons/eq_wrapper/eq_proto_different_types",
     "comparisons/ne_literal/ne_proto_different_types",
-
-    # TODO: google.protobuf.Any unpacking is not yet supported in CelLiteRuntime.
-    "dynamic/any/literal_empty,var",
 
     # TODO: Message creation with prepopulated fields is not yet supported in
     # CelLiteRuntime.
@@ -259,6 +263,11 @@ _TESTS_TO_SKIP_LITE = _TESTS_TO_SKIP_PLANNER + [
     "wrappers",
 ]
 
+_TESTS_TO_SKIP_LITE = _TESTS_TO_SKIP_LITE_SELECT_OPT + [
+    # Custom proto2 default values on unset fields require SelectOptimization in CelLiteRuntime.
+    "proto2/empty_field/scalar_with_default",
+]
+
 conformance_test(
     name = "conformance",
     data = _ALL_TESTS,
@@ -286,8 +295,24 @@ conformance_test(
 )
 
 conformance_test(
+    name = "conformance_planner_select_opt",
+    data = _ALL_TESTS,
+    enable_select_optimization = True,
+    runtime = RUNTIME.PLANNER,
+    skip_tests = _TESTS_TO_SKIP_PLANNER_SELECT_OPT,
+)
+
+conformance_test(
     name = "conformance_lite",
     data = _ALL_TESTS,
     runtime = RUNTIME.LITE,
     skip_tests = _TESTS_TO_SKIP_LITE,
+)
+
+conformance_test(
+    name = "conformance_lite_select_opt",
+    data = _ALL_TESTS,
+    enable_select_optimization = True,
+    runtime = RUNTIME.LITE,
+    skip_tests = _TESTS_TO_SKIP_LITE_SELECT_OPT,
 )
