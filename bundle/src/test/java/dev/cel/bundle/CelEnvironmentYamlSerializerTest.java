@@ -16,6 +16,7 @@ package dev.cel.bundle;
 
 import static com.google.common.truth.Truth.assertThat;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.junit.Assert.assertThrows;
 
 import com.google.common.base.Ascii;
 import com.google.common.collect.ImmutableList;
@@ -31,6 +32,7 @@ import dev.cel.bundle.CelEnvironment.VariableDecl;
 import dev.cel.common.CelContainer;
 import java.io.IOException;
 import java.net.URL;
+import java.util.Optional;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -168,15 +170,18 @@ public final class CelEnvironmentYamlSerializerTest {
                                                 .build())
                                         .build())
                                 .build())),
-                    FunctionDecl.create(
-                        "coalesce",
-                        ImmutableSet.of(
-                            OverloadDecl.newBuilder()
-                                .setId("coalesce_null_int")
-                                .setTarget(TypeDecl.create("google.protobuf.Int64Value"))
-                                .setArguments(ImmutableList.of(TypeDecl.create("int")))
-                                .setReturnType(TypeDecl.create("int"))
-                                .build()))))
+                    FunctionDecl.newBuilder()
+                        .setName("coalesce")
+                        .setDescription("")
+                        .setOverloads(
+                            ImmutableSet.of(
+                                OverloadDecl.newBuilder()
+                                    .setId("coalesce_null_int")
+                                    .setTarget(TypeDecl.create("google.protobuf.Int64Value"))
+                                    .setArguments(ImmutableList.of(TypeDecl.create("int")))
+                                    .setReturnType(TypeDecl.create("int"))
+                                    .build()))
+                        .build()))
             .setStandardLibrarySubset(
                 LibrarySubset.newBuilder()
                     .setDisabled(true)
@@ -197,7 +202,8 @@ public final class CelEnvironmentYamlSerializerTest {
                 CelEnvironment.Limit.create("cel.limit.parse_recursion_depth", 7))
             .build();
 
-    String yamlOutput = CelEnvironmentYamlSerializer.toYaml(environment);
+    String yamlOutput =
+        CelEnvironmentYamlSerializer.toYaml(environment, /* useTypeSignatures= */ false);
     try {
       String yamlFileContent = readFile("environment/dump_env.yaml");
       // Strip the license at the beginning of the file
@@ -230,7 +236,8 @@ public final class CelEnvironmentYamlSerializerTest {
                     .build())
             .build();
 
-    String yamlOutput = CelEnvironmentYamlSerializer.toYaml(environment);
+    String yamlOutput =
+        CelEnvironmentYamlSerializer.toYaml(environment, /* useTypeSignatures= */ false);
 
     String expectedYaml =
         "name: dump_env\n"
@@ -246,5 +253,134 @@ public final class CelEnvironmentYamlSerializerTest {
             + "    - id: add_list\n";
 
     assertThat(yamlOutput).isEqualTo(expectedYaml);
+  }
+
+  @Test
+  public void toYaml_useTypeSignatures() throws Exception {
+    CelEnvironment environment =
+        CelEnvironment.newBuilder()
+            .setName("signature_env")
+            .setVariables(
+                ImmutableSet.of(
+                    VariableDecl.newBuilder()
+                        .setName("msg")
+                        .setDescription("message variable")
+                        .setType(TypeDecl.create("google.rpc.context.AttributeContext.Request"))
+                        .build(),
+                    VariableDecl.create(
+                        "map_var",
+                        TypeDecl.newBuilder()
+                            .setName("map")
+                            .addParams(TypeDecl.create("string"))
+                            .addParams(TypeDecl.ofTypeParam("V"))
+                            .build()),
+                    VariableDecl.create("str_wrapper", TypeDecl.create("string_wrapper")),
+                    VariableDecl.create("timestamp_var", TypeDecl.create("timestamp"))))
+            .setFunctions(
+                ImmutableSet.of(
+                    FunctionDecl.newBuilder()
+                        .setName("getOrDefault")
+                        .setDescription("Returns the value of a key or default.")
+                        .setOverloads(
+                            ImmutableSet.of(
+                                OverloadDecl.newBuilder()
+                                    .setId("getOrDefault_key_value")
+                                    .setTarget(
+                                        TypeDecl.newBuilder()
+                                            .setName("map")
+                                            .addParams(
+                                                TypeDecl.ofTypeParam("K"),
+                                                TypeDecl.ofTypeParam("V"))
+                                            .build())
+                                    .setArguments(
+                                        ImmutableList.of(
+                                            TypeDecl.ofTypeParam("K"), TypeDecl.ofTypeParam("V")))
+                                    .addExamples("{'a': 1}.getOrDefault('a', 0) // 1")
+                                    .setReturnType(TypeDecl.ofTypeParam("V"))
+                                    .build()))
+                        .build(),
+                    FunctionDecl.create(
+                        "contains",
+                        ImmutableSet.of(
+                            OverloadDecl.newBuilder()
+                                .setId("contains(list<~T>,~T)")
+                                .setArguments(
+                                    ImmutableList.of(
+                                        TypeDecl.newBuilder()
+                                            .setName("list")
+                                            .addParams(TypeDecl.ofTypeParam("T"))
+                                            .build(),
+                                        TypeDecl.ofTypeParam("T")))
+                                .addExamples("contains([1, 2, 3], 2) // true")
+                                .setReturnType(TypeDecl.create("bool"))
+                                .build())),
+                    FunctionDecl.create(
+                        "coalesce",
+                        ImmutableSet.of(
+                            OverloadDecl.newBuilder()
+                                .setId("coalesce_null_int")
+                                .setTarget(TypeDecl.create("int_wrapper"))
+                                .setArguments(ImmutableList.of(TypeDecl.create("int")))
+                                .setReturnType(TypeDecl.create("int"))
+                                .build()))))
+            .build();
+
+    String yamlOutput =
+        CelEnvironmentYamlSerializer.toYaml(environment, /* useTypeSignatures= */ true);
+
+    String expectedYaml =
+        "name: signature_env\n"
+            + "variables:\n"
+            + "- name: msg\n"
+            + "  description: message variable\n"
+            + "  type: google.rpc.context.AttributeContext.Request\n"
+            + "- name: map_var\n"
+            + "  type: map<string,~V>\n"
+            + "- name: str_wrapper\n"
+            + "  type: string_wrapper\n"
+            + "- name: timestamp_var\n"
+            + "  type: timestamp\n"
+            + "functions:\n"
+            + "- name: getOrDefault\n"
+            + "  description: Returns the value of a key or default.\n"
+            + "  overloads:\n"
+            + "  - id: getOrDefault_key_value\n"
+            + "    signature: map<~K,~V>.getOrDefault(~K,~V)\n"
+            + "    examples:\n"
+            + "    - '{''a'': 1}.getOrDefault(''a'', 0) // 1'\n"
+            + "    return: ~V\n"
+            + "- name: contains\n"
+            + "  overloads:\n"
+            + "  - signature: contains(list<~T>,~T)\n"
+            + "    examples:\n"
+            + "    - contains([1, 2, 3], 2) // true\n"
+            + "    return: bool\n"
+            + "- name: coalesce\n"
+            + "  overloads:\n"
+            + "  - id: coalesce_null_int\n"
+            + "    signature: int_wrapper.coalesce(int)\n"
+            + "    return: int\n";
+
+    assertThat(yamlOutput).isEqualTo(expectedYaml);
+
+    CelEnvironment roundTripped =
+        CelEnvironmentYamlParser.newInstance().parse(yamlOutput).toBuilder()
+            .setSource(Optional.empty())
+            .build();
+    assertThat(roundTripped).isEqualTo(environment);
+  }
+
+  @Test
+  public void toYaml_useTypeSignatures_invalidTypeDecl_throws() {
+    CelEnvironment environment =
+        CelEnvironment.newBuilder()
+            .setName("invalid_env")
+            .setVariables(
+                ImmutableSet.of(VariableDecl.create("invalid_var", TypeDecl.create("list"))))
+            .build();
+
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> CelEnvironmentYamlSerializer.toYaml(environment, /* useTypeSignatures= */ true));
   }
 }

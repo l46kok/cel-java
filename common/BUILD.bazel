@@ -41,15 +41,27 @@ cel_android_library(
 )
 
 java_library(
-    name = "cel_signature_utils",
+    name = "cel_overload_decl_formatter",
     visibility = ["//:internal"],
-    exports = ["//common/src/main/java/dev/cel/common:cel_signature_utils"],
+    exports = ["//common/src/main/java/dev/cel/common:cel_overload_decl_formatter"],
 )
 
 cel_android_library(
-    name = "cel_signature_utils_android",
+    name = "cel_overload_decl_formatter_android",
     visibility = ["//:internal"],
-    exports = ["//common/src/main/java/dev/cel/common:cel_signature_utils_android"],
+    exports = ["//common/src/main/java/dev/cel/common:cel_overload_decl_formatter_android"],
+)
+
+java_library(
+    name = "type_specifier_formatter",
+    visibility = ["//:internal"],
+    exports = ["//common/src/main/java/dev/cel/common:type_specifier_formatter"],
+)
+
+cel_android_library(
+    name = "type_specifier_formatter_android",
+    visibility = ["//:internal"],
+    exports = ["//common/src/main/java/dev/cel/common:type_specifier_formatter_android"],
 )
 
 java_library(

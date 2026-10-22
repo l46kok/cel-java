@@ -14,6 +14,7 @@
 
 package dev.cel.bundle;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableList.toImmutableList;
@@ -35,12 +36,17 @@ import dev.cel.common.CelContainer;
 import dev.cel.common.CelFunctionDecl;
 import dev.cel.common.CelOptions;
 import dev.cel.common.CelOverloadDecl;
+import dev.cel.common.CelOverloadDeclFormatter;
 import dev.cel.common.CelVarDecl;
 import dev.cel.common.Source;
+import dev.cel.common.types.CelKind;
 import dev.cel.common.types.CelType;
 import dev.cel.common.types.CelTypeProvider;
+import dev.cel.common.types.CelTypes;
 import dev.cel.common.types.ListType;
 import dev.cel.common.types.MapType;
+import dev.cel.common.types.NullableType;
+import dev.cel.common.types.OpaqueType;
 import dev.cel.common.types.OptionalType;
 import dev.cel.common.types.SimpleType;
 import dev.cel.common.types.TypeParamType;
@@ -55,6 +61,7 @@ import dev.cel.runtime.CelRuntimeBuilder;
 import dev.cel.runtime.CelRuntimeLibrary;
 import java.util.Arrays;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.function.ObjIntConsumer;
 
 /**
@@ -545,8 +552,12 @@ public abstract class CelEnvironment {
   public abstract static class OverloadDecl {
 
     /**
-     * A unique overload ID. Required. This should follow the typical naming convention used in CEL
-     * (e.g: targetType_func_argType1_argType...)
+     * A unique overload ID. Required.
+     *
+     * <p>This can follow the typical naming convention used in CEL (e.g. {@code
+     * targetType_func_argType1_argType...}) or use a canonical overload signature (e.g. {@code
+     * targetType.func(argType1,argType2)}). When parsed from YAML with a {@code signature} field
+     * and no explicit {@code id}, this defaults to the {@code signature} string.
      */
     public abstract String id();
 
@@ -623,21 +634,29 @@ public abstract class CelEnvironment {
 
     /** Converts this policy function overload into a {@link CelOverloadDecl}. */
     public CelOverloadDecl toCelOverloadDecl(CelTypeProvider celTypeProvider) {
+      return toCelOverloadDecl(celTypeProvider::findType);
+    }
+
+    CelOverloadDecl toCelOverloadDecl() {
+      return toCelOverloadDecl(typeName -> Optional.of(OpaqueType.create(typeName)));
+    }
+
+    private CelOverloadDecl toCelOverloadDecl(Function<String, Optional<CelType>> typeFinder) {
       CelOverloadDecl.Builder builder =
           CelOverloadDecl.newBuilder()
               .setIsInstanceFunction(false)
               .setOverloadId(id())
-              .setResultType(returnType().toCelType(celTypeProvider));
+              .setResultType(returnType().toCelType(typeFinder));
 
       target()
           .ifPresent(
               t ->
                   builder
                       .setIsInstanceFunction(true)
-                      .addParameterTypes(t.toCelType(celTypeProvider)));
+                      .addParameterTypes(t.toCelType(typeFinder)));
 
       for (TypeDecl type : arguments()) {
-        builder.addParameterTypes(type.toCelType(celTypeProvider));
+        builder.addParameterTypes(type.toCelType(typeFinder));
       }
 
       return builder.build();
@@ -709,20 +728,70 @@ public abstract class CelEnvironment {
       return newBuilder().setName(typeParamName).setIsTypeParam(true).build();
     }
 
+    /** Converts a {@link CelType} into a {@link TypeDecl}. */
+    static TypeDecl fromCelType(CelType type) {
+      if (type.kind() == CelKind.ERROR
+          || type.kind() == CelKind.UNSPECIFIED
+          || (type.kind() == CelKind.OPAQUE && type.name().equals("function"))) {
+        throw new IllegalArgumentException("Unsupported type: " + type.name());
+      }
+      if (type instanceof NullableType) {
+        switch (((NullableType) type).targetType().kind()) {
+          case BOOL:
+            return TypeDecl.create(CelTypes.BOOL_WRAPPER_MESSAGE);
+          case BYTES:
+            return TypeDecl.create(CelTypes.BYTES_WRAPPER_MESSAGE);
+          case DOUBLE:
+            return TypeDecl.create(CelTypes.DOUBLE_WRAPPER_MESSAGE);
+          case INT:
+            return TypeDecl.create(CelTypes.INT64_WRAPPER_MESSAGE);
+          case STRING:
+            return TypeDecl.create(CelTypes.STRING_WRAPPER_MESSAGE);
+          case UINT:
+            return TypeDecl.create(CelTypes.UINT64_WRAPPER_MESSAGE);
+          default:
+            throw new IllegalArgumentException("Unsupported wrapper type: " + type.name());
+        }
+      }
+      return TypeDecl.newBuilder()
+          .setName(type.name())
+          .setIsTypeParam(type.kind() == CelKind.TYPE_PARAM)
+          .addParams(
+              type.parameters().stream().map(TypeDecl::fromCelType).collect(toImmutableList()))
+          .build();
+    }
+
     public static TypeDecl.Builder newBuilder() {
       return new AutoValue_CelEnvironment_TypeDecl.Builder().setIsTypeParam(false);
     }
 
     /** Converts this type declaration into a {@link CelType}. */
     public CelType toCelType(CelTypeProvider celTypeProvider) {
+      return toCelType(celTypeProvider::findType);
+    }
+
+    CelType toCelType() {
+      return toCelType(typeName -> Optional.of(OpaqueType.create(typeName)));
+    }
+
+    private CelType toCelType(Function<String, Optional<CelType>> typeFinder) {
+      if (isTypeParam()) {
+        if (!params().isEmpty()) {
+          throw new IllegalArgumentException(
+              "Type param has unexpected param count: " + params().size());
+        }
+        return TypeParamType.create(name());
+      }
       switch (name()) {
+        case "*error*":
+          throw new IllegalArgumentException("Unsupported type name: " + name());
         case "list":
           if (params().size() != 1) {
             throw new IllegalArgumentException(
                 "List type has unexpected param count: " + params().size());
           }
 
-          CelType elementType = params().get(0).toCelType(celTypeProvider);
+          CelType elementType = params().get(0).toCelType(typeFinder);
           return ListType.create(elementType);
         case "map":
           if (params().size() != 2) {
@@ -730,38 +799,72 @@ public abstract class CelEnvironment {
                 "Map type has unexpected param count: " + params().size());
           }
 
-          CelType keyType = params().get(0).toCelType(celTypeProvider);
-          CelType valueType = params().get(1).toCelType(celTypeProvider);
+          CelType keyType = params().get(0).toCelType(typeFinder);
+          CelType valueType = params().get(1).toCelType(typeFinder);
           return MapType.create(keyType, valueType);
         case "type":
           checkState(
               params().size() == 1, "Expected 1 parameter for type, got %s", params().size());
-          return TypeType.create(params().get(0).toCelType(celTypeProvider));
+          return TypeType.create(params().get(0).toCelType(typeFinder));
+        case OptionalType.NAME:
+          checkState(
+              params().size() == 1,
+              "Optional type must have exactly 1 parameter. Found %s",
+              params().size());
+          return OptionalType.create(params().get(0).toCelType(typeFinder));
         default:
-          if (isTypeParam()) {
-            return TypeParamType.create(name());
-          }
+          break;
+      }
 
-          if (name().equals("dyn")) {
-            return SimpleType.DYN;
-          }
+      Optional<CelType> builtinType = findCelTypeByName(name());
+      if (builtinType.isPresent()) {
+        checkArgument(
+            params().isEmpty(), "Type %s cannot have type parameters", name());
+        return builtinType.get();
+      }
 
-          CelType simpleType = SimpleType.findByName(name()).orElse(null);
-          if (simpleType != null) {
+      CelType resolvedType =
+          typeFinder
+              .apply(name())
+              .orElseThrow(
+                  () -> new IllegalArgumentException("Undefined type name: " + name()));
+      if (!params().isEmpty()) {
+        return resolvedType.withParameters(
+            params().stream().map(p -> p.toCelType(typeFinder)).collect(toImmutableList()));
+      }
+      return resolvedType;
+    }
+
+    private static Optional<CelType> findCelTypeByName(String name) {
+      switch (name) {
+        case "dyn":
+          return Optional.of(SimpleType.DYN);
+        case "null":
+          return Optional.of(SimpleType.NULL_TYPE);
+        case "any":
+          return Optional.of(SimpleType.ANY);
+        case "timestamp":
+          return Optional.of(SimpleType.TIMESTAMP);
+        case "duration":
+          return Optional.of(SimpleType.DURATION);
+        case "bool_wrapper":
+          return Optional.of(NullableType.create(SimpleType.BOOL));
+        case "bytes_wrapper":
+          return Optional.of(NullableType.create(SimpleType.BYTES));
+        case "double_wrapper":
+          return Optional.of(NullableType.create(SimpleType.DOUBLE));
+        case "int_wrapper":
+          return Optional.of(NullableType.create(SimpleType.INT));
+        case "string_wrapper":
+          return Optional.of(NullableType.create(SimpleType.STRING));
+        case "uint_wrapper":
+          return Optional.of(NullableType.create(SimpleType.UINT));
+        default:
+          Optional<CelType> simpleType = SimpleType.findByName(name);
+          if (simpleType.isPresent()) {
             return simpleType;
           }
-
-          if (name().equals(OptionalType.NAME)) {
-            checkState(
-                params().size() == 1,
-                "Optional type must have exactly 1 parameter. Found %s",
-                params().size());
-            return OptionalType.create(params().get(0).toCelType(celTypeProvider));
-          }
-
-          return celTypeProvider
-              .findType(name())
-              .orElseThrow(() -> new IllegalArgumentException("Undefined type name: " + name()));
+          return CelTypes.getWellKnownCelType(name);
       }
     }
   }
@@ -1057,6 +1160,15 @@ public abstract class CelEnvironment {
             .setOverloads(ImmutableSet.of());
       }
 
+      /**
+       * Creates a new {@link FunctionSelector} matching the given function {@code name} and {@code
+       * overloads}.
+       *
+       * @param name the function name to match
+       * @param overloads the overload IDs or canonical overload signatures (e.g. {@code
+       *     "add_bytes"} or {@code "_+_(bytes,bytes)"}) to match, or empty to match all overloads
+       *     of the function
+       */
       public static FunctionSelector create(String name, ImmutableSet<String> overloads) {
         return newBuilder()
             .setName(name)
@@ -1072,6 +1184,7 @@ public abstract class CelEnvironment {
           StandardOverload overload,
           ImmutableSet<FunctionSelector> selectors) {
         String functionName = function.functionDecl().name();
+        String overloadSignature = null;
         for (FunctionSelector functionSelector : selectors) {
           if (!functionSelector.name().equals(functionName)) {
             continue;
@@ -1081,10 +1194,22 @@ public abstract class CelEnvironment {
             return true;
           }
 
-          String overloadId = overload.celOverloadDecl().overloadId();
+          CelOverloadDecl celOverload = overload.celOverloadDecl();
+          String overloadId = celOverload.overloadId();
           for (OverloadSelector overloadSelector : functionSelector.overloads()) {
             if (overloadSelector.id().equals(overloadId)) {
               return true;
+            }
+          }
+
+          if (overloadSignature == null) {
+            overloadSignature = CelOverloadDeclFormatter.format(functionName, celOverload);
+          }
+          if (!overloadSignature.equals(overloadId)) {
+            for (OverloadSelector overloadSelector : functionSelector.overloads()) {
+              if (overloadSelector.id().equals(overloadSignature)) {
+                return true;
+              }
             }
           }
         }
@@ -1096,7 +1221,10 @@ public abstract class CelEnvironment {
     @AutoValue
     public abstract static class OverloadSelector {
 
-      /** An overload ID. Required. Follows the same format as {@link OverloadDecl#id()} */
+      /**
+       * An overload ID or canonical overload signature (e.g. {@code "add_bytes"} or {@code
+       * "_+_(bytes,bytes)"}). Required. Follows the same format as {@link OverloadDecl#id()}.
+       */
       public abstract String id();
 
       /** Builder for {@link OverloadSelector}. */

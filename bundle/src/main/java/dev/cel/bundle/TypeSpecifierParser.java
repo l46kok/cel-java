@@ -61,6 +61,36 @@ final class TypeSpecifierParser {
     return res;
   }
 
+  static ImmutableList<TypeDecl> parseTypeList(String text) {
+    checkNotNull(text);
+    TypeSpecifierParser parser = new TypeSpecifierParser(text);
+    return parser.parseTypeList();
+  }
+
+  private ImmutableList<TypeDecl> parseTypeList() {
+    skipWhitespace();
+    if (pos >= length) {
+      return ImmutableList.of();
+    }
+    ImmutableList.Builder<TypeDecl> types = ImmutableList.builder();
+    while (true) {
+      types.add(parseTypeElem(0));
+      skipWhitespace();
+      if (pos < length && text.charAt(pos) == ',') {
+        pos++; // consume ','
+        continue;
+      }
+      break;
+    }
+    if (pos < length) {
+      throw new IllegalArgumentException(
+          String.format(
+              "unexpected character '%c' at position %d in %s",
+              text.charAt(pos), pos, formatQuoted(text)));
+    }
+    return types.build();
+  }
+
   private TypeSpecifierParser(String text) {
     this.text = text;
     this.length = text.length();

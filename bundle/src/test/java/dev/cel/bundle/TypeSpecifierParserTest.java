@@ -175,6 +175,7 @@ public final class TypeSpecifierParserTest {
     String input = sb.toString();
     TypeDecl result = TypeDecl.parse(input);
     assertThat(result).isNotNull();
+    assertThat(TypeSpecifierParser.parseTypeList(input)).containsExactly(result);
   }
 
   @Test
@@ -191,6 +192,45 @@ public final class TypeSpecifierParserTest {
     IllegalArgumentException e =
         assertThrows(IllegalArgumentException.class, () -> TypeDecl.parse(input));
     assertThat(e).hasMessageThat().contains("exceeded maximum type specifier recursion depth");
+  }
+
+  @Test
+  public void parseTypeList_empty() {
+    assertThat(TypeSpecifierParser.parseTypeList("")).isEmpty();
+    assertThat(TypeSpecifierParser.parseTypeList("   ")).isEmpty();
+  }
+
+  @Test
+  public void parseTypeList_singleAndMultiple() {
+    assertThat(TypeSpecifierParser.parseTypeList("int")).containsExactly(TypeDecl.create("int"));
+    assertThat(TypeSpecifierParser.parseTypeList("int, string"))
+        .containsExactly(TypeDecl.create("int"), TypeDecl.create("string"))
+        .inOrder();
+    assertThat(TypeSpecifierParser.parseTypeList(" list < int > ,  map < string , ~T > "))
+        .containsExactly(
+            TypeDecl.newBuilder().setName("list").addParams(TypeDecl.create("int")).build(),
+            TypeDecl.newBuilder()
+                .setName("map")
+                .addParams(TypeDecl.create("string"), TypeDecl.ofTypeParam("T"))
+                .build())
+        .inOrder();
+  }
+
+  @Test
+  public void parseTypeList_invalid_throws() {
+    assertThrows(
+        IllegalArgumentException.class, () -> TypeSpecifierParser.parseTypeList("int,"));
+    assertThrows(
+        IllegalArgumentException.class, () -> TypeSpecifierParser.parseTypeList(",int"));
+    assertThrows(
+        IllegalArgumentException.class, () -> TypeSpecifierParser.parseTypeList("int,,string"));
+    IllegalArgumentException e =
+        assertThrows(
+            IllegalArgumentException.class, () -> TypeSpecifierParser.parseTypeList("int string"));
+    assertThat(e)
+        .hasMessageThat()
+        .isEqualTo("unexpected character 's' at position 4 in \"int string\"");
+    assertThrows(IllegalArgumentException.class, () -> TypeSpecifierParser.parseTypeList("int>"));
   }
 
   @Test

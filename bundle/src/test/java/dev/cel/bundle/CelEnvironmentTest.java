@@ -18,11 +18,13 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertThrows;
 
 import com.google.common.collect.ImmutableSet;
+import com.google.testing.junit.testparameterinjector.TestParameter;
 import com.google.testing.junit.testparameterinjector.TestParameterInjector;
 import dev.cel.bundle.CelEnvironment.CanonicalCelExtension;
 import dev.cel.bundle.CelEnvironment.ExtensionConfig;
 import dev.cel.bundle.CelEnvironment.LibrarySubset;
 import dev.cel.bundle.CelEnvironment.LibrarySubset.FunctionSelector;
+import dev.cel.bundle.CelEnvironment.TypeDecl;
 import dev.cel.common.CelAbstractSyntaxTree;
 import dev.cel.common.CelContainer;
 import dev.cel.common.CelOptions;
@@ -30,7 +32,13 @@ import dev.cel.common.CelValidationException;
 import dev.cel.common.CelValidationResult;
 import dev.cel.common.types.CelType;
 import dev.cel.common.types.CelTypeProvider;
+import dev.cel.common.types.ListType;
+import dev.cel.common.types.MapType;
+import dev.cel.common.types.NullableType;
+import dev.cel.common.types.OpaqueType;
+import dev.cel.common.types.OptionalType;
 import dev.cel.common.types.SimpleType;
+import dev.cel.common.types.TypeParamType;
 import dev.cel.common.types.TypeType;
 import dev.cel.compiler.CelCompiler;
 import dev.cel.compiler.CelCompilerFactory;
@@ -466,6 +474,55 @@ public class CelEnvironmentTest {
   }
 
   @Test
+  public void stdlibSubset_functionOverloadIncludedBySignature() throws Exception {
+    CelEnvironment environment =
+        CelEnvironment.newBuilder()
+            .setStandardLibrarySubset(
+                LibrarySubset.newBuilder()
+                    .setDisabled(false)
+                    .setIncludedFunctions(
+                        ImmutableSet.of(
+                            FunctionSelector.create("_+_", ImmutableSet.of("_+_(int,int)"))))
+                    .build())
+            .build();
+
+    CelCompiler compiler = CelCompilerFactory.standardCelCompilerBuilder().build();
+    CelCompiler extendedCompiler = environment.extend(compiler, CelOptions.DEFAULT);
+    CelValidationResult result = extendedCompiler.compile("1 + 2");
+    assertThat(result.hasError()).isFalse();
+
+    result = extendedCompiler.compile("1.0 + 2.0");
+    assertThat(result.getErrorString())
+        .contains("found no matching overload for '_+_' applied to '(double, double)'");
+  }
+
+  @Test
+  public void stdlibSubset_functionOverloadExcludedBySignature() throws Exception {
+    CelEnvironment environment =
+        CelEnvironment.newBuilder()
+            .setStandardLibrarySubset(
+                LibrarySubset.newBuilder()
+                    .setDisabled(false)
+                    .setExcludedFunctions(
+                        ImmutableSet.of(
+                            FunctionSelector.create(
+                                "_+_", ImmutableSet.of("_+_(int,int)", "_+_(list<~A>,list<~A>)"))))
+                    .build())
+            .build();
+
+    CelCompiler compiler = CelCompilerFactory.standardCelCompilerBuilder().build();
+    CelCompiler extendedCompiler = environment.extend(compiler, CelOptions.DEFAULT);
+    CelValidationResult result = extendedCompiler.compile("'a' + 'b' == 'ab'");
+    assertThat(result.hasError()).isFalse();
+
+    result = extendedCompiler.compile("1 + 1");
+    assertThat(result.getErrorString()).contains("found no matching overload for '_+_'");
+
+    result = extendedCompiler.compile("[1] + [2]");
+    assertThat(result.getErrorString()).contains("found no matching overload for '_+_'");
+  }
+
+  @Test
   public void typeDecl_toCelType_type() {
     CelTypeProvider typeProvider =
         CelCompilerFactory.standardCelCompilerBuilder().build().getTypeProvider();
@@ -489,5 +546,103 @@ public class CelEnvironmentTest {
     IllegalStateException e =
         assertThrows(IllegalStateException.class, () -> typeDecl.toCelType(typeProvider));
     assertThat(e).hasMessageThat().contains("Expected 1 parameter for type, got 0");
+
+    CelEnvironment.TypeDecl optionalDecl =
+        CelEnvironment.TypeDecl.newBuilder()
+            .setName("optional_type")
+            .addParams(CelEnvironment.TypeDecl.create("int"))
+            .addParams(CelEnvironment.TypeDecl.create("string"))
+            .build();
+    IllegalStateException optionalException =
+        assertThrows(IllegalStateException.class, () -> optionalDecl.toCelType(typeProvider));
+    assertThat(optionalException)
+        .hasMessageThat()
+        .contains("Optional type must have exactly 1 parameter. Found 2");
+  }
+
+  private enum FromAndToCelTypeTestCase {
+    INT(SimpleType.INT),
+    BOOL_WRAPPER(NullableType.create(SimpleType.BOOL)),
+    BYTES_WRAPPER(NullableType.create(SimpleType.BYTES)),
+    DOUBLE_WRAPPER(NullableType.create(SimpleType.DOUBLE)),
+    INT_WRAPPER(NullableType.create(SimpleType.INT)),
+    STRING_WRAPPER(NullableType.create(SimpleType.STRING)),
+    UINT_WRAPPER(NullableType.create(SimpleType.UINT)),
+    MAP_LIST_TYPE_PARAM(
+        MapType.create(SimpleType.STRING, ListType.create(TypeParamType.create("T")))),
+    OPTIONAL_INT(OptionalType.create(SimpleType.INT)),
+    OPAQUE_WITH_PARAM(OpaqueType.create("my_opaque", SimpleType.INT)),
+    ;
+
+    private final CelType celType;
+
+    FromAndToCelTypeTestCase(CelType celType) {
+      this.celType = celType;
+    }
+  }
+
+  @Test
+  public void typeDecl_fromCelType_and_toCelType(@TestParameter FromAndToCelTypeTestCase testCase) {
+    assertThat(TypeDecl.fromCelType(testCase.celType).toCelType()).isEqualTo(testCase.celType);
+  }
+
+  private enum ShorthandTypeDeclToCelTypeTestCase {
+    INT_WRAPPER("int_wrapper", NullableType.create(SimpleType.INT)),
+    BOOL_WRAPPER("bool_wrapper", NullableType.create(SimpleType.BOOL)),
+    UINT_WRAPPER("uint_wrapper", NullableType.create(SimpleType.UINT)),
+    DOUBLE_WRAPPER("double_wrapper", NullableType.create(SimpleType.DOUBLE)),
+    STRING_WRAPPER("string_wrapper", NullableType.create(SimpleType.STRING)),
+    BYTES_WRAPPER("bytes_wrapper", NullableType.create(SimpleType.BYTES)),
+    NULL("null", SimpleType.NULL_TYPE),
+    ANY("any", SimpleType.ANY),
+    TIMESTAMP("timestamp", SimpleType.TIMESTAMP),
+    DURATION("duration", SimpleType.DURATION),
+    ;
+
+    private final String typeName;
+    private final CelType expectedCelType;
+
+    ShorthandTypeDeclToCelTypeTestCase(String typeName, CelType expectedCelType) {
+      this.typeName = typeName;
+      this.expectedCelType = expectedCelType;
+    }
+  }
+
+  @Test
+  public void typeDecl_shorthandToCelType(
+      @TestParameter ShorthandTypeDeclToCelTypeTestCase testCase) {
+    CelTypeProvider typeProvider =
+        CelCompilerFactory.standardCelCompilerBuilder().build().getTypeProvider();
+    assertThat(TypeDecl.create(testCase.typeName).toCelType(typeProvider))
+        .isEqualTo(testCase.expectedCelType);
+  }
+
+  @Test
+  public void typeDecl_invalidTypes_throws() {
+    CelTypeProvider typeProvider =
+        CelCompilerFactory.standardCelCompilerBuilder().build().getTypeProvider();
+    CelType durationWrapperType = NullableType.create(SimpleType.DURATION);
+    CelType functionType = OpaqueType.create("function", SimpleType.INT);
+    TypeDecl parameterizedTypeParam =
+        TypeDecl.newBuilder()
+            .setName("T")
+            .setIsTypeParam(true)
+            .addParams(TypeDecl.create("int"))
+            .build();
+    TypeDecl errorTypeDecl = TypeDecl.create("*error*");
+    TypeDecl parameterizedInt = TypeDecl.parse("int<int>");
+    TypeDecl parameterizedDyn = TypeDecl.parse("dyn<string>");
+    TypeDecl parameterizedTimestamp = TypeDecl.parse("google.protobuf.Timestamp<bool>");
+
+    assertThrows(IllegalArgumentException.class, () -> TypeDecl.fromCelType(SimpleType.ERROR));
+    assertThrows(IllegalArgumentException.class, () -> TypeDecl.fromCelType(durationWrapperType));
+    assertThrows(IllegalArgumentException.class, () -> TypeDecl.fromCelType(functionType));
+    assertThrows(
+        IllegalArgumentException.class, () -> parameterizedTypeParam.toCelType(typeProvider));
+    assertThrows(IllegalArgumentException.class, () -> errorTypeDecl.toCelType(typeProvider));
+    assertThrows(IllegalArgumentException.class, () -> parameterizedInt.toCelType(typeProvider));
+    assertThrows(IllegalArgumentException.class, () -> parameterizedDyn.toCelType(typeProvider));
+    assertThrows(
+        IllegalArgumentException.class, () -> parameterizedTimestamp.toCelType(typeProvider));
   }
 }

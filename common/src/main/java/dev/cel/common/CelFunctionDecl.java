@@ -102,9 +102,7 @@ public abstract class CelFunctionDecl {
       for (CelOverloadDecl overload : currentOverloads) {
         String overloadId = overload.overloadId();
         if (overloadId.isEmpty()) {
-          overloadId =
-              CelSignatureUtils.makeOverloadSignature(
-                  functionName, overload.parameterTypes(), overload.isInstanceFunction());
+          overloadId = CelOverloadDeclFormatter.format(functionName, overload);
           updatedOverloads.add(overload.toBuilder().setOverloadId(overloadId).build());
         } else {
           updatedOverloads.add(overload);

@@ -15,8 +15,6 @@
 package dev.cel.common;
 
 import static com.google.common.truth.Truth.assertThat;
-import static dev.cel.common.CelSignatureUtils.makeOverloadSignature;
-import static dev.cel.common.CelSignatureUtils.makeTypeSignature;
 import static org.junit.Assert.assertThrows;
 
 import com.google.common.collect.ImmutableList;
@@ -40,9 +38,9 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 @RunWith(TestParameterInjector.class)
-public final class CelSignatureUtilsTest {
+public final class TypeSpecifierFormatterTest {
 
-  private enum TypeSignatureTestCase {
+  private enum FormatTypeTestCase {
     NULL(SimpleType.NULL_TYPE, "null"),
     DYN(SimpleType.DYN, "dyn"),
     BOOL(SimpleType.BOOL, "bool"),
@@ -81,83 +79,53 @@ public final class CelSignatureUtilsTest {
     NESTED_COMPLEX(
         MapType.create(
             SimpleType.STRING, ListType.create(OptionalType.create(TypeParamType.create("V")))),
-        "map<string,list<optional_type<~V>>>");
+        "map<string,list<optional_type<~V>>>"),
+    LIST_ESCAPED_TYPE_PARAM(
+        ListType.create(TypeParamType.create("a,b<c>")), "list<~a\\,b\\<c\\>>");
 
     private final CelType type;
     private final String expectedSignature;
 
-    TypeSignatureTestCase(CelType type, String expectedSignature) {
+    FormatTypeTestCase(CelType type, String expectedSignature) {
       this.type = type;
       this.expectedSignature = expectedSignature;
     }
   }
 
   @Test
-  public void makeTypeSignature_success(@TestParameter TypeSignatureTestCase testCase) {
-    assertThat(makeTypeSignature(testCase.type)).isEqualTo(testCase.expectedSignature);
+  public void format_success(@TestParameter FormatTypeTestCase testCase) {
+    assertThat(TypeSpecifierFormatter.format(testCase.type)).isEqualTo(testCase.expectedSignature);
   }
 
   @Test
-  public void makeTypeSignature_structAndEnum() {
+  public void format_structAndEnum() {
     CelType structType = StructTypeReference.create("cel.expr.conformance.proto3.TestAllTypes");
     CelType enumType =
         EnumType.create(
             "cel.expr.conformance.proto3.GlobalEnum", ImmutableMap.of("GOO", 0, "BAR", 1));
 
-    assertThat(makeTypeSignature(structType)).isEqualTo("cel.expr.conformance.proto3.TestAllTypes");
-    assertThat(makeTypeSignature(enumType)).isEqualTo("cel.expr.conformance.proto3.GlobalEnum");
+    assertThat(TypeSpecifierFormatter.format(structType))
+        .isEqualTo("cel.expr.conformance.proto3.TestAllTypes");
+    assertThat(TypeSpecifierFormatter.format(enumType))
+        .isEqualTo("cel.expr.conformance.proto3.GlobalEnum");
   }
 
   @Test
-  public void makeTypeSignature_unparameterizedListAndFunction() {
-    assertThat(makeTypeSignature(ListType.create())).isEqualTo("list<dyn>");
-    assertThat(makeTypeSignature(OpaqueType.create("function"))).isEqualTo("function<dyn>");
+  public void format_unparameterizedListAndFunction() {
+    assertThat(TypeSpecifierFormatter.format(ListType.create())).isEqualTo("list<dyn>");
+    assertThat(TypeSpecifierFormatter.format(OpaqueType.create("function")))
+        .isEqualTo("function<dyn>");
   }
 
   @Test
-  public void makeTypeSignature_unsupportedTypes_throws() {
+  public void format_unsupportedTypes_throws() {
     CelType unspecifiedType = UnspecifiedType.create();
-    assertThrows(IllegalArgumentException.class, () -> makeTypeSignature(SimpleType.ERROR));
-    assertThrows(IllegalArgumentException.class, () -> makeTypeSignature(unspecifiedType));
-  }
-
-  @Test
-  public void makeOverloadSignature_success() {
-    // Global no-arg function
-    assertThat(makeOverloadSignature("now", ImmutableList.of(), /* isMember= */ false))
-        .isEqualTo("now()");
-
-    // Global multi-arg function
-    assertThat(
-            makeOverloadSignature(
-                "add",
-                ImmutableList.of(SimpleType.INT, ListType.create(SimpleType.STRING)),
-                /* isMember= */ false))
-        .isEqualTo("add(int,list<string>)");
-
-    // Member function with parameterized receiver
-    assertThat(
-            makeOverloadSignature(
-                "get",
-                ImmutableList.of(
-                    MapType.create(TypeParamType.create("K"), TypeParamType.create("V")),
-                    TypeParamType.create("K")),
-                /* isMember= */ true))
-        .isEqualTo("map<~K,~V>.get(~K)");
-
-    // Global function with dot in name (escaped)
-    assertThat(
-            makeOverloadSignature(
-                "math.greatest",
-                ImmutableList.of(SimpleType.INT, SimpleType.INT),
-                /* isMember= */ false))
-        .isEqualTo("math\\.greatest(int,int)");
-  }
-
-  @Test
-  public void makeOverloadSignature_memberWithNoArgs_throws() {
+    CelType durationWrapperType = NullableType.create(SimpleType.DURATION);
     assertThrows(
-        IllegalArgumentException.class,
-        () -> makeOverloadSignature("size", ImmutableList.of(), /* isMember= */ true));
+        IllegalArgumentException.class, () -> TypeSpecifierFormatter.format(SimpleType.ERROR));
+    assertThrows(
+        IllegalArgumentException.class, () -> TypeSpecifierFormatter.format(unspecifiedType));
+    assertThrows(
+        IllegalArgumentException.class, () -> TypeSpecifierFormatter.format(durationWrapperType));
   }
 }
