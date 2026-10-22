@@ -1,0 +1,23 @@
+Source: 1 && true
+=====>
+ERROR: test_location:1:1: expected type 'bool' but found 'int'
+ | 1 && true
+ | ^
+
+Source: 'a' || 1
+=====>
+ERROR: test_location:1:1: expected type 'bool' but found 'string'
+ | 'a' || 1
+ | ^
+ERROR: test_location:1:8: expected type 'bool' but found 'int'
+ | 'a' || 1
+ | .......^
+
+Source: true && false
+declare _&&_ {
+  function logical_and_int (int, int) -> int
+}
+=====>
+ERROR: test_location:1:6: found no matching overload for '_&&_' applied to '(bool, bool)' (candidates: (int, int))
+ | true && false
+ | .....^

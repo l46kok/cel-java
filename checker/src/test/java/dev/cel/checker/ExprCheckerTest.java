@@ -175,6 +175,29 @@ public class ExprCheckerTest extends CelBaselineTestCase {
     runTest();
   }
 
+  @Test
+  public void operatorsBoolErrors() throws Exception {
+    source = "1 && true";
+    runTest();
+
+    source = "'a' || 1";
+    runTest();
+
+    // Bool operands still match no overload if _&&_ has no bool overload.
+    declareFunction(
+        "_&&_",
+        globalOverload(
+            "logical_and_int", ImmutableList.of(SimpleType.INT, SimpleType.INT), SimpleType.INT));
+    source = "true && false";
+    prepareCompiler(ProtoMessageTypeProvider.newBuilder().build());
+    celCompiler =
+        celCompiler
+            .toCompilerBuilder()
+            .setStandardDeclarations(CelStandardDeclarations.EMPTY)
+            .build();
+    testOutput().println(celCompiler.compile(source, testSourceDescription()).getErrorString());
+  }
+
   // Name References
   // ===============
 

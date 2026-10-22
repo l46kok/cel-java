@@ -652,18 +652,51 @@ public final class ExprChecker {
       }
     }
     if (resultType == null) {
-      env.reportError(
-          callExprId,
-          position,
-          "found no matching overload for '%s' applied to '%s'%s",
-          function.name(),
-          expectedString,
-          excludedCands.isEmpty()
-              ? ""
-              : " (candidates: " + Joiner.on(',').join(excludedCands) + ")");
+      // Non-bool operands of the logical operators are reported individually, as this is more
+      // precise than reporting that no overload matches.
+      boolean reportedLogicalOperandsErrors = reportLogicalOperandsErrors(function.name(), args);
+      if (!reportedLogicalOperandsErrors) {
+        env.reportError(
+            callExprId,
+            position,
+            "found no matching overload for '%s' applied to '%s'%s",
+            function.name(),
+            expectedString,
+            excludedCands.isEmpty()
+                ? ""
+                : " (candidates: " + Joiner.on(',').join(excludedCands) + ")");
+      }
       resultType = SimpleType.ERROR;
     }
     return OverloadResolution.of(refBuilder.build(), resultType);
+  }
+
+  /**
+   * Reports a type mismatch for each operand of a logical operator ({@code _&&_}, {@code _||_})
+   * which is not a {@code bool}.
+   *
+   * @return whether any error was reported.
+   */
+  private boolean reportLogicalOperandsErrors(String functionName, List<CelMutableExpr> args) {
+    if (!functionName.equals(Operator.LOGICAL_AND.getFunction())
+        && !functionName.equals(Operator.LOGICAL_OR.getFunction())) {
+      return false;
+    }
+
+    boolean reported = false;
+    for (CelMutableExpr arg : args) {
+      CelType argType = env.getType(arg);
+      if (!inferenceContext.isAssignable(argType, SimpleType.BOOL)) {
+        env.reportError(
+            arg.id(),
+            getPosition(arg),
+            "expected type '%s' but found '%s'",
+            CelTypes.format(SimpleType.BOOL),
+            CelTypes.format(inferenceContext.specialize(argType)));
+        reported = true;
+      }
+    }
+    return reported;
   }
 
   // Return value from visit is not needed as the subtree is not rewritten here.

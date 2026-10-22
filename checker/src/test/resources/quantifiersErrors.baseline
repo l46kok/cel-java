@@ -6,6 +6,6 @@ declare x {
 ERROR: test_location:1:1: expression of type 'cel.expr.conformance.proto3.TestAllTypes' cannot be range of a comprehension (must be list, map, or dynamic)
   | x.all(e, 0)
   | ^
-ERROR: test_location:1:6: found no matching overload for '_&&_' applied to '(bool, int)' (candidates: (bool, bool))
+ERROR: test_location:1:10: expected type 'bool' but found 'int'
   | x.all(e, 0)
-  | .....^
+  | .........^
