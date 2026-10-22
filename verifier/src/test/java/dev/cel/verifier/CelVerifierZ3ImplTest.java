@@ -365,6 +365,7 @@ public final class CelVerifierZ3ImplTest {
     APPROXIMATED_RANGE("int('123') > 100 && int('123') < 200"),
     APPROXIMATED_BRANCHING("int('123') == 123 ? x > 5 : false"),
     APPROXIMATED_STRING_TO_INT_CONSTRAINED("string_var == 'abc' && int(string_var) == 5"),
+    APPROXIMATED_STRING_TO_DOUBLE_NAN("double('NaN') != double('NaN')"),
     // int('x') errors at runtime, so type() of an approximate argument is approximate too.
     APPROXIMATED_TYPE_OF_CONVERSION("type(int('1')) == int"),
     APPROXIMATED_TYPE_OF_CONSTRAINED_CONVERSION(
@@ -473,6 +474,7 @@ public final class CelVerifierZ3ImplTest {
     CONTRADICTORY_TYPES_FOR_DYNAMIC_VARIABLE("unknown_var + 1 == 2 && unknown_var[0] == 1"),
     TYPE_CONVERSION_UNSATISFIABLE_STRING_TO_INT("type(int('1')) == string"),
     TYPE_CONVERSION_UNSATISFIABLE_DOUBLE_TO_STRING("type(string(1.5)) == int"),
+    TYPE_CONVERSION_UNSATISFIABLE_INT_TO_DOUBLE_NAN("double(x) != double(x)"),
     EMPTY_MAP_SIZE_NOT_ZERO("size({}) != 0"),
     TIMESTAMP_INEQUALITY_CONTRADICTION(
         "timestamp('2023-01-01T00:00:00Z') != timestamp('2023-01-01T00:00:00Z')"),

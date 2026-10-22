@@ -234,9 +234,12 @@ final class TypeConversionAxioms {
           break;
         case DOUBLE:
           sink.accept(ctx.mkOr(typeSystem.isDouble(res), typeSystem.isError(res)));
-          sink.accept(
-              ctx.mkImplies(
-                  typeSystem.isDouble(res), ctx.mkNot(ctx.mkFPIsNaN(typeSystem.getDouble(res)))));
+          // Numeric conversions never yield NaN, but parsing does (double('NaN')).
+          if (conversion != Conversions.STRING_TO_DOUBLE) {
+            sink.accept(
+                ctx.mkImplies(
+                    typeSystem.isDouble(res), ctx.mkNot(ctx.mkFPIsNaN(typeSystem.getDouble(res)))));
+          }
           break;
         case STRING:
           sink.accept(ctx.mkOr(typeSystem.isString(res), typeSystem.isError(res)));
