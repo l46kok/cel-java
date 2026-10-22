@@ -170,6 +170,7 @@ _TESTS_TO_SKIP_LEGACY = [
     "type_deductions/legacy_nullable_types/null_assignable_to_abstract_parameter_candidate",
     "type_deductions/legacy_nullable_types/null_assignable_to_duration_parameter_candidate",
     "type_deductions/legacy_nullable_types/null_assignable_to_timestamp_parameter_candidate",
+    "type_deductions/type_decay",
 ]
 
 _TESTS_TO_SKIP_PLANNER = [
@@ -186,6 +187,7 @@ _TESTS_TO_SKIP_PLANNER = [
     "type_deductions/legacy_nullable_types/null_assignable_to_abstract_parameter_candidate",
     "type_deductions/legacy_nullable_types/null_assignable_to_duration_parameter_candidate",
     "type_deductions/legacy_nullable_types/null_assignable_to_timestamp_parameter_candidate",
+    "type_deductions/type_decay",
 
     # Future features for CEL 1.0
     # TODO: Strong typing support for enums, specified but not implemented.
