@@ -14,7 +14,6 @@
 
 package dev.cel.optimizer.optimizers;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableList.toImmutableList;
@@ -66,7 +65,6 @@ import dev.cel.optimizer.AstMutator.MangledComprehensionAst;
 import dev.cel.optimizer.CelAstOptimizer;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -393,69 +391,9 @@ public final class SubexpressionOptimizer implements CelAstOptimizer {
   }
 
   private ImmutableList<CelMutableExpr> getCseCandidates(CelNavigableMutableAst navAst) {
-    if (cseOptions.subexpressionMaxRecursionDepth() > 0) {
-      return getCseCandidatesWithRecursionDepth(
-          navAst, cseOptions.subexpressionMaxRecursionDepth());
-    } else {
-      return getCseCandidatesWithCommonSubexpr(navAst);
-    }
-  }
-
-  /**
-   * Retrieves all subexpr candidates based on the recursion limit even if there's no duplicate
-   * subexpr found.
-   */
-  private ImmutableList<CelMutableExpr> getCseCandidatesWithRecursionDepth(
-      CelNavigableMutableAst navAst, int recursionLimit) {
-    checkArgument(recursionLimit > 0);
-    Set<CelMutableExpr> ineligibleExprs = getIneligibleExprsFromComprehensionBranches(navAst);
-    ImmutableList<CelNavigableMutableExpr> descendants =
-        navAst
-            .getRoot()
-            .descendants(TraversalOrder.PRE_ORDER)
-            .filter(node -> node.height() <= recursionLimit)
-            .filter(node -> canEliminate(node, ineligibleExprs))
-            .sorted(Comparator.comparingInt(CelNavigableMutableExpr::height).reversed())
-            .collect(toImmutableList());
-    if (descendants.isEmpty()) {
-      return ImmutableList.of();
-    }
-
-    ImmutableList<CelMutableExpr> cseCandidates =
-        getCseCandidatesWithCommonSubexpr(descendants, ineligibleExprs);
-    if (!cseCandidates.isEmpty()) {
-      return cseCandidates;
-    }
-
-    // If there's no common subexpr, just return the one with the highest height that's still below
-    // the recursion limit, but only if it actually needs to be extracted due to exceeding the
-    // recursion limit.
-    boolean astHasMoreExtractableSubexprs =
-        navAst
-            .getRoot()
-            .allNodes(TraversalOrder.POST_ORDER)
-            .filter(node -> node.height() > recursionLimit)
-            .anyMatch(node -> canEliminate(node, ineligibleExprs));
-    if (astHasMoreExtractableSubexprs) {
-      return ImmutableList.of(descendants.get(0).expr());
-    }
-
-    // The height of the remaining subexpression is already below the recursion limit. No need to
-    // extract.
-    return ImmutableList.of();
-  }
-
-  private ImmutableList<CelMutableExpr> getCseCandidatesWithCommonSubexpr(
-      CelNavigableMutableAst navAst) {
     Set<CelMutableExpr> ineligibleExprs = getIneligibleExprsFromComprehensionBranches(navAst);
     ImmutableList<CelNavigableMutableExpr> allNodes =
         navAst.getRoot().allNodes(TraversalOrder.PRE_ORDER).collect(toImmutableList());
-
-    return getCseCandidatesWithCommonSubexpr(allNodes, ineligibleExprs);
-  }
-
-  private ImmutableList<CelMutableExpr> getCseCandidatesWithCommonSubexpr(
-      ImmutableList<CelNavigableMutableExpr> allNodes, Set<CelMutableExpr> ineligibleExprs) {
     ImmutableListMultimap<Integer, CelNavigableMutableExpr> nodesByHeight =
         Multimaps.index(allNodes, CelNavigableMutableExpr::height);
     HashSet<CelMutableExpr> semanticallyEqualNodes = new HashSet<>();
@@ -572,8 +510,6 @@ public final class SubexpressionOptimizer implements CelAstOptimizer {
 
     public abstract boolean enableCelBlock();
 
-    public abstract int subexpressionMaxRecursionDepth();
-
     public abstract ImmutableSet<String> eliminableFunctions();
 
     /** Builder for configuring the {@link SubexpressionOptimizerOptions}. */
@@ -597,33 +533,6 @@ public final class SubexpressionOptimizer implements CelAstOptimizer {
        */
       @Deprecated
       public abstract Builder enableCelBlock(boolean value);
-
-      /**
-       * Ensures all extracted subexpressions do not exceed the maximum depth of designated value.
-       * The purpose of this is to guarantee evaluation and deserialization safety by preventing
-       * deeply nested ASTs. The trade-off is increased memory usage due to memoizing additional
-       * block indices during lazy evaluation.
-       *
-       * <p>As a general note, root of a node has a depth of 0. An expression `x.y.z` has a depth of
-       * 2.
-       *
-       * <p>Note that expressions containing no common subexpressions may become a candidate for
-       * extraction to satisfy the max depth requirement.
-       *
-       * <p>This is a no-op if the configured value is less than 1, or no subexpression needs to be
-       * extracted because the entire expression is already under the designated limit.
-       *
-       * <p>Examples:
-       *
-       * <ol>
-       *   <li>a.b.c with depth 1 -> cel.@block([x.b, @index0.c], @index1)
-       *   <li>a.b.c with depth 3 -> a.b.c
-       *   <li>a.b + a.b.c.d with depth 3 -> cel.@block([a.b, @index0.c.d], @index0 + @index1)
-       * </ol>
-       *
-       * <p>
-       */
-      public abstract Builder subexpressionMaxRecursionDepth(int value);
 
       abstract ImmutableSet.Builder<String> eliminableFunctionsBuilder();
 
@@ -651,15 +560,12 @@ public final class SubexpressionOptimizer implements CelAstOptimizer {
       Builder() {}
     }
 
-    abstract Builder toBuilder();
-
     /** Returns a new options builder with recommended defaults pre-configured. */
     public static Builder newBuilder() {
       return new AutoValue_SubexpressionOptimizer_SubexpressionOptimizerOptions.Builder()
           .iterationLimit(500)
           .enableCelBlock(true)
-          .populateMacroCalls(false)
-          .subexpressionMaxRecursionDepth(0);
+          .populateMacroCalls(false);
     }
 
     SubexpressionOptimizerOptions() {}

@@ -17,7 +17,6 @@ package dev.cel.optimizer.optimizers;
 import static com.google.common.truth.Truth.assertThat;
 import static dev.cel.common.CelOverloadDecl.newGlobalOverload;
 
-import com.google.common.base.Ascii;
 import com.google.common.collect.ImmutableMap;
 import com.google.testing.junit.testparameterinjector.TestParameter;
 import com.google.testing.junit.testparameterinjector.TestParameterInjector;
@@ -51,6 +50,8 @@ import org.junit.runner.RunWith;
 
 // @MediumTest
 @RunWith(TestParameterInjector.class)
+// Golden tests accumulate all cases into a single baseline file per test method.
+@SuppressWarnings("LoopToTestParameter")
 public class SubexpressionOptimizerBaselineTest extends BaselineTestCase {
   private static Cel setupCelEnv(CelBuilder celBuilder) {
     return celBuilder
@@ -105,6 +106,8 @@ public class SubexpressionOptimizerBaselineTest extends BaselineTestCase {
                           .putMapInt32Int64(2, 2)
                           .putMapStringString("key", "A")))
           .build();
+  private static final ImmutableMap<String, Object> INPUT_MAP =
+      ImmutableMap.of("msg", TEST_ALL_TYPES_INPUT, "x", 5L, "y", 6L, "opt_x", Optional.of(5L));
 
   private static final SubexpressionOptimizerOptions OPTIMIZER_COMMON_OPTIONS =
       SubexpressionOptimizerOptions.newBuilder()
@@ -112,20 +115,9 @@ public class SubexpressionOptimizerBaselineTest extends BaselineTestCase {
           .addEliminableFunctions("pure_custom_func")
           .build();
 
-  private String overriddenBaseFilePath = "";
-
   @Before
   public void setUp() {
     this.cel = setupCelEnv(runtimeFlavor.builder());
-    overriddenBaseFilePath = "";
-  }
-
-  @Override
-  protected String baselineFileName() {
-    if (overriddenBaseFilePath.isEmpty()) {
-      return super.baselineFileName();
-    }
-    return overriddenBaseFilePath;
   }
 
   @TestParameter CelRuntimeFlavor runtimeFlavor;
@@ -133,122 +125,59 @@ public class SubexpressionOptimizerBaselineTest extends BaselineTestCase {
   private Cel cel;
 
   @Test
-  public void allOptimizers_producesSameEvaluationResult(
-      @TestParameter CseTestOptimizer cseTestOptimizer, @TestParameter CseTestCase cseTestCase)
+  public void cse_producesSameEvaluationResult(@TestParameter CseTestCase cseTestCase)
       throws Exception {
     skipBaselineVerification();
     CelAbstractSyntaxTree ast = cel.compile(cseTestCase.source).getAst();
-    ImmutableMap<String, Object> inputMap =
-        ImmutableMap.of("msg", TEST_ALL_TYPES_INPUT, "x", 5L, "y", 6L, "opt_x", Optional.of(5L));
-    Object expectedEvalResult = cel.createProgram(ast).eval(inputMap);
+    Object expectedEvalResult = cel.createProgram(ast).eval(INPUT_MAP);
 
-    CelAbstractSyntaxTree optimizedAst = cseTestOptimizer.newCseOptimizer(cel).optimize(ast);
+    CelAbstractSyntaxTree optimizedAst = newCseOptimizer().optimize(ast);
 
-    Object optimizedEvalResult = cel.createProgram(optimizedAst).eval(inputMap);
+    Object optimizedEvalResult = cel.createProgram(optimizedAst).eval(INPUT_MAP);
     assertThat(optimizedEvalResult).isEqualTo(expectedEvalResult);
   }
 
   @Test
-  public void allOptimizers_producesSameEvaluationResult_parsedOnly(
-      @TestParameter CseTestCase cseTestCase, @TestParameter CseTestOptimizer cseTestOptimizer)
+  public void cse_producesSameEvaluationResult_parsedOnly(@TestParameter CseTestCase cseTestCase)
       throws Exception {
     skipBaselineVerification();
     if (runtimeFlavor.equals(CelRuntimeFlavor.LEGACY)) {
       return;
     }
     CelAbstractSyntaxTree ast = cel.compile(cseTestCase.source).getAst();
-    ImmutableMap<String, Object> inputMap =
-        ImmutableMap.of("msg", TEST_ALL_TYPES_INPUT, "x", 5L, "y", 6L, "opt_x", Optional.of(5L));
-    Object expectedEvalResult = cel.createProgram(ast).eval(inputMap);
+    Object expectedEvalResult = cel.createProgram(ast).eval(INPUT_MAP);
 
-    CelAbstractSyntaxTree optimizedAst = cseTestOptimizer.newCseOptimizer(cel).optimize(ast);
+    CelAbstractSyntaxTree optimizedAst = newCseOptimizer().optimize(ast);
     CelAbstractSyntaxTree parsedOnlyOptimizedAst =
         CelAbstractSyntaxTree.newParsedAst(optimizedAst.getExpr(), optimizedAst.getSource());
 
-    Object optimizedEvalResult = cel.createProgram(parsedOnlyOptimizedAst).eval(inputMap);
+    Object optimizedEvalResult = cel.createProgram(parsedOnlyOptimizedAst).eval(INPUT_MAP);
     assertThat(optimizedEvalResult).isEqualTo(expectedEvalResult);
   }
 
   @Test
   public void subexpression_unparsed() throws Exception {
-    for (CseTestCase cseTestCase : EnumSet.allOf(CseTestCase.class)) {
-      testOutput().println("Test case: " + cseTestCase.name());
-      testOutput().println("Source: " + cseTestCase.source);
-      testOutput().println("=====>");
-      CelAbstractSyntaxTree ast = cel.compile(cseTestCase.source).getAst();
-      boolean resultPrinted = false;
-      for (CseTestOptimizer cseTestOptimizer : CseTestOptimizer.values()) {
-        String optimizerName = cseTestOptimizer.name();
-        CelAbstractSyntaxTree optimizedAst;
-        try {
-          optimizedAst = cseTestOptimizer.newCseOptimizer(cel).optimize(ast);
-        } catch (Exception e) {
-          testOutput().printf("[%s]: Optimization Error: %s", optimizerName, e);
-          continue;
-        }
-        if (!resultPrinted) {
-          Object optimizedEvalResult =
-              cel.createProgram(optimizedAst)
-                  .eval(
-                      ImmutableMap.of(
-                          "msg", TEST_ALL_TYPES_INPUT, "x", 5L, "y", 6L, "opt_x", Optional.of(5L)));
-          testOutput().println("Result: " + optimizedEvalResult);
-          resultPrinted = true;
-        }
-        try {
-          testOutput().printf("[%s]: %s", optimizerName, CEL_UNPARSER.unparse(optimizedAst));
-        } catch (RuntimeException e) {
-          testOutput().printf("[%s]: Unparse Error: %s", optimizerName, e);
-        }
-        testOutput().println();
-      }
-      testOutput().println();
-    }
+    printUnparsedTestCases(newCseOptimizer());
   }
 
   @Test
   public void constfold_before_subexpression_unparsed() throws Exception {
-    for (CseTestCase cseTestCase : EnumSet.allOf(CseTestCase.class)) {
-      testOutput().println("Test case: " + cseTestCase.name());
-      testOutput().println("Source: " + cseTestCase.source);
-      testOutput().println("=====>");
-      CelAbstractSyntaxTree ast = cel.compile(cseTestCase.source).getAst();
-      boolean resultPrinted = false;
-      for (CseTestOptimizer cseTestOptimizer : EnumSet.allOf(CseTestOptimizer.class)) {
-        String optimizerName = cseTestOptimizer.name();
-        CelAbstractSyntaxTree optimizedAst =
-            cseTestOptimizer.newCseWithConstFoldingOptimizer(cel).optimize(ast);
-        if (!resultPrinted) {
-          Object optimizedEvalResult =
-              cel.createProgram(optimizedAst)
-                  .eval(
-                      ImmutableMap.of(
-                          "msg", TEST_ALL_TYPES_INPUT, "x", 5L, "y", 6L, "opt_x", Optional.of(5L)));
-          testOutput().println("Result: " + optimizedEvalResult);
-          resultPrinted = true;
-        }
-        try {
-          testOutput().printf("[%s]: %s", optimizerName, CEL_UNPARSER.unparse(optimizedAst));
-        } catch (RuntimeException e) {
-          testOutput().printf("[%s]: Unparse Error: %s", optimizerName, e);
-        }
-        testOutput().println();
-      }
-      testOutput().println();
-    }
+    printUnparsedTestCases(
+        CelOptimizerFactory.standardCelOptimizerBuilder(cel)
+            .addAstOptimizers(
+                ConstantFoldingOptimizer.getInstance(),
+                SubexpressionOptimizer.newInstance(OPTIMIZER_COMMON_OPTIONS))
+            .build());
   }
 
   @Test
-  public void subexpression_ast(@TestParameter CseTestOptimizer cseTestOptimizer) throws Exception {
-    String testBasefileName = "subexpression_ast_" + Ascii.toLowerCase(cseTestOptimizer.name());
-    overriddenBaseFilePath = String.format("%s%s.baseline", testdataDir(), testBasefileName);
+  public void subexpression_ast_block_common_subexpr_only() throws Exception {
     for (CseTestCase cseTestCase : EnumSet.allOf(CseTestCase.class)) {
       testOutput().println("Test case: " + cseTestCase.name());
       testOutput().println("Source: " + cseTestCase.source);
       testOutput().println("=====>");
       CelAbstractSyntaxTree ast = cel.compile(cseTestCase.source).getAst();
-      CelAbstractSyntaxTree optimizedAst =
-          newCseOptimizer(cel, cseTestOptimizer.option).optimize(ast);
+      CelAbstractSyntaxTree optimizedAst = newCseOptimizer().optimize(ast);
       testOutput().println(optimizedAst.getExpr());
     }
   }
@@ -256,52 +185,11 @@ public class SubexpressionOptimizerBaselineTest extends BaselineTestCase {
   @Test
   public void large_expressions_block_common_subexpr() throws Exception {
     CelOptimizer celOptimizer =
-        newCseOptimizer(
-            cel, SubexpressionOptimizerOptions.newBuilder().populateMacroCalls(true).build());
-
-    runLargeTestCases(celOptimizer);
-  }
-
-  @Test
-  public void large_expressions_block_recursion_depth_1() throws Exception {
-    CelOptimizer celOptimizer =
-        newCseOptimizer(
-            cel,
-            SubexpressionOptimizerOptions.newBuilder()
-                .populateMacroCalls(true)
-                .subexpressionMaxRecursionDepth(1)
-                .build());
-
-    runLargeTestCases(celOptimizer);
-  }
-
-  @Test
-  public void large_expressions_block_recursion_depth_2() throws Exception {
-    CelOptimizer celOptimizer =
-        newCseOptimizer(
-            cel,
-            SubexpressionOptimizerOptions.newBuilder()
-                .populateMacroCalls(true)
-                .subexpressionMaxRecursionDepth(2)
-                .build());
-
-    runLargeTestCases(celOptimizer);
-  }
-
-  @Test
-  public void large_expressions_block_recursion_depth_3() throws Exception {
-    CelOptimizer celOptimizer =
-        newCseOptimizer(
-            cel,
-            SubexpressionOptimizerOptions.newBuilder()
-                .populateMacroCalls(true)
-                .subexpressionMaxRecursionDepth(3)
-                .build());
-
-    runLargeTestCases(celOptimizer);
-  }
-
-  private void runLargeTestCases(CelOptimizer celOptimizer) throws Exception {
+        CelOptimizerFactory.standardCelOptimizerBuilder(cel)
+            .addAstOptimizers(
+                SubexpressionOptimizer.newInstance(
+                    SubexpressionOptimizerOptions.newBuilder().populateMacroCalls(true).build()))
+            .build();
     for (CseLargeTestCase cseTestCase : EnumSet.allOf(CseLargeTestCase.class)) {
       testOutput().println("Test case: " + cseTestCase.name());
       testOutput().println("Source: " + cseTestCase.source);
@@ -323,52 +211,23 @@ public class SubexpressionOptimizerBaselineTest extends BaselineTestCase {
     }
   }
 
-  private static CelOptimizer newCseOptimizer(Cel cel, SubexpressionOptimizerOptions options) {
-    return CelOptimizerFactory.standardCelOptimizerBuilder(cel)
-        .addAstOptimizers(SubexpressionOptimizer.newInstance(options))
-        .build();
+  private void printUnparsedTestCases(CelOptimizer celOptimizer) throws Exception {
+    for (CseTestCase cseTestCase : EnumSet.allOf(CseTestCase.class)) {
+      testOutput().println("Test case: " + cseTestCase.name());
+      testOutput().println("Source: " + cseTestCase.source);
+      testOutput().println("=====>");
+      CelAbstractSyntaxTree optimizedAst =
+          celOptimizer.optimize(cel.compile(cseTestCase.source).getAst());
+      testOutput().println("Result: " + cel.createProgram(optimizedAst).eval(INPUT_MAP));
+      testOutput().println("Unparsed: " + CEL_UNPARSER.unparse(optimizedAst));
+      testOutput().println();
+    }
   }
 
-  @SuppressWarnings("Immutable") // Test only
-  private enum CseTestOptimizer {
-    BLOCK_COMMON_SUBEXPR_ONLY(OPTIMIZER_COMMON_OPTIONS),
-    BLOCK_RECURSION_DEPTH_1(
-        OPTIMIZER_COMMON_OPTIONS.toBuilder().subexpressionMaxRecursionDepth(1).build()),
-    BLOCK_RECURSION_DEPTH_2(
-        OPTIMIZER_COMMON_OPTIONS.toBuilder().subexpressionMaxRecursionDepth(2).build()),
-    BLOCK_RECURSION_DEPTH_3(
-        OPTIMIZER_COMMON_OPTIONS.toBuilder().subexpressionMaxRecursionDepth(3).build()),
-    BLOCK_RECURSION_DEPTH_4(
-        OPTIMIZER_COMMON_OPTIONS.toBuilder().subexpressionMaxRecursionDepth(4).build()),
-    BLOCK_RECURSION_DEPTH_5(
-        OPTIMIZER_COMMON_OPTIONS.toBuilder().subexpressionMaxRecursionDepth(5).build()),
-    BLOCK_RECURSION_DEPTH_6(
-        OPTIMIZER_COMMON_OPTIONS.toBuilder().subexpressionMaxRecursionDepth(6).build()),
-    BLOCK_RECURSION_DEPTH_7(
-        OPTIMIZER_COMMON_OPTIONS.toBuilder().subexpressionMaxRecursionDepth(7).build()),
-    BLOCK_RECURSION_DEPTH_8(
-        OPTIMIZER_COMMON_OPTIONS.toBuilder().subexpressionMaxRecursionDepth(8).build()),
-    BLOCK_RECURSION_DEPTH_9(
-        OPTIMIZER_COMMON_OPTIONS.toBuilder().subexpressionMaxRecursionDepth(9).build());
-
-    private final SubexpressionOptimizerOptions option;
-
-    CseTestOptimizer(SubexpressionOptimizerOptions option) {
-      this.option = option;
-    }
-
-    // Defers building the optimizer until the test runs
-    private CelOptimizer newCseOptimizer(Cel cel) {
-      return SubexpressionOptimizerBaselineTest.newCseOptimizer(cel, option);
-    }
-
-    // Defers building the optimizer until the test runs
-    private CelOptimizer newCseWithConstFoldingOptimizer(Cel cel) {
-      return CelOptimizerFactory.standardCelOptimizerBuilder(cel)
-          .addAstOptimizers(
-              ConstantFoldingOptimizer.getInstance(), SubexpressionOptimizer.newInstance(option))
-          .build();
-    }
+  private CelOptimizer newCseOptimizer() {
+    return CelOptimizerFactory.standardCelOptimizerBuilder(cel)
+        .addAstOptimizers(SubexpressionOptimizer.newInstance(OPTIMIZER_COMMON_OPTIONS))
+        .build();
   }
 
   private enum CseTestCase {
