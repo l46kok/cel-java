@@ -215,15 +215,6 @@ public final class CelVerifierZ3ImplTest {
   }
 
   @Test
-  public void isSatisfiable_typeConversionApproximation() throws Exception {
-    CelAbstractSyntaxTree astInt = CEL.compile("type(int('1')) == int").getAst();
-    assertThat(VERIFIER.isSatisfiable(astInt).status()).isEqualTo(VerificationStatus.VERIFIED);
-
-    CelAbstractSyntaxTree astDouble = CEL.compile("type(double('1.5')) == double").getAst();
-    assertThat(VERIFIER.isSatisfiable(astDouble).status()).isEqualTo(VerificationStatus.VERIFIED);
-  }
-
-  @Test
   public void isSatisfiable_success(@TestParameter IsSatisfiableTestCase testCase)
       throws Exception {
     CelAbstractSyntaxTree ast = CEL.compile(testCase.expr).getAst();
@@ -373,6 +364,11 @@ public final class CelVerifierZ3ImplTest {
     APPROXIMATED_INT_TO_STRING("string(123) == '123'"),
     APPROXIMATED_RANGE("int('123') > 100 && int('123') < 200"),
     APPROXIMATED_BRANCHING("int('123') == 123 ? x > 5 : false"),
+    APPROXIMATED_STRING_TO_INT_CONSTRAINED("string_var == 'abc' && int(string_var) == 5"),
+    // int('x') errors at runtime, so type() of an approximate argument is approximate too.
+    APPROXIMATED_TYPE_OF_CONVERSION("type(int('1')) == int"),
+    APPROXIMATED_TYPE_OF_CONSTRAINED_CONVERSION(
+        "string_var == 'abc' && type(int(string_var)) == int"),
     // Containers are only type-constrained up to the unroll limit, so observing one through dyn may
     // expose an element beyond it that violates the static type.
     BEYOND_BMC_LIMIT_DYN_LIST_LITERAL_EQUALITY(
@@ -1679,22 +1675,6 @@ public final class CelVerifierZ3ImplTest {
         "Counterexample input:",
         "x = -9223372036854775808",
         "y = -1"),
-    UNINTERPRETED_CONVERSION_CAN_ERROR_INT_FROM_STRING(
-        "int(string_var) == int(string_var)",
-        "Condition is not always true\\.",
-        "Counterexample input:"),
-    UNINTERPRETED_CONVERSION_CAN_ERROR_TIMESTAMP_FROM_STRING(
-        "timestamp(string_var) == timestamp(string_var)",
-        "Condition is not always true\\.",
-        "Counterexample input:"),
-    UNINTERPRETED_CONVERSION_CAN_ERROR_DURATION_FROM_STRING(
-        "duration(string_var) == duration(string_var)",
-        "Condition is not always true\\.",
-        "Counterexample input:"),
-    UNINTERPRETED_CONVERSION_CAN_ERROR_BOOL_FROM_STRING(
-        "bool(string_var) == bool(string_var)",
-        "Condition is not always true\\.",
-        "Counterexample input:"),
     LIST_INDEX_OUT_OF_BOUNDS_AT_BMC_LIMIT(
         "size(int_list) == 5 ? int_list[5] == 1 : true",
         "Condition is not always true\\.",
@@ -1760,6 +1740,8 @@ public final class CelVerifierZ3ImplTest {
     TIMESTAMP_BOUNDS_VALID("timestamp('2023-01-01T00:00:00Z') <= timestamp(253402300799)"),
     UNINTERPRETED_FUNCTION("request.matches('^[a-z]+$')"),
     INT_STRING_UNINTERPRETED("int('123') == 123"),
+    INT_STRING_VAR_UNINTERPRETED("int(string_var) == int(string_var)"),
+    INT_CONSTRAINED_STRING_VAR_UNINTERPRETED("string_var != '5' || int(string_var) == 5"),
     LIST_WITH_APPROXIMATE_ELEMENT("[request.matches('a')]"),
     MAP_WITH_APPROXIMATE_KEY("{request.matches('a'): 1}"),
     MAP_WITH_APPROXIMATE_VALUE("{1: request.matches('a')}"),
@@ -1830,6 +1812,9 @@ public final class CelVerifierZ3ImplTest {
         "int_list == [1, 2, 3, 4, 5, 6] ? int_list.all(x, x > 0) : true",
         "int_list == [1, 2, 3, 4, 5, 6] ? (int_list.all(x, x > 0) || size(int_list) == 6) : true"),
     APPROXIMATION_DIVERGENCE("request.matches('a') == true", "request.matches('a') == false"),
+    TIMESTAMP_STRING_CONVERSION_NOT_BOUNDED_BY_WHOLE_SECONDS(
+        "timestamp(string_var) <= timestamp(253402300799)",
+        "timestamp(string_var) == timestamp(string_var)"),
     IDENTITY_ERASURE_INCONGRUENCE(
         "size(int_list) == 6 && size(int_list_2) == 6 ? (int_list.map(x, x + 1) + [1]) : [1]",
         "size(int_list) == 6 && size(int_list_2) == 6 ? (int_list_2.map(x, x + 1) + [1]) : [1]"),
@@ -2458,9 +2443,6 @@ public final class CelVerifierZ3ImplTest {
         "google.protobuf.Duration{seconds: 100, nanos: 500}",
         "google.protobuf.Duration{seconds: 100}"),
     TIMESTAMP_VARIABLE_NOT_BOUNDED_BY_WHOLE_SECONDS("ts <= timestamp(253402300799)", "true"),
-    TIMESTAMP_STRING_CONVERSION_NOT_BOUNDED_BY_WHOLE_SECONDS(
-        "timestamp(string_var) <= timestamp(253402300799)",
-        "timestamp(string_var) == timestamp(string_var)"),
     TIMESTAMP_STRUCT_TO_INT_NEGATIVE_SECONDS_NEGATIVE_NANOS_FAILS(
         "int(google.protobuf.Timestamp{seconds: -1, nanos: -1}) == -1", "false"),
     TIMESTAMP_STRUCT_TO_INT_NEGATIVE_SECONDS_NANOS_TOO_LARGE_FAILS(

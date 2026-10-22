@@ -15,7 +15,6 @@
 package dev.cel.verifier.axioms;
 
 import com.google.common.base.Preconditions;
-import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.Context;
 import com.microsoft.z3.Expr;
 import dev.cel.checker.CelStandardDeclarations.StandardFunction;
@@ -41,16 +40,10 @@ final class TypeAxiom {
                 Preconditions.checkArgument(argApproximations.size() == 1);
 
                 Expr<?> val = unwrappedArgs.get(0);
-                BoolExpr argApprox = argApproximations.get(0);
-
                 Expr<?> result = getTypeExpression(ctx, typeSystem, val);
 
-                // Custom approximation logic for type(): it is only approximate if the argument
-                // is approximate AND the argument is an Error or Unknown.
-                BoolExpr isErrOrUnk = typeSystem.isErrorOrUnknown(val);
-                BoolExpr typeApprox = ctx.mkAnd(argApprox, isErrOrUnk);
-
-                return Optional.of(CelZ3OverloadResult.create(result, typeApprox));
+                // An approximate argument may have a different kind (or be an error) at runtime.
+                return Optional.of(CelZ3OverloadResult.create(result, argApproximations.get(0)));
               })
           .build();
 

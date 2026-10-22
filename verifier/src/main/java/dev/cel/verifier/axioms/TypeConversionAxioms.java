@@ -24,7 +24,6 @@ import com.microsoft.z3.IntExpr;
 import com.microsoft.z3.Sort;
 import dev.cel.checker.CelStandardDeclarations.StandardFunction;
 import dev.cel.checker.CelStandardDeclarations.StandardFunction.Overload.Conversions;
-import dev.cel.common.types.SimpleType;
 import dev.cel.verifier.CelZ3TypeSystem;
 import java.util.Optional;
 
@@ -197,15 +196,12 @@ final class TypeConversionAxioms {
 
   private static CelZ3OverloadTranslator createUninterpretedConversion(Conversions conversion) {
     return (ctx, typeSystem, sink, unwrappedArgs, argApproximations) -> {
-      Expr<?> arg = unwrappedArgs.get(0);
-      BoolExpr baseApprox = argApproximations.get(0);
-
       FuncDecl<?> funcDecl =
           typeSystem.internFuncDecl(
               conversion.celOverloadDecl().overloadId(),
               new Sort[] {typeSystem.celValueSort()},
               typeSystem.celValueSort());
-      Expr<?> res = ctx.mkApp(funcDecl, arg);
+      Expr<?> res = ctx.mkApp(funcDecl, unwrappedArgs.get(0));
 
       switch (conversion.celOverloadDecl().resultType().kind()) {
         case INT:
@@ -257,14 +253,9 @@ final class TypeConversionAxioms {
                   + conversion.celOverloadDecl().resultType());
       }
 
-      boolean isArgConstant = typeSystem.isPrimitiveConstant(arg);
-      boolean isStringParseConversion =
-          conversion.celOverloadDecl().parameterTypes().get(0).equals(SimpleType.STRING);
-
-      BoolExpr finalApprox =
-          (!isArgConstant && isStringParseConversion) ? baseApprox : ctx.mkTrue();
-
-      return Optional.of(CelZ3OverloadResult.create(res, finalApprox));
+      // Uninterpreted: the solver may pick a result (or error) no real input yields, so never
+      // exact.
+      return Optional.of(CelZ3OverloadResult.create(res, ctx.mkTrue()));
     };
   }
 
