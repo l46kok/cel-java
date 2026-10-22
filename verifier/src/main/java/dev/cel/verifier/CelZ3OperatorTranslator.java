@@ -85,6 +85,14 @@ final class CelZ3OperatorTranslator {
       return opOpt.isPresent() ? Optional.of(resultChain) : Optional.empty();
     }
 
+    // A candidate overload without an axiom (e.g. a custom overload of a standard operator) is
+    // treated as an uninterpreted call, rather than falling through to the type-mismatch error.
+    if (reference != null
+        && reference.overloadIds().stream()
+            .anyMatch(id -> !functionRegistry.getTranslator(id).isPresent())) {
+      return Optional.empty();
+    }
+
     boolean matchedAny = false;
     Expr<?> currentZ3Result = resultChain.z3Expr();
     BoolExpr currentApprox = resultChain.isApproximate();

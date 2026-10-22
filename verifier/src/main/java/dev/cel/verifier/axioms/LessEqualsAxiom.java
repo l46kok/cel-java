@@ -15,6 +15,7 @@
 package dev.cel.verifier.axioms;
 
 import com.microsoft.z3.ArithExpr;
+import com.microsoft.z3.BoolExpr;
 import com.microsoft.z3.SeqExpr;
 import dev.cel.checker.CelStandardDeclarations.StandardFunction;
 import dev.cel.checker.CelStandardDeclarations.StandardFunction.Overload.Comparison;
@@ -26,6 +27,14 @@ final class LessEqualsAxiom {
 
   static final CelZ3FunctionAxiom INSTANCE =
       CelZ3FunctionAxiom.newBuilder(StandardFunction.LESS_EQUALS.functionDecl())
+          .addBinaryOverloadTranslator(
+              Comparison.LESS_EQUALS_BOOL.celOverloadDecl(),
+              (ctx, typeSystem, constraintSink, lhs, rhs) ->
+                  Optional.of(
+                      typeSystem.wrapBool(
+                          ctx.mkImplies(
+                              (BoolExpr) typeSystem.unwrapBool(lhs),
+                              (BoolExpr) typeSystem.unwrapBool(rhs)))))
           .addBinaryOverloadTranslator(
               Comparison.LESS_EQUALS_INT64.celOverloadDecl(),
               (ctx, typeSystem, constraintSink, lhs, rhs) ->

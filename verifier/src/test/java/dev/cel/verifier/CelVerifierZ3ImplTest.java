@@ -554,6 +554,10 @@ public final class CelVerifierZ3ImplTest {
 
   private enum IsAlwaysTrueTestCase {
     LOGICAL_OR_CONSTANTS("true || false"),
+    BOOL_ORDERING(
+        "false < true && !(true < false) && false <= true && !(true <= false) && true > false"
+            + " && !(false > true) && true >= false && !(false >= true)"),
+    BOOL_ORDERING_REFLEXIVE("a <= a && a >= a && !(a < a) && !(a > a)"),
     TIMESTAMP_GREATER_EQUALS("timestamp(200) >= timestamp(100)"),
     DURATION_GREATER_EQUALS(
         "(timestamp(200) - timestamp(100)) >= (timestamp(150) - timestamp(100))"),
@@ -2851,6 +2855,27 @@ public final class CelVerifierZ3ImplTest {
     CelVerificationResult result = VERIFIER.verifyEquivalence(astA, astB);
 
     assertThat(result.status()).isEqualTo(VerificationStatus.VERIFIED);
+  }
+
+  @Test
+  public void isSatisfiable_customOperatorOverload_inconclusive() throws Exception {
+    // The custom overload has no axiom, so it must not fall through to the type-mismatch error.
+    CelCompiler celCompiler =
+        CEL.toCompilerBuilder()
+            .addFunctionDeclarations(
+                CelFunctionDecl.newFunctionDeclaration(
+                    Operator.LESS.getFunction(),
+                    CelOverloadDecl.newGlobalOverload(
+                        "less_list_int",
+                        SimpleType.BOOL,
+                        ListType.create(SimpleType.INT),
+                        ListType.create(SimpleType.INT))))
+            .build();
+    CelAbstractSyntaxTree ast = celCompiler.compile("!(int_list < int_list_2)").getAst();
+
+    CelVerificationResult result = VERIFIER.isSatisfiable(ast);
+
+    assertThat(result.status()).isEqualTo(VerificationStatus.INCONCLUSIVE);
   }
 
   @Test
