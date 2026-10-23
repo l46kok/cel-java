@@ -25,7 +25,10 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 /** State shared by the translators of a single verification query. */
 final class CelZ3TranslationContext {
@@ -37,6 +40,7 @@ final class CelZ3TranslationContext {
   private final Set<BoolExpr> constraints;
   private final Map<Expr<?>, CelType> inputVariableTypes;
   private final List<BoolExpr> truncationConditions;
+  private final Map<String, TranslatedValue> symbolTable;
 
   Context ctx() {
     return ctx;
@@ -85,6 +89,33 @@ final class CelZ3TranslationContext {
     return CelZ3Exprs.mkOrFlattened(ctx, truncationConditions);
   }
 
+  void bindSymbol(String name, TranslatedValue value) {
+    symbolTable.put(name, value);
+  }
+
+  Optional<TranslatedValue> lookupSymbol(String name) {
+    return Optional.ofNullable(symbolTable.get(name));
+  }
+
+  TranslatedValue computeSymbolIfAbsent(
+      String name, Function<String, TranslatedValue> mappingFunction) {
+    return symbolTable.computeIfAbsent(name, mappingFunction);
+  }
+
+  /** Binds {@code varName} to {@code value} while running {@code action}, then restores it. */
+  <T> T withScope(String varName, TranslatedValue value, Supplier<T> action) {
+    TranslatedValue prev = symbolTable.put(varName, value);
+    try {
+      return action.get();
+    } finally {
+      if (prev != null) {
+        symbolTable.put(varName, prev);
+      } else {
+        symbolTable.remove(varName);
+      }
+    }
+  }
+
   CelZ3TranslationContext(Context ctx, CelZ3TypeSystem typeSystem, int comprehensionUnrollLimit) {
     this.ctx = ctx;
     this.typeSystem = typeSystem;
@@ -94,5 +125,6 @@ final class CelZ3TranslationContext {
     this.constraints = new LinkedHashSet<>();
     this.inputVariableTypes = new HashMap<>();
     this.truncationConditions = new ArrayList<>();
+    this.symbolTable = new HashMap<>();
   }
 }

@@ -160,6 +160,7 @@ java_library(
         "CelAstAlphaHasher.java",
         "CelAstToZ3Translator.java",
         "CelVerifierZ3Impl.java",
+        "CelZ3ComprehensionTranslator.java",
         "CelZ3CounterexampleGenerator.java",
         "CelZ3ExtensionalityAxioms.java",
         "CelZ3FunctionRegistry.java",
