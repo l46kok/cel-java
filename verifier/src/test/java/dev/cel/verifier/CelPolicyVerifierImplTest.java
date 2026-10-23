@@ -500,6 +500,31 @@ public final class CelPolicyVerifierImplTest {
   }
 
   @Test
+  public void verifyInvariants_literalListVariableBeyondUnrollLimit_verified() throws Exception {
+    String policySource =
+        "name: literal_list_policy\n" //
+            + "rule:\n" //
+            + "  variables:\n" //
+            + "    - xs: '[1, 2, 3, 4, 5, 6]'\n" //
+            + "  match:\n" //
+            + "    - output: 'true'\n" //
+            + "verification:\n" //
+            + "  invariants:\n" //
+            + "    - id: all_positive\n" //
+            + "      assert: variables.xs.all(x, x > 0)";
+    CelPolicy policy = PARSER.parse(policySource);
+    CelPolicyVerifier verifier =
+        CelPolicyVerifierFactory.newVerifier(
+                POLICY_COMPILER,
+                CelVerifierFactory.newVerifier(CEL).setComprehensionUnrollLimit(5).build())
+            .build();
+
+    ImmutableMap<String, CelVerificationResult> results = verifier.verifyInvariants(policy);
+
+    assertThat(results).containsExactly("all_positive", CelVerificationResult.verified());
+  }
+
+  @Test
   public void verifyInvariants_workloadAdmissionFlawed_violationsDetected() throws Exception {
     Cel extendedCel =
         CEL.toCelBuilder()

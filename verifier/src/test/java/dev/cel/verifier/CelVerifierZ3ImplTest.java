@@ -742,6 +742,9 @@ public final class CelVerifierZ3ImplTest {
     OPTIONAL_VALUE_VAR("optional.of(x).value() == x"),
     OPTIONAL_HAS_VALUE_VAR("optional.of(x).hasValue()"),
     OPTIONAL_VAR_HAS_VALUE_IMPLIES_INT("opt_var.hasValue() ? type(opt_var.value()) == int : true"),
+    OPTIONAL_LIST_INDEX("size(int_list) > 0 ? int_list[?0].value() == int_list[0] : true"),
+    OPTIONAL_MAP_INDEX(
+        "'a' in string_int_map ? string_int_map[?'a'].value() == string_int_map['a'] : true"),
 
     IEEE_754_PROTO_NEG_ZERO_NEQ(
         "TestAllTypes{single_double: -0.0} != TestAllTypes{single_double: 0.0}"),
@@ -978,6 +981,7 @@ public final class CelVerifierZ3ImplTest {
         "size(int_list) > 15 ? type(int_list[dyn(15)]) == int : true"),
     MAP_INDEX_TYPE_CONSTRAINT(
         "'key' in string_int_map ? type(string_int_map['key']) == int : true"),
+    FIELD_SELECTION_TYPE_CONSTRAINT("type(test_all_types.single_int64) == int"),
     LITERAL_LIST_INDEX("[1, 2][0] == 1"),
     NESTED_LIST_VARIABLES_EQUALITY(
         "nested_list == [[1]] && nested_list_2 == [[1]] ? nested_list == nested_list_2 : true"),
@@ -1045,6 +1049,7 @@ public final class CelVerifierZ3ImplTest {
             "x == x",
             "[x] == [x]",
             "{1: x} == {1: x}",
+            "size(int_list) == 1 ? int_list.all(i, x == x) : true",
           })
           String expression)
       throws Exception {
@@ -1569,6 +1574,12 @@ public final class CelVerifierZ3ImplTest {
         "[true, 1/0].exists(x, x) == true",
         "Condition is not always true\\.",
         "\\(The expression fails unconditionally, regardless of input state\\)"),
+    // The non-negative element can't make the step false, so only an error at 0 violates it.
+    DYNAMIC_LIST_ALL_STEP_ERROR_PROPAGATES(
+        "size(int_list) == 1 && int_list[0] >= 0 ? int_list.all(x, 10 / x >= 0) : true",
+        "Condition is not always true\\.",
+        "Counterexample input:",
+        "int_list = \\[0\\]"),
     DYNAMIC_STRING_MACRO_TYPE_MISMATCH(
         "unknown_var == 1 ? !(unknown_var.contains('a') == true || unknown_var.contains('a') =="
             + " false) : true",

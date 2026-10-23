@@ -52,6 +52,7 @@ public final class CelZ3Exprs {
         filteredArgs.add(arg);
       }
     }
+    // Performance only: both shortcuts are equivalent to the mkOr below.
     if (filteredArgs.isEmpty()) {
       return ctx.mkFalse();
     }
@@ -82,6 +83,7 @@ public final class CelZ3Exprs {
         filteredArgs.add(arg);
       }
     }
+    // Performance only: both shortcuts are equivalent to the mkAnd below.
     if (filteredArgs.isEmpty()) {
       return ctx.mkTrue();
     }
