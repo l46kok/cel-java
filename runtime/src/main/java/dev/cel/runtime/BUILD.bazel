@@ -530,13 +530,19 @@ cel_android_library(
 java_library(
     name = "lite_runtime_library",
     srcs = ["CelLiteRuntimeLibrary.java"],
-    deps = [":lite_runtime"],
+    deps = [
+        ":lite_runtime",
+        "@maven//:com_google_errorprone_error_prone_annotations",
+    ],
 )
 
 cel_android_library(
     name = "lite_runtime_library_android",
     srcs = ["CelLiteRuntimeLibrary.java"],
-    deps = [":lite_runtime_android"],
+    deps = [
+        ":lite_runtime_android",
+        "@maven//:com_google_errorprone_error_prone_annotations",
+    ],
 )
 
 java_library(

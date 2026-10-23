@@ -14,10 +14,13 @@
 
 package dev.cel.runtime;
 
+import com.google.errorprone.annotations.Immutable;
+
 /**
  * CelLiteRuntimeLibrary defines the interface to extend functionalities beyond the CEL standard
  * functions for {@link CelLiteRuntime}.
  */
+@Immutable
 public interface CelLiteRuntimeLibrary {
 
   /**

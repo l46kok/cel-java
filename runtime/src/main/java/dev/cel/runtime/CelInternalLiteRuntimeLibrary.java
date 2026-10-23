@@ -14,6 +14,7 @@
 
 package dev.cel.runtime;
 
+import com.google.errorprone.annotations.Immutable;
 import dev.cel.common.CelOptions;
 import dev.cel.common.annotations.Internal;
 
@@ -25,6 +26,7 @@ import dev.cel.common.annotations.Internal;
  * <p>CEL Library Internals. Do Not Use.
  */
 @Internal
+@Immutable
 public interface CelInternalLiteRuntimeLibrary extends CelLiteRuntimeLibrary {
 
   /**
