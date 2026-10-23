@@ -91,15 +91,13 @@ final class CelAstToZ3Translator {
   private static final long MAX_UINT32 = 0xFFFFFFFFL;
   private final Context ctx;
   private final CelZ3TypeSystem typeSystem;
-  private final CelZ3OperatorTranslator operatorTranslator;
+  private final CelZ3TranslationContext context;
   private final CelZ3TypeConstraintGenerator typeConstraintGenerator;
+  private final CelZ3OperatorTranslator operatorTranslator;
   private final Map<String, TranslatedValue> symbolTable;
-  private final Set<BoolExpr> typeConstraints;
-  private final Map<Expr<?>, CelType> inputVariableTypes;
   private final ImmutableSet<String> unknownIdentifiers;
   private final int comprehensionUnrollLimit;
   private final CelTypeProvider typeProvider;
-  private final List<BoolExpr> truncationConditions;
   private final Map<String, Expr<?>> emptyMessageCache;
   private final Map<Object, Expr<?>> listLiteralCache;
   private Expr<?> emptyListCache;
@@ -109,11 +107,11 @@ final class CelAstToZ3Translator {
    * Returns a set of Z3 boolean expressions representing type constraints for the translated AST.
    */
   Set<BoolExpr> getTypeConstraints() {
-    return typeConstraints;
+    return context.constraints();
   }
 
   BoolExpr hasTruncation() {
-    return CelZ3Exprs.mkOrFlattened(ctx, truncationConditions);
+    return context.hasTruncation();
   }
 
   CelZ3TypeSystem getTypeSystem() {
@@ -149,13 +147,13 @@ final class CelAstToZ3Translator {
     Set<Expr<?>> mapRefs = new LinkedHashSet<>();
     Set<Expr<?>> msgRefs = new LinkedHashSet<>();
 
-    for (Expr<?> constraint : typeConstraints) {
+    for (Expr<?> constraint : context.constraints()) {
       collectReferences(constraint, visited, listRefs, mapRefs, msgRefs);
     }
     collectReferences(result.z3Expr(), visited, listRefs, mapRefs, msgRefs);
 
-    this.typeConstraints.addAll(
-        CelZ3ExtensionalityAxioms.generateAxioms(ctx, typeSystem, listRefs, mapRefs, msgRefs));
+    CelZ3ExtensionalityAxioms.generateAxioms(ctx, typeSystem, listRefs, mapRefs, msgRefs)
+        .forEach(context::addConstraint);
 
     return result;
   }
@@ -260,18 +258,18 @@ final class CelAstToZ3Translator {
             name,
             n -> {
               Expr<?> v = ctx.mkConst(n, typeSystem.celValueSort());
-              inputVariableTypes.put(v, type);
+              context.addInputVariable(v, type);
 
               // Variables at rest can never be pre-cooked Errors
               // Basically prevents error being a counterexample of var == var
-              typeConstraints.add(ctx.mkNot(typeSystem.isError(v)));
+              context.addConstraint(ctx.mkNot(typeSystem.isError(v)));
 
               BoolExpr constraint = typeConstraintGenerator.createTypeConstraint(v, exprId, ast);
               if (unknownIdentifiers.contains(name)) {
-                typeConstraints.add(ctx.mkOr(typeSystem.isUnknown(v), constraint));
+                context.addConstraint(ctx.mkOr(typeSystem.isUnknown(v), constraint));
               } else {
-                typeConstraints.add(ctx.mkNot(typeSystem.isUnknown(v)));
-                typeConstraints.add(constraint);
+                context.addConstraint(ctx.mkNot(typeSystem.isUnknown(v)));
+                context.addConstraint(constraint);
               }
 
               return TranslatedValue.create(
@@ -325,7 +323,7 @@ final class CelAstToZ3Translator {
         elementsTv.add(elem);
       }
       listRef = typeSystem.mkListRefConst(LIST_REF_PREFIX);
-      typeConstraints.add(ctx.mkEq(typeSystem.getSeq(listRef), seq));
+      context.addConstraint(ctx.mkEq(typeSystem.getSeq(listRef), seq));
       propagateTruncatedTypeConstraint(typeSystem.wrapList(listRef), values);
       Expr<?> finalListRef = listRef;
       cacheKey.ifPresent(key -> listLiteralCache.put(key, finalListRef));
@@ -380,9 +378,9 @@ final class CelAstToZ3Translator {
               ctx.mkITE(finalPresence, ctx.mkStore(mapPresence, key, ctx.mkTrue()), mapPresence);
     }
 
-    typeConstraints.add(ctx.mkEq(typeSystem.getMapValues(mapRef), mapValues));
-    typeConstraints.add(ctx.mkEq(typeSystem.getMapPresence(mapRef), mapPresence));
-    typeConstraints.add(ctx.mkEq(typeSystem.getMapKeys(mapRef), keysSeq));
+    context.addConstraint(ctx.mkEq(typeSystem.getMapValues(mapRef), mapValues));
+    context.addConstraint(ctx.mkEq(typeSystem.getMapPresence(mapRef), mapPresence));
+    context.addConstraint(ctx.mkEq(typeSystem.getMapKeys(mapRef), keysSeq));
 
     Expr<?> result = typeSystem.wrapMap(mapRef);
     propagateTruncatedTypeConstraint(result, values);
@@ -399,7 +397,7 @@ final class CelAstToZ3Translator {
             typeSystem.isErrorOrUnknown(container),
             typeSystem.hasTruncatedTypeConstraint(container));
     for (Expr<?> element : elements) {
-      typeConstraints.add(
+      context.addConstraint(
           ctx.mkImplies(typeSystem.hasTruncatedTypeConstraint(element), hasTruncated));
     }
   }
@@ -488,10 +486,10 @@ final class CelAstToZ3Translator {
               ctx.mkITE(shouldBypass, msgPresence, ctx.mkStore(msgPresence, key, ctx.mkTrue()));
     }
 
-    typeConstraints.add(
+    context.addConstraint(
         ctx.mkEq(typeSystem.getMsgTypeName(msgRef), ctx.mkString(createStruct.messageName())));
-    typeConstraints.add(ctx.mkEq(typeSystem.getMsgValues(msgRef), msgValues));
-    typeConstraints.add(ctx.mkEq(typeSystem.getMsgPresence(msgRef), msgPresence));
+    context.addConstraint(ctx.mkEq(typeSystem.getMsgValues(msgRef), msgValues));
+    context.addConstraint(ctx.mkEq(typeSystem.getMsgPresence(msgRef), msgPresence));
 
     Expr<?> result = typeSystem.wrapMessage(msgRef);
     return TranslatedValue.propagateStrict(ctx, typeSystem, result, celExpr, elementsTv);
@@ -744,7 +742,7 @@ final class CelAstToZ3Translator {
     if (type instanceof ListType) {
       if (emptyListCache == null) {
         emptyListCache = typeSystem.mkListRefConst(EMPTY_LIST_PREFIX);
-        typeConstraints.add(
+        context.addConstraint(
             ctx.mkEq(
                 typeSystem.getSeq(emptyListCache),
                 ctx.mkEmptySeq(ctx.mkSeqSort(typeSystem.celValueSort()))));
@@ -754,15 +752,15 @@ final class CelAstToZ3Translator {
     if (type instanceof MapType) {
       if (emptyMapCache == null) {
         emptyMapCache = typeSystem.mkMapRefConst(EMPTY_MAP_PREFIX);
-        typeConstraints.add(
+        context.addConstraint(
             ctx.mkEq(
                 typeSystem.getMapPresence(emptyMapCache),
                 ctx.mkConstArray(typeSystem.celValueSort(), ctx.mkFalse())));
-        typeConstraints.add(
+        context.addConstraint(
             ctx.mkEq(
                 typeSystem.getMapValues(emptyMapCache),
                 ctx.mkConstArray(typeSystem.celValueSort(), typeSystem.mkUnknown())));
-        typeConstraints.add(
+        context.addConstraint(
             ctx.mkEq(
                 typeSystem.getMapKeys(emptyMapCache),
                 ctx.mkEmptySeq(ctx.mkSeqSort(typeSystem.celValueSort()))));
@@ -776,15 +774,15 @@ final class CelAstToZ3Translator {
               messageName,
               name -> {
                 Expr<?> ref = typeSystem.mkMessageRefConst(EMPTY_MSG_REF_PREFIX + name);
-                typeConstraints.add(
+                context.addConstraint(
                     ctx.mkEq(
                         typeSystem.getMsgPresence(ref),
                         ctx.mkConstArray(ctx.getStringSort(), ctx.mkFalse())));
-                typeConstraints.add(
+                context.addConstraint(
                     ctx.mkEq(
                         typeSystem.getMsgValues(ref),
                         ctx.mkConstArray(ctx.getStringSort(), typeSystem.mkUnknown())));
-                typeConstraints.add(ctx.mkEq(typeSystem.getMsgTypeName(ref), ctx.mkString(name)));
+                context.addConstraint(ctx.mkEq(typeSystem.getMsgTypeName(ref), ctx.mkString(name)));
                 return ref;
               });
       return typeSystem.wrapMessage(msgRef);
@@ -808,7 +806,7 @@ final class CelAstToZ3Translator {
     BoolExpr presence =
         (BoolExpr) ctx.mkSelect((ArrayExpr) typeSystem.getMapPresence(mapRef), mapFieldZ3Str);
     Expr<?> value = ctx.mkSelect((ArrayExpr) typeSystem.getMapValues(mapRef), mapFieldZ3Str);
-    constrainPresentValue(CelZ3Exprs.mkAndFlattened(ctx, typeGuard, presence), value);
+    context.constrainValidValue(CelZ3Exprs.mkAndFlattened(ctx, typeGuard, presence), value);
     return new FieldAccess(presence, value);
   }
 
@@ -818,12 +816,8 @@ final class CelAstToZ3Translator {
     BoolExpr presence =
         (BoolExpr) ctx.mkSelect((ArrayExpr) typeSystem.getMsgPresence(msgRef), msgFieldZ3Str);
     Expr<?> value = ctx.mkSelect((ArrayExpr) typeSystem.getMsgValues(msgRef), msgFieldZ3Str);
-    constrainPresentValue(CelZ3Exprs.mkAndFlattened(ctx, typeGuard, presence), value);
+    context.constrainValidValue(CelZ3Exprs.mkAndFlattened(ctx, typeGuard, presence), value);
     return new FieldAccess(presence, value);
-  }
-
-  private void constrainPresentValue(BoolExpr guard, Expr<?> value) {
-    typeConstraints.add(ctx.mkImplies(guard, ctx.mkNot(typeSystem.isErrorOrUnknown(value))));
   }
 
   private TranslatedValue translateSelect(CelExpr celExpr, CelAbstractSyntaxTree ast) {
@@ -873,7 +867,7 @@ final class CelAstToZ3Translator {
 
     Expr<?> fieldAccess = select.testOnly() ? typeSystem.wrapBool(presenceResult) : valueResult;
 
-    typeConstraints.add(typeConstraintGenerator.createTypeConstraint(fieldAccess, exprId, ast));
+    context.addConstraint(typeConstraintGenerator.createTypeConstraint(fieldAccess, exprId, ast));
 
     TranslatedValue result =
         TranslatedValue.propagateStrict(
@@ -938,10 +932,10 @@ final class CelAstToZ3Translator {
 
               Expr<?>[] exprArgs = args.stream().map(TranslatedValue::z3Expr).toArray(Expr[]::new);
               Expr<?> callRes = ctx.mkApp(funcDecl, exprArgs);
-              typeConstraints.add(
+              context.addConstraint(
                   typeConstraintGenerator.createTypeConstraint(callRes, exprId, ast));
-              typeConstraints.add(ctx.mkNot(typeSystem.isUnknown(callRes)));
-              typeConstraints.add(ctx.mkNot(typeSystem.isError(callRes)));
+              context.addConstraint(ctx.mkNot(typeSystem.isUnknown(callRes)));
+              context.addConstraint(ctx.mkNot(typeSystem.isError(callRes)));
 
               // The solver picks the result freely, so a model depending on it is never exact.
               return TranslatedValue.propagateStrict(
@@ -1120,7 +1114,7 @@ final class CelAstToZ3Translator {
     BoolExpr isValidRange = isMap ? typeSystem.isMap(iterRange) : typeSystem.isList(iterRange);
     BoolExpr isTruncated =
         ctx.mkAnd(isValidRange, ctx.mkGt(lengthExpr, ctx.mkInt(comprehensionUnrollLimit)));
-    truncationConditions.add(isTruncated);
+    context.addTruncationCondition(isTruncated);
 
     if (isAllMacro(comp) || isExistsMacro(comp)) {
       return unrollAllAndExists(
@@ -1312,13 +1306,13 @@ final class CelAstToZ3Translator {
     // Constrain out-of-bounds elements to prevent MBQI from infinitely instantiating list/map
     // axioms
     BoolExpr outOfBounds = ctx.mkGe(idx, lengthExpr);
-    typeConstraints.add(ctx.mkImplies(outOfBounds, ctx.mkEq(xVal, typeSystem.mkUnknown())));
+    context.addConstraint(ctx.mkImplies(outOfBounds, ctx.mkEq(xVal, typeSystem.mkUnknown())));
 
     // If we are iterating over a map, we can optionally bind the sequence elements
     // to the map presence array to ensure the solver knows they correspond.
     if (mapPresence != null) {
       Expr<?> selectExpr = ctx.mkSelect(mapPresence, xVal);
-      typeConstraints.add(ctx.mkImplies(inBounds, (BoolExpr) selectExpr));
+      context.addConstraint(ctx.mkImplies(inBounds, (BoolExpr) selectExpr));
     }
   }
 
@@ -1502,24 +1496,13 @@ final class CelAstToZ3Translator {
     this.ctx = ctx;
     this.comprehensionUnrollLimit = comprehensionUnrollLimit;
     this.typeSystem = new CelZ3TypeSystem(ctx, parameterizeUnknowns);
-    this.typeConstraints = new LinkedHashSet<>();
-    this.inputVariableTypes = new HashMap<>();
-    this.typeConstraintGenerator =
-        new CelZ3TypeConstraintGenerator(ctx, typeSystem, comprehensionUnrollLimit);
-    this.operatorTranslator =
-        new CelZ3OperatorTranslator(
-            ctx,
-            typeSystem,
-            this.typeConstraints::add,
-            typeConstraintGenerator::createTypeConstraintForType,
-            val -> inputVariableTypes.getOrDefault(val, SimpleType.DYN),
-            functionRegistry,
-            comprehensionUnrollLimit);
+    this.context = new CelZ3TranslationContext(ctx, typeSystem, comprehensionUnrollLimit);
+    this.typeConstraintGenerator = context.typeConstraintGenerator();
+    this.operatorTranslator = new CelZ3OperatorTranslator(context, functionRegistry);
     this.symbolTable = new HashMap<>();
     this.unknownIdentifiers = unknownIdentifiers;
     this.emptyMessageCache = new HashMap<>();
     this.listLiteralCache = new HashMap<>();
     this.typeProvider = typeProvider;
-    this.truncationConditions = new ArrayList<>();
   }
 }

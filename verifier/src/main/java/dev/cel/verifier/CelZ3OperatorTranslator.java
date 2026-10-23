@@ -47,18 +47,14 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
-import java.util.function.BiFunction;
-import java.util.function.Consumer;
-import java.util.function.Function;
 
 /** Handles mapping CEL Operators to Z3 SMT logic. */
 @SuppressWarnings({"unchecked", "rawtypes"}) // Z3 Java API uses raw types.
 final class CelZ3OperatorTranslator {
   private final Context ctx;
   private final CelZ3TypeSystem typeSystem;
-  private final Consumer<BoolExpr> constraintSink;
-  private final BiFunction<Expr<?>, CelType, BoolExpr> typeConstraintGenerator;
-  private final Function<Expr<?>, CelType> guaranteedTypes;
+  private final CelZ3TranslationContext context;
+  private final CelZ3TypeConstraintGenerator typeConstraintGenerator;
   private final CelZ3FunctionRegistry functionRegistry;
   private final int comprehensionUnrollLimit;
 
@@ -117,7 +113,7 @@ final class CelZ3OperatorTranslator {
       }
 
       Optional<CelZ3OverloadResult> evaluatedResultOpt =
-          translator.translate(ctx, typeSystem, constraintSink, z3Args, argApproximations);
+          translator.translate(ctx, typeSystem, context::addConstraint, z3Args, argApproximations);
 
       if (!evaluatedResultOpt.isPresent()) {
         continue;
@@ -197,10 +193,10 @@ final class CelZ3OperatorTranslator {
       SeqExpr<?> seq = typeSystem.getSeq(typeSystem.getListRef(rhs));
       for (Expr<?> cand : candidates) {
         BoolExpr structContains = ctx.mkContains((Expr) seq, (Expr) ctx.mkUnit(cand));
-        constraintSink.accept(
+        context.addConstraint(
             ctx.mkImplies(
                 ctx.mkAnd(typeSystem.isList(rhs), structContains),
-                typeConstraintGenerator.apply(cand, elemType)));
+                typeConstraintGenerator.createTypeConstraintForType(cand, elemType)));
       }
       // With a concrete element type, the constraints above cover any match in rhs.
       return isConcrete(elemType)
@@ -210,10 +206,12 @@ final class CelZ3OperatorTranslator {
       // IN_MAP only probes the presence of lhs itself.
       ArrayExpr mapPresence = (ArrayExpr) typeSystem.getMapPresence(typeSystem.getMapRef(rhs));
       BoolExpr inMap = (BoolExpr) ctx.mkSelect(mapPresence, lhs);
-      constraintSink.accept(
+      context.addConstraint(
           ctx.mkImplies(
               ctx.mkAnd(typeSystem.isMap(rhs), inMap),
-              typeConstraintGenerator.apply(lhs, ((MapType) rhsType).keyType())));
+              context
+                  .typeConstraintGenerator()
+                  .createTypeConstraintForType(lhs, ((MapType) rhsType).keyType())));
       return isTruncatedMap(rhs);
     }
     return CelZ3Exprs.mkOrFlattened(
@@ -677,10 +675,12 @@ final class CelZ3OperatorTranslator {
 
   private void constrainListElement(SeqExpr<?> seq, IntExpr idx, Expr<?> elem, CelType listType) {
     if (listType instanceof ListType) {
-      constraintSink.accept(
+      context.addConstraint(
           ctx.mkImplies(
               ctx.mkLt(idx, ctx.mkLength(seq)),
-              typeConstraintGenerator.apply(elem, ((ListType) listType).elemType())));
+              context
+                  .typeConstraintGenerator()
+                  .createTypeConstraintForType(elem, ((ListType) listType).elemType())));
     }
   }
 
@@ -754,21 +754,17 @@ final class CelZ3OperatorTranslator {
             ctx.mkLt((ArithExpr) index, ctx.mkLength(seq)));
 
     Expr<?> val = ctx.mkNth(seq, (ArithExpr) index);
-    constrainValidElement(ctx.mkAnd(typeGuard, inBounds), val);
+    context.constrainValidValue(ctx.mkAnd(typeGuard, inBounds), val);
 
     if (isOptional) {
       Expr<?> resultOptRef = ctx.mkApp(typeSystem.optionalOfRefFunc(), val);
-      constraintSink.accept(ctx.mkEq(typeSystem.getOptionalValue(resultOptRef), val));
-      constraintSink.accept(typeSystem.optHasValue(resultOptRef));
+      context.addConstraint(ctx.mkEq(typeSystem.getOptionalValue(resultOptRef), val));
+      context.addConstraint(typeSystem.optHasValue(resultOptRef));
       return ctx.mkITE(
           inBounds, typeSystem.mkOptionalOf(resultOptRef), typeSystem.mkOptionalNone());
     }
 
     return ctx.mkITE(inBounds, val, typeSystem.mkError());
-  }
-
-  private void constrainValidElement(BoolExpr guard, Expr<?> val) {
-    constraintSink.accept(ctx.mkImplies(guard, ctx.mkNot(typeSystem.isErrorOrUnknown(val))));
   }
 
   private Optional<Long> extractIntNumSafe(Expr<?> expr) {
@@ -925,12 +921,12 @@ final class CelZ3OperatorTranslator {
             .addCase(isDouble, doubleProbe.altVal)
             .build(valOrig);
 
-    constrainValidElement(ctx.mkAnd(typeGuard, finalInMap), finalVal);
+    context.constrainValidValue(ctx.mkAnd(typeGuard, finalInMap), finalVal);
 
     if (isOptional) {
       Expr<?> resultOptRef = ctx.mkApp(typeSystem.optionalOfRefFunc(), finalVal);
-      constraintSink.accept(ctx.mkEq(typeSystem.getOptionalValue(resultOptRef), finalVal));
-      constraintSink.accept(typeSystem.optHasValue(resultOptRef));
+      context.addConstraint(ctx.mkEq(typeSystem.getOptionalValue(resultOptRef), finalVal));
+      context.addConstraint(typeSystem.optHasValue(resultOptRef));
       return ctx.mkITE(
           finalInMap, typeSystem.mkOptionalOf(resultOptRef), typeSystem.mkOptionalNone());
     }
@@ -1030,9 +1026,10 @@ final class CelZ3OperatorTranslator {
 
       CelType finalType = isOptional ? OptionalType.create(expectedElemType) : expectedElemType;
       BoolExpr isDefined = ctx.mkAnd(shouldEvaluate, ctx.mkNot(typeSystem.isError(actualValue)));
-      BoolExpr typeConstraint = typeConstraintGenerator.apply(actualValue, finalType);
+      BoolExpr typeConstraint =
+          typeConstraintGenerator.createTypeConstraintForType(actualValue, finalType);
       if (isLhsTypeGuaranteed) {
-        constraintSink.accept(ctx.mkImplies(isDefined, typeConstraint));
+        context.addConstraint(ctx.mkImplies(isDefined, typeConstraint));
         return TranslatedValue.create(actualValue, typeSystem, ctx.mkFalse());
       }
       // The type checker may narrow other static types (e.g. `(['a'] + dyn_var)[1]` is typed
@@ -1118,7 +1115,7 @@ final class CelZ3OperatorTranslator {
    * so constraints derived from those could exclude valid inputs.
    */
   private CelType guaranteedType(TranslatedValue val) {
-    return guaranteedTypes.apply(val.z3Expr());
+    return context.guaranteedType(val.z3Expr());
   }
 
   /**
@@ -1170,20 +1167,12 @@ final class CelZ3OperatorTranslator {
             .collect(toImmutableList()));
   }
 
-  CelZ3OperatorTranslator(
-      Context ctx,
-      CelZ3TypeSystem typeSystem,
-      Consumer<BoolExpr> constraintSink,
-      BiFunction<Expr<?>, CelType, BoolExpr> typeConstraintGenerator,
-      Function<Expr<?>, CelType> guaranteedTypes,
-      CelZ3FunctionRegistry functionRegistry,
-      int comprehensionUnrollLimit) {
-    this.ctx = ctx;
-    this.typeSystem = typeSystem;
-    this.constraintSink = constraintSink;
-    this.typeConstraintGenerator = typeConstraintGenerator;
-    this.guaranteedTypes = guaranteedTypes;
+  CelZ3OperatorTranslator(CelZ3TranslationContext context, CelZ3FunctionRegistry functionRegistry) {
+    this.ctx = context.ctx();
+    this.typeSystem = context.typeSystem();
+    this.context = context;
+    this.typeConstraintGenerator = context.typeConstraintGenerator();
     this.functionRegistry = functionRegistry;
-    this.comprehensionUnrollLimit = comprehensionUnrollLimit;
+    this.comprehensionUnrollLimit = context.comprehensionUnrollLimit();
   }
 }
