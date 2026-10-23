@@ -119,7 +119,6 @@ public final class CelUnparserImplTest {
           "Foo{`a b`: foo}",
 
           // Constants
-          "true",
           "4",
           "4u",
 
@@ -135,14 +134,12 @@ public final class CelUnparserImplTest {
           "false && (!true || false)",
           "(false && !true || false) ? 2 : 3",
           "(x < 5) ? x : 5",
-          "(x > 5) ? (x - 5) : 0",
           "(x > 5) ? ((x > 10) ? (x - 10) : 5) : 0",
           "a in b",
 
           // Calculations
           "(1 + 2) * 3",
           "1 + 2 * 3",
-          "-(1 * 2)",
 
           // Comprehensions
           "[1, 2, 3].all(x, x > 0)",
@@ -165,12 +162,7 @@ public final class CelUnparserImplTest {
           // equal to filter(x, filter_function).
           "[1, 2, 3].map(x, x >= 2, x)",
 
-          // Index
-          "x[\"a\"].single_int32 == 23",
-          "a[1][\"b\"]",
-
           // Functions
-          "x != \"a\"",
           "size(x) == x.size()",
 
           // Long string

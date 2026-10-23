@@ -181,7 +181,6 @@ public final class CelStringExtensionsTest extends CelExtensionTestBase {
   @TestParameters("{string: '😁😦😑😦', separator: ' ', expectedResult: ['😁😦😑😦']}")
   @TestParameters("{string: '😁a😦나😑 😦', separator: ' ', expectedResult: ['😁a😦나😑', '😦']}")
   @TestParameters("{string: '😁a😦나😑 😦', separator: '나😑 ', expectedResult: ['😁a😦', '😦']}")
-  @TestParameters("{string: '😁a😦나😑 😦', separator: ' ', expectedResult: ['😁a😦나😑' ,'😦']}")
   @TestParameters("{string: '😁a😦나😑 😦', separator: '😁a😦나😑 😦', expectedResult: ['','']}")
   public void split_unicode_success(String string, String separator, List<String> expectedResult)
       throws Exception {
