@@ -307,7 +307,8 @@ public class CelComprehensionsExtensionsTest extends CelExtensionTestBase {
   @TestParameters(
       "{expr: '{}.transformMapEntry(i.j, k, {k: i.j})', err: 'argument must be a simple name'}")
   @TestParameters(
-      "{expr: '{}.transformMapEntry(j, k, \"bad filter\", {k: j})', err: 'no matching overload'}")
+      "{expr: '{}.transformMapEntry(j, k, \"bad filter\", {k: j})', err: \"expected type 'bool'"
+          + " but found 'string'\"}")
   @TestParameters(
       "{expr: '[1, 2].transformList(i, v, v % 2 == 0 ? [v] : v)', err: 'no matching overload'}")
   @TestParameters(

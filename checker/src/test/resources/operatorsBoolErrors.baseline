@@ -13,6 +13,24 @@ ERROR: test_location:1:8: expected type 'bool' but found 'int'
  | 'a' || 1
  | .......^
 
+Source: 1 ? 'a' : 'b'
+=====>
+ERROR: test_location:1:1: expected type 'bool' but found 'int'
+ | 1 ? 'a' : 'b'
+ | ^
+
+Source: true ? 'a' : 1
+=====>
+ERROR: test_location:1:6: found no matching overload for '_?_:_' applied to '(bool, string, int)' (candidates: (bool, %A0, %A0))
+ | true ? 'a' : 1
+ | .....^
+
+Source: [1, 2].filter(x, x + 1)
+=====>
+ERROR: test_location:1:20: expected type 'bool' but found 'int'
+ | [1, 2].filter(x, x + 1)
+ | ...................^
+
 Source: true && false
 declare _&&_ {
   function logical_and_int (int, int) -> int

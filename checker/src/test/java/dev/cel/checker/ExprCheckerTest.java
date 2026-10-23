@@ -183,6 +183,17 @@ public class ExprCheckerTest extends CelBaselineTestCase {
     source = "'a' || 1";
     runTest();
 
+    source = "1 ? 'a' : 'b'";
+    runTest();
+
+    // The condition is a bool, but the branches don't agree on a type.
+    source = "true ? 'a' : 1";
+    runTest();
+
+    // The filter macro expands its predicate into the condition of a conditional.
+    source = "[1, 2].filter(x, x + 1)";
+    runTest();
+
     // Bool operands still match no overload if _&&_ has no bool overload.
     declareFunction(
         "_&&_",

@@ -652,10 +652,11 @@ public final class ExprChecker {
       }
     }
     if (resultType == null) {
-      // Non-bool operands of the logical operators are reported individually, as this is more
-      // precise than reporting that no overload matches.
-      boolean reportedLogicalOperandsErrors = reportLogicalOperandsErrors(function.name(), args);
-      if (!reportedLogicalOperandsErrors) {
+      // Non-bool operands of the logical operators and non-bool conditions of the conditional
+      // operator are reported individually, as this is more precise than reporting that no
+      // overload matches.
+      boolean reportedBoolOperandsErrors = reportBoolOperandsErrors(function.name(), args);
+      if (!reportedBoolOperandsErrors) {
         env.reportError(
             callExprId,
             position,
@@ -672,19 +673,25 @@ public final class ExprChecker {
   }
 
   /**
-   * Reports a type mismatch for each operand of a logical operator ({@code _&&_}, {@code _||_})
-   * which is not a {@code bool}.
+   * Reports a type mismatch for each operand of a logical operator ({@code _&&_}, {@code _||_}),
+   * and for the condition of the conditional operator ({@code _?_:_}), which is not a {@code bool}.
    *
    * @return whether any error was reported.
    */
-  private boolean reportLogicalOperandsErrors(String functionName, List<CelMutableExpr> args) {
-    if (!functionName.equals(Operator.LOGICAL_AND.getFunction())
-        && !functionName.equals(Operator.LOGICAL_OR.getFunction())) {
+  private boolean reportBoolOperandsErrors(String functionName, List<CelMutableExpr> args) {
+    List<CelMutableExpr> boolArgs;
+    if (functionName.equals(Operator.LOGICAL_AND.getFunction())
+        || functionName.equals(Operator.LOGICAL_OR.getFunction())) {
+      boolArgs = args;
+    } else if (functionName.equals(Operator.CONDITIONAL.getFunction())) {
+      // Only the condition must be a bool: the branches can have any type.
+      boolArgs = args.subList(0, 1);
+    } else {
       return false;
     }
 
     boolean reported = false;
-    for (CelMutableExpr arg : args) {
+    for (CelMutableExpr arg : boolArgs) {
       CelType argType = env.getType(arg);
       if (!inferenceContext.isAssignable(argType, SimpleType.BOOL)) {
         env.reportError(
