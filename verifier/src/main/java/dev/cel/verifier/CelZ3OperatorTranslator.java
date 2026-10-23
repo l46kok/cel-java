@@ -150,7 +150,7 @@ final class CelZ3OperatorTranslator {
               typeSystem.isOptional(operand),
               typeSystem.getOptionalValue(typeSystem.getOptionalRef(operand)),
               operand);
-      currentApprox = CelZ3Exprs.mkOrFlattened(ctx, currentApprox, isTruncatedMap(target));
+      currentApprox = CelZ3Exprs.mkOrFlattened(ctx, currentApprox, context.isTruncatedMap(target));
     }
 
     return Optional.of(
@@ -212,10 +212,10 @@ final class CelZ3OperatorTranslator {
               context
                   .typeConstraintGenerator()
                   .createTypeConstraintForType(lhs, ((MapType) rhsType).keyType())));
-      return isTruncatedMap(rhs);
+      return context.isTruncatedMap(rhs);
     }
     return CelZ3Exprs.mkOrFlattened(
-        ctx, isTruncatedMap(rhs), mayObserveTruncatedTypeConstraint(ast, lhsTv, rhsTv));
+        ctx, context.isTruncatedMap(rhs), mayObserveTruncatedTypeConstraint(ast, lhsTv, rhsTv));
   }
 
   private BoolExpr mkTypeGuard(Expr<?> arg, CelType expectedType) {
@@ -985,7 +985,7 @@ final class CelZ3OperatorTranslator {
             ctx.mkLt(
                 typeSystem.getInt(rhsTrans),
                 ctx.mkLength(typeSystem.getSeq(typeSystem.getListRef(lhsTrans)))));
-    BoolExpr isMapIndexTruncated = ctx.mkAnd(shouldEvaluate, isTruncatedMap(lhsTrans));
+    BoolExpr isMapIndexTruncated = ctx.mkAnd(shouldEvaluate, context.isTruncatedMap(lhsTrans));
     return TranslatedValue.propagateStrict(ctx, typeSystem, opName, actualValue, args)
         .withApproximation(
             CelZ3Exprs.mkOrFlattened(
@@ -1136,18 +1136,6 @@ final class CelZ3OperatorTranslator {
   private static boolean isNumericType(CelType type) {
     CelKind kind = type.kind();
     return kind == CelKind.INT || kind == CelKind.UINT || kind == CelKind.DOUBLE;
-  }
-
-  /**
-   * Whether {@code val} is a map with more keys than the unroll limit, beyond which its presence is
-   * not linked to its keys.
-   */
-  BoolExpr isTruncatedMap(Expr<?> val) {
-    return ctx.mkAnd(
-        typeSystem.isMap(val),
-        ctx.mkGt(
-            ctx.mkLength(typeSystem.getMapKeys(typeSystem.getMapRef(val))),
-            ctx.mkInt(comprehensionUnrollLimit)));
   }
 
   /**

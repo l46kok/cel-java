@@ -165,6 +165,7 @@ java_library(
         "CelZ3ExtensionalityAxioms.java",
         "CelZ3FunctionRegistry.java",
         "CelZ3OperatorTranslator.java",
+        "CelZ3StructTranslator.java",
         "CelZ3TranslationContext.java",
         "CelZ3TypeConstraintGenerator.java",
         "TranslatedValue.java",

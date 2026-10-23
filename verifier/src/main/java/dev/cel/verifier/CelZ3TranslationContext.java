@@ -81,6 +81,18 @@ final class CelZ3TranslationContext {
     return inputVariableTypes.getOrDefault(value, SimpleType.DYN);
   }
 
+  /**
+   * Whether {@code val} is a map with more keys than the unroll limit, beyond which its presence is
+   * not linked to its keys.
+   */
+  BoolExpr isTruncatedMap(Expr<?> val) {
+    return ctx.mkAnd(
+        typeSystem.isMap(val),
+        ctx.mkGt(
+            ctx.mkLength(typeSystem.getMapKeys(typeSystem.getMapRef(val))),
+            ctx.mkInt(comprehensionUnrollLimit)));
+  }
+
   void addTruncationCondition(BoolExpr condition) {
     truncationConditions.add(condition);
   }
