@@ -259,7 +259,7 @@ final class CelVerifierZ3Impl implements CelVerifier {
               "Equivalence violation detected.",
               getCounterexampleString(
                   ctx,
-                  translator.getTypeSystem(),
+                  translator,
                   result.model,
                   /* isApproximate= */ false,
                   /* isCounterexample= */ true));
@@ -269,7 +269,7 @@ final class CelVerifierZ3Impl implements CelVerifier {
                   + " theories, or loop bounds.",
               getCounterexampleString(
                   ctx,
-                  translator.getTypeSystem(),
+                  translator,
                   result.model,
                   /* isApproximate= */ true,
                   /* isCounterexample= */ true));
@@ -345,7 +345,7 @@ final class CelVerifierZ3Impl implements CelVerifier {
               String.format("%s violation detected.", subjectName),
               getCounterexampleString(
                   ctx,
-                  translator.getTypeSystem(),
+                  translator,
                   result.model,
                   /* isApproximate= */ false,
                   /* isCounterexample= */ true));
@@ -355,7 +355,7 @@ final class CelVerifierZ3Impl implements CelVerifier {
                   + " theories, or loop bounds.",
               getCounterexampleString(
                   ctx,
-                  translator.getTypeSystem(),
+                  translator,
                   result.model,
                   /* isApproximate= */ true,
                   /* isCounterexample= */ true));
@@ -408,7 +408,7 @@ final class CelVerifierZ3Impl implements CelVerifier {
                   "Condition is not always true.",
                   getCounterexampleString(
                       ctx,
-                      translator.getTypeSystem(),
+                      translator,
                       result.model,
                       /* isApproximate= */ false,
                       /* isCounterexample= */ true))
@@ -416,7 +416,7 @@ final class CelVerifierZ3Impl implements CelVerifier {
                   "Condition is satisfiable."
                       + getCounterexampleString(
                           ctx,
-                          translator.getTypeSystem(),
+                          translator,
                           result.model,
                           /* isApproximate= */ false,
                           /* isCounterexample= */ false));
@@ -432,7 +432,7 @@ final class CelVerifierZ3Impl implements CelVerifier {
               prefix,
               getCounterexampleString(
                   ctx,
-                  translator.getTypeSystem(),
+                  translator,
                   result.model,
                   /* isApproximate= */ true,
                   /* isCounterexample= */ searchForCounterexample));
@@ -540,12 +540,17 @@ final class CelVerifierZ3Impl implements CelVerifier {
 
   private static String getCounterexampleString(
       Context ctx,
-      CelZ3TypeSystem typeSystem,
+      CelAstToZ3Translator translator,
       Model model,
       boolean isApproximate,
       boolean isCounterexample) {
     return CelZ3CounterexampleGenerator.generate(
-        ctx, typeSystem, model, isApproximate, isCounterexample);
+        ctx,
+        translator.getTypeSystem(),
+        model,
+        translator.getInputVariables(),
+        isApproximate,
+        isCounterexample);
   }
 
   private enum SolverOutcome {

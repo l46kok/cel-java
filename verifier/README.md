@@ -224,8 +224,8 @@ public class PolicyVerifierExample {
         System.out.println(result.message());
         // Output:
         // Equivalence violation detected. Counterexample input:
-        //   country = "a"
         //   role = "editor"
+        //   country = "a"
         //   port = 443
         break;
       case INCONCLUSIVE:

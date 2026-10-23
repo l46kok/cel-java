@@ -196,13 +196,22 @@ public final class CelVerifierZ3ImplTest {
         "size(int_list) == 6 && dyn(b ? [1] : int_list) == [1]", "b = true"),
     TIMESTAMP_SUBSECOND_SATISFIABLE(
         "ts == google.protobuf.Timestamp{seconds: 10, nanos: 500}",
-        "ts = google\\.protobuf\\.Timestamp\\{seconds: 10, nanos: 500\\}"),
+        "ts = timestamp\\(\"1970-01-01T00:00:10\\.000000500Z\"\\)"),
     TIMESTAMP_NEGATIVE_SUBSECOND_SATISFIABLE(
         "ts == google.protobuf.Timestamp{seconds: -1, nanos: 500}",
-        "ts = google\\.protobuf\\.Timestamp\\{seconds: -1, nanos: 500\\}"),
+        "ts = timestamp\\(\"1969-12-31T23:59:59\\.000000500Z\"\\)"),
     DURATION_SUBSECOND_SATISFIABLE(
         "dur == google.protobuf.Duration{seconds: 1, nanos: 500}",
-        "dur = duration\\('1000000500ns'\\)"),
+        "dur = duration\\(\"1000000500ns\"\\)"),
+    // Timestamps nested in dyn aren't range constrained, and RFC 3339 can't express these.
+    TIMESTAMP_ABOVE_RANGE_SATISFIABLE(
+        "type(dyn_var) == google.protobuf.Timestamp"
+            + " && dyn_var > google.protobuf.Timestamp{seconds: 253402300799, nanos: 999999999}",
+        "dyn_var = timestamp\\(\\d+\\)"),
+    TIMESTAMP_BELOW_RANGE_SATISFIABLE(
+        "type(dyn_var) == google.protobuf.Timestamp"
+            + " && dyn_var < google.protobuf.Timestamp{seconds: -62135596800}",
+        "dyn_var = timestamp\\(-\\d+\\)"),
     ;
 
     private final String expr;
@@ -237,6 +246,87 @@ public final class CelVerifierZ3ImplTest {
     assertThat(result.message()).contains("Condition is satisfiable.");
     assertThat(result.message()).contains("Satisfying input:");
     assertThat(result.message()).containsMatch("x = (?:[6-9]|[1-9]\\d+)");
+  }
+
+  private enum WitnessTestCase {
+    INT_MIN("x == -9223372036854775808", "x", "-9223372036854775808"),
+    INT_MAX("x == 9223372036854775807", "x", "9223372036854775807"),
+    UINT_MAX("u == 18446744073709551615u", "u", "18446744073709551615u"),
+    SUBNORMAL_DOUBLE("d == 4.9e-324", "d", "4.9E-324"),
+    POSITIVE_INFINITY("d > 1.7976931348623157e308", "d", "double(\"Infinity\")"),
+    NEGATIVE_INFINITY("d < -1.7976931348623157e308", "d", "double(\"-Infinity\")"),
+    BOOL("a", "a", "true"),
+    UNICODE_STRING("string_var == 'é'", "string_var", "\"é\""),
+    ESCAPED_STRING("string_var == '\"\\\\\\n\\x01'", "string_var", "\"\\\"\\\\\\u000a\\u0001\""),
+    ESCAPED_BYTES("by == b'a\\x01\"'", "by", "b\"a\\x01\\\"\""),
+    DEL_BYTES("by == b'\\x7f'", "by", "b\"\\x7f\""),
+    C1_CONTROL_STRING("string_var == '\\u0085'", "string_var", "\"\\u0085\""),
+    MIN_TIMESTAMP("ts == timestamp(-62135596800)", "ts", "timestamp(\"0001-01-01T00:00:00Z\")"),
+    MAX_TIMESTAMP(
+        "ts == google.protobuf.Timestamp{seconds: 253402300799, nanos: 999999999}",
+        "ts",
+        "timestamp(\"9999-12-31T23:59:59.999999999Z\")"),
+    SUBSECOND_TIMESTAMP(
+        "ts == google.protobuf.Timestamp{seconds: -1, nanos: 500}",
+        "ts",
+        "timestamp(\"1969-12-31T23:59:59.000000500Z\")"),
+    DURATION("timestamp(100) - timestamp(50) == dur", "dur", "duration(\"50s\")"),
+    SUBSECOND_DURATION(
+        "dur == google.protobuf.Duration{seconds: -1, nanos: -500}",
+        "dur",
+        "duration(\"-1000000500ns\")"),
+    NULL("dyn_var == null", "dyn_var", "null"),
+    EMPTY_LIST("int_list == []", "int_list", "[]"),
+    LIST_WITH_NULL("dyn_list == [true, null]", "dyn_list", "[true, null]"),
+    MAP("string_int_map == {'a': 1}", "string_int_map", "{\"a\": 1}"),
+    OPTIONAL("opt_var == optional.of(1)", "opt_var", "optional.of(1)"),
+    OPTIONAL_NONE("opt_var == optional.none()", "opt_var", "optional.none()");
+
+    private final String expr;
+    private final String variableName;
+    private final String expectedDisplayValue;
+
+    WitnessTestCase(String expr, String variableName, String expectedDisplayValue) {
+      this.expr = expr;
+      this.variableName = variableName;
+      this.expectedDisplayValue = expectedDisplayValue;
+    }
+  }
+
+  @Test
+  public void isSatisfiable_witnessDisplayedAsCelLiteral(@TestParameter WitnessTestCase testCase)
+      throws Exception {
+    CelAbstractSyntaxTree ast = CEL.compile(testCase.expr).getAst();
+
+    CelVerificationResult result = VERIFIER.isSatisfiable(ast);
+
+    assertThat(result.message().split("\n"))
+        .asList()
+        .contains("  " + testCase.variableName + " = " + testCase.expectedDisplayValue);
+  }
+
+  @Test
+  public void isSatisfiable_listAtDisplayLimit_displaysAllElements() throws Exception {
+    CelAbstractSyntaxTree ast =
+        CEL.compile("int_list == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]").getAst();
+
+    CelVerificationResult result = VERIFIER.isSatisfiable(ast);
+
+    assertThat(result.message())
+        .endsWith("int_list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]");
+  }
+
+  @Test
+  public void isSatisfiable_listPastDisplayLimit_elidesRemainingElements() throws Exception {
+    CelAbstractSyntaxTree ast =
+        CEL.compile("int_list == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]").getAst();
+
+    CelVerificationResult result = VERIFIER.isSatisfiable(ast);
+
+    assertThat(result.message())
+        .endsWith(
+            "int_list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, ... (1 more"
+                + " elements)]");
   }
 
   @Test
@@ -1461,12 +1551,12 @@ public final class CelVerifierZ3ImplTest {
         "dur != dur",
         "Condition is not always true\\.",
         "Counterexample input:",
-        "dur = duration\\('-?\\d+s'\\)"),
+        "dur = duration\\(\"-?\\d+s\"\\)"),
     TIMESTAMP_VARIABLE_COUNTEREXAMPLE(
         "ts != ts",
         "Condition is not always true\\.",
         "Counterexample input:",
-        "ts = timestamp\\(-?\\d+\\)"),
+        "ts = timestamp\\(\"[^\"]+\"\\)"),
     UNINTERPRETED_CONVERSION_NULL_FAILS_WITH_ERRORS(
         "string(null) == string(null)", "Condition is not always true\\."),
     LAW_OF_EXCLUDED_MIDDLE_FAILS_WITH_ERRORS(
@@ -1506,7 +1596,7 @@ public final class CelVerifierZ3ImplTest {
         "opt_dyn_var.hasValue() ? type(opt_dyn_var.value()) == int : true",
         "Condition is not always true\\.",
         "Counterexample input:",
-        "opt_dyn_var = optional\\(Unknown\\)"),
+        "opt_dyn_var = optional\\.of\\(Unknown\\)"),
     OPTIONAL_ENTRY_DYN_VAR_TYPE_MISMATCH(
         "[?dyn_var] == [?dyn_var] ? true : true",
         "Condition is not always true\\.",
@@ -1630,7 +1720,7 @@ public final class CelVerifierZ3ImplTest {
         "request == request",
         "Condition is not always true\\.",
         "Counterexample input:",
-        "request = NaN"),
+        "request = double\\(\"NaN\"\\)"),
     CROSS_TYPE_NUMERIC_EQUALITY_APPROXIMATION_VIOLATION(
         "dyn_var == 1.0",
         "Condition is not always true\\.",
@@ -2605,9 +2695,9 @@ public final class CelVerifierZ3ImplTest {
         "role == \"user\"",
         ImmutableList.of("role = \"admin\"", "role = \"user\"")),
     DOUBLE("d == 1.5", "d == 2.5", ImmutableList.of("d = 1\\.5", "d = 2\\.5")),
-    DOUBLE_NAN("d != d", "false", ImmutableList.of("d = NaN")),
-    DOUBLE_INF("d == (1.0 / 0.0)", "false", ImmutableList.of("d = Infinity")),
-    DOUBLE_NEG_INF("d == (-1.0 / 0.0)", "false", ImmutableList.of("d = -Infinity")),
+    DOUBLE_NAN("d != d", "false", ImmutableList.of("d = double\\(\"NaN\"\\)")),
+    DOUBLE_INF("d == (1.0 / 0.0)", "false", ImmutableList.of("d = double\\(\"Infinity\"\\)")),
+    DOUBLE_NEG_INF("d == (-1.0 / 0.0)", "false", ImmutableList.of("d = double\\(\"-Infinity\"\\)")),
     DOUBLE_NEG_ZERO("d == 0.0 && 1.0 / d == (-1.0 / 0.0)", "false", ImmutableList.of("d = -0\\.0")),
     DOUBLE_POS_ZERO("d == 0.0 && 1.0 / d == (1.0 / 0.0)", "false", ImmutableList.of("d = 0\\.0")),
     UINT("u == 443u", "u == 80u", ImmutableList.of("u = 443u", "u = 80u")),

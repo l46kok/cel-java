@@ -186,6 +186,7 @@ java_library(
         "//common/ast",
         "//common/ast:cel_block",
         "//common/internal:cel_descriptor_pools",
+        "//common/internal:proto_time_utils",
         "//common/internal:well_known_proto",
         "//common/types",
         "//common/types:cel_types",
