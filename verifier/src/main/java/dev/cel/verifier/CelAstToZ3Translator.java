@@ -92,6 +92,7 @@ final class CelAstToZ3Translator {
   private final Context ctx;
   private final CelZ3TypeSystem typeSystem;
   private final CelZ3OperatorTranslator operatorTranslator;
+  private final CelZ3TypeConstraintGenerator typeConstraintGenerator;
   private final Map<String, TranslatedValue> symbolTable;
   private final Set<BoolExpr> typeConstraints;
   private final Map<Expr<?>, CelType> inputVariableTypes;
@@ -265,7 +266,7 @@ final class CelAstToZ3Translator {
               // Basically prevents error being a counterexample of var == var
               typeConstraints.add(ctx.mkNot(typeSystem.isError(v)));
 
-              BoolExpr constraint = createTypeConstraint(v, exprId, ast);
+              BoolExpr constraint = typeConstraintGenerator.createTypeConstraint(v, exprId, ast);
               if (unknownIdentifiers.contains(name)) {
                 typeConstraints.add(ctx.mkOr(typeSystem.isUnknown(v), constraint));
               } else {
@@ -582,7 +583,8 @@ final class CelAstToZ3Translator {
       }
       entryTvs.add(entryTv);
     }
-    BoolExpr validValue = createTypeConstraintForType(currentVal, targetType);
+    BoolExpr validValue =
+        typeConstraintGenerator.createTypeConstraintForType(currentVal, targetType);
     if (typeName.equals(CelTypes.INT32_WRAPPER_MESSAGE)) {
       IntExpr intVal = typeSystem.getInt(currentVal);
       validValue =
@@ -871,7 +873,7 @@ final class CelAstToZ3Translator {
 
     Expr<?> fieldAccess = select.testOnly() ? typeSystem.wrapBool(presenceResult) : valueResult;
 
-    typeConstraints.add(createTypeConstraint(fieldAccess, exprId, ast));
+    typeConstraints.add(typeConstraintGenerator.createTypeConstraint(fieldAccess, exprId, ast));
 
     TranslatedValue result =
         TranslatedValue.propagateStrict(
@@ -936,7 +938,8 @@ final class CelAstToZ3Translator {
 
               Expr<?>[] exprArgs = args.stream().map(TranslatedValue::z3Expr).toArray(Expr[]::new);
               Expr<?> callRes = ctx.mkApp(funcDecl, exprArgs);
-              typeConstraints.add(createTypeConstraint(callRes, exprId, ast));
+              typeConstraints.add(
+                  typeConstraintGenerator.createTypeConstraint(callRes, exprId, ast));
               typeConstraints.add(ctx.mkNot(typeSystem.isUnknown(callRes)));
               typeConstraints.add(ctx.mkNot(typeSystem.isError(callRes)));
 
@@ -1126,33 +1129,6 @@ final class CelAstToZ3Translator {
       return unrollMapAndFilter(
           celExpr, ast, seq, lengthExpr, mapPresence, isTruncated, iterRangeTv);
     }
-  }
-
-  private BoolExpr getBoundedMapBijection(
-      ArrayExpr mapPresence, SeqExpr<?> seq, ArithExpr lengthExpr) {
-    List<BoolExpr> constraints = new ArrayList<>();
-    for (int i = 0; i < comprehensionUnrollLimit; i++) {
-      for (int j = i + 1; j < comprehensionUnrollLimit; j++) {
-        BoolExpr validPair = ctx.mkLt(ctx.mkInt(j), lengthExpr);
-        BoolExpr notEqual =
-            ctx.mkNot(ctx.mkEq(ctx.mkNth(seq, ctx.mkInt(i)), ctx.mkNth(seq, ctx.mkInt(j))));
-        constraints.add(ctx.mkImplies(validPair, notEqual));
-      }
-    }
-
-    BoolExpr isNotTruncated = ctx.mkLe(lengthExpr, ctx.mkInt(comprehensionUnrollLimit));
-
-    ArrayExpr seqMap = ctx.mkConstArray(typeSystem.celValueSort(), ctx.mkFalse());
-    for (int i = 0; i < comprehensionUnrollLimit; i++) {
-      seqMap =
-          (ArrayExpr)
-              ctx.mkITE(
-                  ctx.mkLt(ctx.mkInt(i), lengthExpr),
-                  ctx.mkStore(seqMap, ctx.mkNth(seq, ctx.mkInt(i)), ctx.mkTrue()),
-                  seqMap);
-    }
-    constraints.add(ctx.mkImplies(isNotTruncated, ctx.mkEq(mapPresence, seqMap)));
-    return CelZ3Exprs.mkAndFlattened(ctx, constraints);
   }
 
   private <T> T withIterationScope(
@@ -1469,161 +1445,6 @@ final class CelAstToZ3Translator {
     return arg.identOrDefault().name().equals(comp.accuVar());
   }
 
-  private BoolExpr createTypeConstraint(Expr<?> val, long exprId, CelAbstractSyntaxTree ast) {
-    CelType type =
-        ast.getType(exprId)
-            .orElseThrow(
-                () -> new IllegalArgumentException("Type not found for expr ID: " + exprId));
-    BoolExpr typeConstraint = createTypeConstraintForType(val, type);
-    return ctx.mkOr(typeSystem.isErrorOrUnknown(val), typeConstraint);
-  }
-
-  private BoolExpr createTypeConstraintForType(Expr<?> val, CelType type) {
-    if (type instanceof NullableType) {
-      NullableType nullableType = (NullableType) type;
-      return ctx.mkOr(
-          typeSystem.isNull(val), createTypeConstraintForType(val, nullableType.targetType()));
-    }
-    if (type instanceof OptionalType) {
-      BoolExpr isOpt = typeSystem.isOptional(val);
-      CelType paramType = type.parameters().get(0);
-      if (paramType.kind().isDyn() || paramType.kind().isTypeParam()) {
-        return isOpt;
-      }
-      Expr<?> optRef = typeSystem.getOptionalRef(val);
-      BoolExpr hasValue = typeSystem.optHasValue(optRef);
-      Expr<?> optVal = typeSystem.getOptionalValue(optRef);
-      BoolExpr optValNotError = ctx.mkNot(typeSystem.isError(optVal));
-      BoolExpr valConstraint = createTypeConstraintForType(optVal, paramType);
-      return ctx.mkAnd(isOpt, ctx.mkImplies(hasValue, ctx.mkAnd(optValNotError, valConstraint)));
-    }
-    if (type.equals(SimpleType.BOOL)) {
-      return typeSystem.isBool(val);
-    }
-    if (type.equals(SimpleType.INT)) {
-      IntExpr unwrapped = typeSystem.getInt(val);
-      return ctx.mkAnd(typeSystem.isInt(val), ctx.mkNot(typeSystem.checkIntOverflow(unwrapped)));
-    }
-    if (type.equals(SimpleType.UINT)) {
-      IntExpr unwrapped = typeSystem.getUint(val);
-      return ctx.mkAnd(typeSystem.isUint(val), ctx.mkNot(typeSystem.checkUintOverflow(unwrapped)));
-    }
-    if (type.equals(SimpleType.DOUBLE)) {
-      return typeSystem.isDouble(val);
-    }
-    if (type.equals(SimpleType.STRING)) {
-      return typeSystem.isString(val);
-    }
-    if (type.equals(SimpleType.BYTES)) {
-      return typeSystem.isBytes(val);
-    }
-    if (type.equals(SimpleType.TIMESTAMP)) {
-      IntExpr nanos = typeSystem.getTimestamp(val);
-      return ctx.mkAnd(
-          typeSystem.isTimestamp(val), ctx.mkNot(typeSystem.checkTimestampOverflow(nanos)));
-    }
-    if (type.equals(SimpleType.DURATION)) {
-      IntExpr nanos = typeSystem.getDuration(val);
-      return ctx.mkAnd(
-          typeSystem.isDuration(val), ctx.mkNot(typeSystem.checkDurationOverflow(nanos)));
-    }
-
-    if (type instanceof ListType) {
-      // Constrain list elements using bounded unrolling up to comprehensionUnrollLimit rather
-      // than Z3 forall quantifiers to prevent MBQI quantifier instantiation loops.
-      // Assert: isList(val) ∧ for all unrolled 0 <= i < length: ¬isError(seq[i]) ∧
-      // typeConstraint(seq[i]).
-      BoolExpr isList = typeSystem.isList(val);
-      CelType elemType = ((ListType) type).elemType();
-
-      Expr<?> listRef = typeSystem.getListRef(val);
-      SeqExpr seq = typeSystem.getSeq(listRef);
-      Expr length = ctx.mkLength(seq);
-
-      List<BoolExpr> boundsAndTypes = new ArrayList<>();
-      boundsAndTypes.add(isList);
-      // Elements beyond the limit are unconstrained, which only matters if elemType is known.
-      if (CelZ3OperatorTranslator.isStaticallyKnown(elemType)) {
-        boundsAndTypes.add(
-            ctx.mkImplies(
-                ctx.mkGt(length, ctx.mkInt(comprehensionUnrollLimit)),
-                typeSystem.hasTruncatedTypeConstraint(val)));
-      }
-      for (int i = 0; i < comprehensionUnrollLimit; i++) {
-        IntExpr idx = ctx.mkInt(i);
-        Expr elem = ctx.mkNth(seq, idx);
-        BoolExpr validIndex = ctx.mkLt(idx, length);
-        // Assert ¬isError(elem) as a domain invariant so Z3 never synthesizes an Error element in
-        // list(dyn). For concrete types, this is already implied by createTypeConstraintForType.
-        boundsAndTypes.add(ctx.mkImplies(validIndex, ctx.mkNot(typeSystem.isError(elem))));
-        BoolExpr elemConstraint = createTypeConstraintForType(elem, elemType);
-        boundsAndTypes.add(ctx.mkImplies(validIndex, elemConstraint));
-      }
-
-      return CelZ3Exprs.mkAndFlattened(ctx, boundsAndTypes);
-    }
-    if (type instanceof MapType) {
-      // Do NOT emit a for-all quantifier over map keys or values here.
-      // Doing so forces MBQI into an infinite loop. Instead, constrain keys and values using
-      // bounded unrolling over the key sequence up to comprehensionUnrollLimit.
-      // Assert: isMap(val) ∧ for all unrolled 0 <= i < length: isPrimitiveKey(key) ∧ ¬isError(key)
-      //         ∧ (presence(key) ⇒ ¬isError(val) ∧ typeConstraint(val))
-      BoolExpr isMap = typeSystem.isMap(val);
-      MapType mapType = (MapType) type;
-      CelType keyType = mapType.keyType();
-      CelType valType = mapType.valueType();
-
-      Expr<?> mapRef = typeSystem.getMapRef(val);
-      SeqExpr seq = typeSystem.getMapKeys(mapRef);
-      Expr length = ctx.mkLength(seq);
-      ArrayExpr mapValues = (ArrayExpr) typeSystem.getMapValues(mapRef);
-      ArrayExpr mapPresence = (ArrayExpr) typeSystem.getMapPresence(mapRef);
-
-      List<BoolExpr> boundsAndTypes = new ArrayList<>();
-      boundsAndTypes.add(isMap);
-      boundsAndTypes.add(getBoundedMapBijection(mapPresence, seq, (ArithExpr) length));
-      // Entries beyond the limit are unconstrained, which matters if keyType or valType is known.
-      if (CelZ3OperatorTranslator.isStaticallyKnown(keyType)
-          || CelZ3OperatorTranslator.isStaticallyKnown(valType)) {
-        boundsAndTypes.add(
-            ctx.mkImplies(
-                ctx.mkGt(length, ctx.mkInt(comprehensionUnrollLimit)),
-                typeSystem.hasTruncatedTypeConstraint(val)));
-      }
-
-      for (int i = 0; i < comprehensionUnrollLimit; i++) {
-        IntExpr idx = ctx.mkInt(i);
-        Expr key = ctx.mkNth(seq, idx);
-        BoolExpr validIndex = ctx.mkLt(idx, length);
-
-        BoolExpr isKeyPrim = typeSystem.isPrimitiveKey(key);
-        BoolExpr keyNotError = ctx.mkNot(typeSystem.isError(key));
-        // Assert isKeyPrim ∧ ¬isError(key) so Z3 never synthesizes a non-primitive or Error key in
-        // map(dyn, ...). For concrete map types, this is already implied by keyType constraints.
-        boundsAndTypes.add(ctx.mkImplies(validIndex, ctx.mkAnd(isKeyPrim, keyNotError)));
-        boundsAndTypes.add(ctx.mkImplies(validIndex, createTypeConstraintForType(key, keyType)));
-
-        BoolExpr presence = (BoolExpr) ctx.mkSelect(mapPresence, key);
-        BoolExpr validEntry = ctx.mkAnd(validIndex, presence);
-
-        Expr mapVal = ctx.mkSelect(mapValues, key);
-        BoolExpr valNotError = ctx.mkNot(typeSystem.isErrorOrUnknown(mapVal));
-        boundsAndTypes.add(ctx.mkImplies(validEntry, valNotError));
-        boundsAndTypes.add(ctx.mkImplies(validEntry, createTypeConstraintForType(mapVal, valType)));
-      }
-
-      return CelZ3Exprs.mkAndFlattened(ctx, boundsAndTypes);
-    }
-    if (type.kind() == CelKind.STRUCT) {
-      return ctx.mkAnd(
-          typeSystem.isMessage(val),
-          ctx.mkEq(
-              typeSystem.getMsgTypeName(typeSystem.getMessageRef(val)), ctx.mkString(type.name())));
-    }
-    // Fallback: no type constraint
-    return ctx.mkTrue();
-  }
-
   private static final class IterationElement {
     private final Expr<?> keyOrIndex;
     private final Expr<?> value;
@@ -1683,12 +1504,14 @@ final class CelAstToZ3Translator {
     this.typeSystem = new CelZ3TypeSystem(ctx, parameterizeUnknowns);
     this.typeConstraints = new LinkedHashSet<>();
     this.inputVariableTypes = new HashMap<>();
+    this.typeConstraintGenerator =
+        new CelZ3TypeConstraintGenerator(ctx, typeSystem, comprehensionUnrollLimit);
     this.operatorTranslator =
         new CelZ3OperatorTranslator(
             ctx,
             typeSystem,
             this.typeConstraints::add,
-            this::createTypeConstraintForType,
+            typeConstraintGenerator::createTypeConstraintForType,
             val -> inputVariableTypes.getOrDefault(val, SimpleType.DYN),
             functionRegistry,
             comprehensionUnrollLimit);
