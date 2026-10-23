@@ -160,14 +160,14 @@ abstract class TranslatedValue {
 
       BoolExpr isError = ts.isError(z3Expr);
       BoolExpr isUnknown = ts.isUnknown(z3Expr);
-      BoolExpr isExact = CelZ3TypeSystem.mkNotFlattened(ctx, isApprox);
+      BoolExpr isExact = CelZ3Exprs.mkNotFlattened(ctx, isApprox);
 
       unknowns.add(isUnknown);
-      exactErrors.add(CelZ3TypeSystem.mkAndFlattened(ctx, isError, isExact));
-      exactUnknowns.add(CelZ3TypeSystem.mkAndFlattened(ctx, isUnknown, isExact));
+      exactErrors.add(CelZ3Exprs.mkAndFlattened(ctx, isError, isExact));
+      exactUnknowns.add(CelZ3Exprs.mkAndFlattened(ctx, isUnknown, isExact));
     }
 
-    BoolExpr anyTaint = CelZ3TypeSystem.mkOrFlattened(ctx, taints);
+    BoolExpr anyTaint = CelZ3Exprs.mkOrFlattened(ctx, taints);
     if (nonConstZ3Args.isEmpty()) {
       return create(baseResult, celExpr, ts, anyTaint);
     }
@@ -175,19 +175,19 @@ abstract class TranslatedValue {
     Expr<?> finalResult =
         ts.propagateErrorAndUnknown(opName, baseResult, nonConstZ3Args, allZ3Args);
 
-    BoolExpr hasExactError = CelZ3TypeSystem.mkOrFlattened(ctx, exactErrors);
-    BoolExpr hasExactUnknown = CelZ3TypeSystem.mkOrFlattened(ctx, exactUnknowns);
-    BoolExpr hasUnknown = CelZ3TypeSystem.mkOrFlattened(ctx, unknowns);
+    BoolExpr hasExactError = CelZ3Exprs.mkOrFlattened(ctx, exactErrors);
+    BoolExpr hasExactUnknown = CelZ3Exprs.mkOrFlattened(ctx, exactUnknowns);
+    BoolExpr hasUnknown = CelZ3Exprs.mkOrFlattened(ctx, unknowns);
 
     BoolExpr isSafe =
-        CelZ3TypeSystem.mkOrFlattened(
+        CelZ3Exprs.mkOrFlattened(
             ctx,
             hasExactUnknown,
-            CelZ3TypeSystem.mkAndFlattened(
-                ctx, hasExactError, CelZ3TypeSystem.mkNotFlattened(ctx, hasUnknown)),
-            CelZ3TypeSystem.mkNotFlattened(ctx, anyTaint));
+            CelZ3Exprs.mkAndFlattened(
+                ctx, hasExactError, CelZ3Exprs.mkNotFlattened(ctx, hasUnknown)),
+            CelZ3Exprs.mkNotFlattened(ctx, anyTaint));
 
-    return create(finalResult, celExpr, ts, CelZ3TypeSystem.mkNotFlattened(ctx, isSafe));
+    return create(finalResult, celExpr, ts, CelZ3Exprs.mkNotFlattened(ctx, isSafe));
   }
 
   /**
@@ -228,7 +228,7 @@ abstract class TranslatedValue {
         z3Expr(),
         celExpr(),
         typeSystem(),
-        CelZ3TypeSystem.mkOrFlattened(typeSystem().ctx(), isApproximate(), approxCondition));
+        CelZ3Exprs.mkOrFlattened(typeSystem().ctx(), isApproximate(), approxCondition));
   }
 }
 

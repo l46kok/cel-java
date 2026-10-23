@@ -22,6 +22,7 @@ import dev.cel.common.types.ListType;
 import dev.cel.common.types.MapType;
 import dev.cel.common.types.OptionalType;
 import dev.cel.common.types.SimpleType;
+import dev.cel.verifier.CelZ3Exprs;
 import dev.cel.verifier.CelZ3TypeSystem;
 import java.util.Optional;
 
@@ -48,7 +49,7 @@ final class TypeAxiom {
           .build();
 
   private static Expr<?> getTypeExpression(Context ctx, CelZ3TypeSystem typeSystem, Expr<?> val) {
-    return CelZ3TypeSystem.SwitchBuilder.newBuilder(ctx)
+    return CelZ3Exprs.SwitchBuilder.newBuilder(ctx)
         .addCase(
             typeSystem.isStruct(val),
             typeSystem.wrapString(typeSystem.getMsgTypeName(typeSystem.getMessageRef(val))))

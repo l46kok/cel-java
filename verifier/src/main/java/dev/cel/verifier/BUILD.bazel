@@ -112,7 +112,10 @@ java_library(
 
 java_library(
     name = "type_system",
-    srcs = ["CelZ3TypeSystem.java"],
+    srcs = [
+        "CelZ3Exprs.java",
+        "CelZ3TypeSystem.java",
+    ],
     compatible_with = [],
     tags = [
     ],

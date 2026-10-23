@@ -33,6 +33,7 @@ import com.microsoft.z3.FPExpr;
 import com.microsoft.z3.SeqExpr;
 import dev.cel.common.CelFunctionDecl;
 import dev.cel.common.CelOverloadDecl;
+import dev.cel.verifier.CelZ3Exprs;
 import dev.cel.verifier.CelZ3TypeSystem;
 import java.util.Optional;
 
@@ -107,7 +108,7 @@ final class OptionalAxioms {
                 Expr<?> mapRef = ts.getMapRef(actualOperand);
 
                 Expr<?> presence =
-                    CelZ3TypeSystem.SwitchBuilder.newBuilder(ctx)
+                    CelZ3Exprs.SwitchBuilder.newBuilder(ctx)
                         .addCase(
                             isMsg,
                             ctx.mkSelect((ArrayExpr) ts.getMsgPresence(msgRef), msgFieldZ3Str))
@@ -117,7 +118,7 @@ final class OptionalAxioms {
                         .build(ctx.mkFalse());
 
                 Expr<?> value =
-                    CelZ3TypeSystem.SwitchBuilder.newBuilder(ctx)
+                    CelZ3Exprs.SwitchBuilder.newBuilder(ctx)
                         .addCase(
                             isMsg, ctx.mkSelect((ArrayExpr) ts.getMsgValues(msgRef), msgFieldZ3Str))
                         .addCase(
@@ -129,7 +130,7 @@ final class OptionalAxioms {
                 BoolExpr shouldEvaluate = (BoolExpr) ctx.mkITE(isOpt, hasValue, ctx.mkTrue());
                 sink.accept(
                     ctx.mkImplies(
-                        CelZ3TypeSystem.mkAndFlattened(
+                        CelZ3Exprs.mkAndFlattened(
                             ctx, shouldEvaluate, isValidTarget, (BoolExpr) presence),
                         valNotError));
 

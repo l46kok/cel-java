@@ -16,10 +16,8 @@ package dev.cel.verifier;
 
 import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
 import com.google.common.collect.ObjectArrays;
 import com.google.common.primitives.UnsignedLongs;
-import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import com.microsoft.z3.ArithExpr;
 import com.microsoft.z3.ArrayExpr;
 import com.microsoft.z3.BoolExpr;
@@ -35,7 +33,6 @@ import com.microsoft.z3.SeqSort;
 import com.microsoft.z3.Sort;
 import dev.cel.common.internal.ProtoTimeUtils;
 import java.math.BigInteger;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -404,7 +401,7 @@ public final class CelZ3TypeSystem {
     // For primitives, generic equality matches the direct Z3 datatype wrapper.
     BoolExpr genericEq = ctx.mkEq(arg0, arg1);
     return (BoolExpr)
-        SwitchBuilder.newBuilder(ctx)
+        CelZ3Exprs.SwitchBuilder.newBuilder(ctx)
             .addCase(isListEq, seqEq)
             .addCase(isMapEq, mapEq)
             .addCase(isMsgEq, msgEq)
@@ -489,7 +486,7 @@ public final class CelZ3TypeSystem {
     BoolExpr hasError = ctx.mkOr(errors);
     BoolExpr hasUnknown = ctx.mkOr(unknowns);
     // Unknowns have higher precedence than error
-    return SwitchBuilder.newBuilder(ctx)
+    return CelZ3Exprs.SwitchBuilder.newBuilder(ctx)
         .addCase(hasUnknown, unknownResult)
         .addCase(hasError, mkError())
         .build(result);
@@ -797,60 +794,6 @@ public final class CelZ3TypeSystem {
     return ctx.mkConcat((Expr<SeqSort<R>>) arg1, (Expr<SeqSort<R>>) arg2);
   }
 
-  /**
-   * Helper to build a chain of nested ITE (If-Then-Else) conditions.
-   *
-   * <p>Conditions are evaluated in the order they are added. Branches with {@code isFalse()}
-   * conditions are skipped, and redundant {@code ITE(condition, X, X)} creations are omitted to
-   * avoid allocating dead AST paths in Z3.
-   */
-  public static final class SwitchBuilder {
-
-    private static final class SwitchCase {
-      private final BoolExpr condition;
-      private final Expr<?> value;
-
-      private SwitchCase(BoolExpr condition, Expr<?> value) {
-        this.condition = condition;
-        this.value = value;
-      }
-    }
-
-    private final Context ctx;
-    private final List<SwitchCase> cases;
-
-    public static SwitchBuilder newBuilder(Context ctx) {
-      return new SwitchBuilder(ctx);
-    }
-
-    @CanIgnoreReturnValue
-    public SwitchBuilder addCase(BoolExpr condition, Expr<?> value) {
-      // Skip branches that can never be hit (e.g. `isFalse()` probes).
-      if (condition.isFalse()) {
-        return this;
-      }
-      cases.add(new SwitchCase(condition, value));
-      return this;
-    }
-
-    public Expr<?> build(Expr<?> defaultFallback) {
-      Expr<?> result = defaultFallback;
-      for (SwitchCase c : Lists.reverse(cases)) {
-        // ITE(condition, X, X) simplifies to X; skip calling into native C++ Z3_mk_ite.
-        if (c.value.equals(result)) {
-          continue;
-        }
-        result = ctx.mkITE(c.condition, c.value, result);
-      }
-      return result;
-    }
-
-    private SwitchBuilder(Context ctx) {
-      this.ctx = ctx;
-      this.cases = new ArrayList<>();
-    }
-  }
-
   @AutoValue
   abstract static class FuncDeclKey {
     abstract String name();
@@ -862,82 +805,6 @@ public final class CelZ3TypeSystem {
     private static FuncDeclKey create(String name, Sort[] domain, Sort range) {
       return new AutoValue_CelZ3TypeSystem_FuncDeclKey(name, ImmutableList.copyOf(domain), range);
     }
-  }
-
-  /**
-   * Helper to construct a flattened logical OR expression to avoid deep left-leaning ASTs.
-   *
-   * <p>Returns {@code false} if the list is empty.
-   */
-  public static BoolExpr mkOrFlattened(Context ctx, BoolExpr... args) {
-    return mkOrFlattened(ctx, Arrays.asList(args));
-  }
-
-  /**
-   * Helper to construct a flattened logical OR expression to avoid deep left-leaning ASTs.
-   *
-   * <p>Returns {@code false} if the list is empty.
-   */
-  public static BoolExpr mkOrFlattened(Context ctx, List<BoolExpr> args) {
-    // Pruning true/false constants in Java is significantly faster than building
-    // larger ASTs and letting Z3 process them natively.
-    List<BoolExpr> filteredArgs = new ArrayList<>();
-    for (BoolExpr arg : args) {
-      if (arg.isTrue()) {
-        return ctx.mkTrue();
-      }
-      if (!arg.isFalse()) {
-        filteredArgs.add(arg);
-      }
-    }
-    if (filteredArgs.isEmpty()) {
-      return ctx.mkFalse();
-    }
-    if (filteredArgs.size() == 1) {
-      return filteredArgs.get(0);
-    }
-    return ctx.mkOr(filteredArgs.toArray(new BoolExpr[0]));
-  }
-
-  /**
-   * Helper to construct a flattened logical AND expression to avoid deep left-leaning ASTs.
-   *
-   * <p>Returns {@code true} if the list is empty.
-   */
-  public static BoolExpr mkAndFlattened(Context ctx, BoolExpr... args) {
-    return mkAndFlattened(ctx, Arrays.asList(args));
-  }
-
-  public static BoolExpr mkAndFlattened(Context ctx, List<BoolExpr> args) {
-    // Pruning true/false constants in Java is significantly faster than building
-    // larger ASTs and letting Z3 process them natively.
-    List<BoolExpr> filteredArgs = new ArrayList<>();
-    for (BoolExpr arg : args) {
-      if (arg.isFalse()) {
-        return ctx.mkFalse();
-      }
-      if (!arg.isTrue()) {
-        filteredArgs.add(arg);
-      }
-    }
-    if (filteredArgs.isEmpty()) {
-      return ctx.mkTrue();
-    }
-    if (filteredArgs.size() == 1) {
-      return filteredArgs.get(0);
-    }
-    return ctx.mkAnd(filteredArgs.toArray(new BoolExpr[0]));
-  }
-
-  /** Helper to construct a logical NOT expression while avoiding redundant NOT operations. */
-  public static BoolExpr mkNotFlattened(Context ctx, BoolExpr arg) {
-    if (arg.isTrue()) {
-      return ctx.mkFalse();
-    }
-    if (arg.isFalse()) {
-      return ctx.mkTrue();
-    }
-    return ctx.mkNot(arg);
   }
 
   CelZ3TypeSystem(Context ctx, boolean parameterizeUnknowns) {

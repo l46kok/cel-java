@@ -131,7 +131,7 @@ final class CelZ3OperatorTranslator {
         typeGuards.add(mkTypeGuard(z3Args.get(i), overload.parameterTypes().get(i)));
       }
 
-      BoolExpr typeGuard = CelZ3TypeSystem.mkAndFlattened(ctx, typeGuards);
+      BoolExpr typeGuard = CelZ3Exprs.mkAndFlattened(ctx, typeGuards);
       currentZ3Result = ctx.mkITE(typeGuard, evaluatedResult.z3Expr(), currentZ3Result);
       currentApprox =
           (BoolExpr) ctx.mkITE(typeGuard, evaluatedResult.isApproximate(), currentApprox);
@@ -144,7 +144,7 @@ final class CelZ3OperatorTranslator {
     Operator op = opOpt.orElse(null);
     if (op == Operator.IN) {
       currentApprox =
-          CelZ3TypeSystem.mkOrFlattened(
+          CelZ3Exprs.mkOrFlattened(
               ctx, currentApprox, constrainInWitnessTypes(args.get(0), args.get(1), ast));
     } else if (op == Operator.OPTIONAL_SELECT) {
       // A chained optional select (e.g. `a.?b.?c`) selects from the value of an optional operand.
@@ -154,7 +154,7 @@ final class CelZ3OperatorTranslator {
               typeSystem.isOptional(operand),
               typeSystem.getOptionalValue(typeSystem.getOptionalRef(operand)),
               operand);
-      currentApprox = CelZ3TypeSystem.mkOrFlattened(ctx, currentApprox, isTruncatedMap(target));
+      currentApprox = CelZ3Exprs.mkOrFlattened(ctx, currentApprox, isTruncatedMap(target));
     }
 
     return Optional.of(
@@ -216,7 +216,7 @@ final class CelZ3OperatorTranslator {
               typeConstraintGenerator.apply(lhs, ((MapType) rhsType).keyType())));
       return isTruncatedMap(rhs);
     }
-    return CelZ3TypeSystem.mkOrFlattened(
+    return CelZ3Exprs.mkOrFlattened(
         ctx, isTruncatedMap(rhs), mayObserveTruncatedTypeConstraint(ast, lhsTv, rhsTv));
   }
 
@@ -385,7 +385,7 @@ final class CelZ3OperatorTranslator {
             : ctx.mkITE(a.isZ3Unknown(), a.z3Expr(), b.z3Expr());
 
     Expr<?> resultZ3 =
-        CelZ3TypeSystem.SwitchBuilder.newBuilder(ctx)
+        CelZ3Exprs.SwitchBuilder.newBuilder(ctx)
             .addCase(hasMatch, typeSystem.mkBool(!isAnd))
             .addCase(hasUnknown, unknownResult)
             .addCase(hasError, typeSystem.mkError())
@@ -394,10 +394,10 @@ final class CelZ3OperatorTranslator {
     // An exact short-circuiting operand alone decides the result. Otherwise, an approximate operand
     // may really be the absorbing value (e.g. `unknown && false` is false).
     BoolExpr resultTaint =
-        CelZ3TypeSystem.mkAndFlattened(
+        CelZ3Exprs.mkAndFlattened(
             ctx,
-            CelZ3TypeSystem.mkNotFlattened(ctx, hasSafeMatch),
-            CelZ3TypeSystem.mkOrFlattened(ctx, a.isApproximate(), b.isApproximate()));
+            CelZ3Exprs.mkNotFlattened(ctx, hasSafeMatch),
+            CelZ3Exprs.mkOrFlattened(ctx, a.isApproximate(), b.isApproximate()));
 
     return TranslatedValue.create(resultZ3, typeSystem, resultTaint);
   }
@@ -435,7 +435,7 @@ final class CelZ3OperatorTranslator {
               typeSystem.wrapInt((IntExpr) intNeg), typeSystem.checkIntOverflow(intNeg));
       Expr<?> doubleResult = typeSystem.wrapDouble(ctx.mkFPNeg(typeSystem.getDouble(z3Expr)));
       result =
-          CelZ3TypeSystem.SwitchBuilder.newBuilder(ctx)
+          CelZ3Exprs.SwitchBuilder.newBuilder(ctx)
               .addCase(typeSystem.isInt(z3Expr), intResult)
               .addCase(typeSystem.isDouble(z3Expr), doubleResult)
               .build(typeSystem.mkError());
@@ -498,7 +498,7 @@ final class CelZ3OperatorTranslator {
     BoolExpr doubleEq = ctx.mkFPEq(typeSystem.getDouble(symVal), typeSystem.mkFpDouble(doubleVal));
 
     return (BoolExpr)
-        CelZ3TypeSystem.SwitchBuilder.newBuilder(ctx)
+        CelZ3Exprs.SwitchBuilder.newBuilder(ctx)
             .addCase(typeSystem.isInt(symVal), intEq)
             .addCase(typeSystem.isUint(symVal), uintEq)
             .addCase(typeSystem.isDouble(symVal), doubleEq)
@@ -610,7 +610,7 @@ final class CelZ3OperatorTranslator {
             ctx.mkLe(ctx.mkFPToReal(fpVal0), realVal1));
 
     return (BoolExpr)
-        CelZ3TypeSystem.SwitchBuilder.newBuilder(ctx)
+        CelZ3Exprs.SwitchBuilder.newBuilder(ctx)
             .addCase(bothIntOrUint, ctx.mkEq(val0, val1))
             .addCase(
                 bothDouble,
@@ -672,7 +672,7 @@ final class CelZ3OperatorTranslator {
       taints.add(elemEquality.isApproximate());
     }
 
-    return CelZ3TypeSystem.mkAndFlattened(ctx, equalities);
+    return CelZ3Exprs.mkAndFlattened(ctx, equalities);
   }
 
   private void constrainListElement(SeqExpr<?> seq, IntExpr idx, Expr<?> elem, CelType listType) {
@@ -740,7 +740,7 @@ final class CelZ3OperatorTranslator {
     String opName = isEquals ? Operator.EQUALS.getFunction() : Operator.NOT_EQUALS.getFunction();
 
     return TranslatedValue.propagateStrict(ctx, typeSystem, opName, equalityExpr, arg0, arg1)
-        .withApproximation(CelZ3TypeSystem.mkOrFlattened(ctx, taints));
+        .withApproximation(CelZ3Exprs.mkOrFlattened(ctx, taints));
   }
 
   private Expr<?> buildListIndex(
@@ -814,12 +814,12 @@ final class CelZ3OperatorTranslator {
     BoolExpr inMap2 = (BoolExpr) ctx.mkSelect(mapPresence, key2);
     Expr<?> val2 = ctx.mkSelect(mapValues, key2);
 
-    BoolExpr condMap1 = CelZ3TypeSystem.mkAndFlattened(ctx, cond1, inMap1);
-    BoolExpr condMap2 = CelZ3TypeSystem.mkAndFlattened(ctx, cond2, inMap2);
+    BoolExpr condMap1 = CelZ3Exprs.mkAndFlattened(ctx, cond1, inMap1);
+    BoolExpr condMap2 = CelZ3Exprs.mkAndFlattened(ctx, cond2, inMap2);
 
-    BoolExpr altInMap = CelZ3TypeSystem.mkOrFlattened(ctx, inMapOrig, condMap1, condMap2);
+    BoolExpr altInMap = CelZ3Exprs.mkOrFlattened(ctx, inMapOrig, condMap1, condMap2);
     Expr<?> altVal =
-        CelZ3TypeSystem.SwitchBuilder.newBuilder(ctx)
+        CelZ3Exprs.SwitchBuilder.newBuilder(ctx)
             .addCase(inMapOrig, valOrig)
             .addCase(condMap1, val1)
             .addCase(condMap2, val2)
@@ -912,14 +912,14 @@ final class CelZ3OperatorTranslator {
 
     BoolExpr finalInMap =
         (BoolExpr)
-            CelZ3TypeSystem.SwitchBuilder.newBuilder(ctx)
+            CelZ3Exprs.SwitchBuilder.newBuilder(ctx)
                 .addCase(isInt, intProbe.altInMap)
                 .addCase(isUint, uintProbe.altInMap)
                 .addCase(isDouble, doubleProbe.altInMap)
                 .build(inMapOrig);
 
     Expr<?> finalVal =
-        CelZ3TypeSystem.SwitchBuilder.newBuilder(ctx)
+        CelZ3Exprs.SwitchBuilder.newBuilder(ctx)
             .addCase(isInt, intProbe.altVal)
             .addCase(isUint, uintProbe.altVal)
             .addCase(isDouble, doubleProbe.altVal)
@@ -992,7 +992,7 @@ final class CelZ3OperatorTranslator {
     BoolExpr isMapIndexTruncated = ctx.mkAnd(shouldEvaluate, isTruncatedMap(lhsTrans));
     return TranslatedValue.propagateStrict(ctx, typeSystem, opName, actualValue, args)
         .withApproximation(
-            CelZ3TypeSystem.mkOrFlattened(
+            CelZ3Exprs.mkOrFlattened(
                 ctx, isListIndexTruncated, isMapIndexTruncated, element.isApproximate()));
   }
 
@@ -1040,8 +1040,8 @@ final class CelZ3OperatorTranslator {
       return TranslatedValue.create(
           actualValue,
           typeSystem,
-          CelZ3TypeSystem.mkAndFlattened(
-              ctx, isDefined, CelZ3TypeSystem.mkNotFlattened(ctx, typeConstraint)));
+          CelZ3Exprs.mkAndFlattened(
+              ctx, isDefined, CelZ3Exprs.mkNotFlattened(ctx, typeConstraint)));
     }
 
     BoolExpr isListGuard =
@@ -1049,7 +1049,7 @@ final class CelZ3OperatorTranslator {
     BoolExpr isMapGuard = ctx.mkAnd(shouldEvaluate, typeSystem.isMap(lhsTrans));
 
     return TranslatedValue.create(
-        CelZ3TypeSystem.SwitchBuilder.newBuilder(ctx)
+        CelZ3Exprs.SwitchBuilder.newBuilder(ctx)
             .addCase(isListGuard, buildListIndex(lhsTrans, rhsTrans, isListGuard, isOptional))
             .addCase(isMapGuard, buildMapIndex(lhsTrans, rhsTrans, isMapGuard, isOptional))
             .build(typeSystem.mkError()),
@@ -1080,7 +1080,7 @@ final class CelZ3OperatorTranslator {
             : cond.z3Expr();
 
     Expr<?> resultZ3 =
-        CelZ3TypeSystem.SwitchBuilder.newBuilder(ctx)
+        CelZ3Exprs.SwitchBuilder.newBuilder(ctx)
             .addCase(hasUnknown, unknownResult)
             .addCase(hasError, typeSystem.mkError())
             .addCase(condTrue, trueBranch.z3Expr())
@@ -1091,7 +1091,7 @@ final class CelZ3OperatorTranslator {
 
     BoolExpr resultTaint =
         (BoolExpr)
-            CelZ3TypeSystem.SwitchBuilder.newBuilder(ctx)
+            CelZ3Exprs.SwitchBuilder.newBuilder(ctx)
                 .addCase(hasUnknown, ctx.mkNot(hasSafeUnknown))
                 .addCase(hasError, ctx.mkNot(hasSafeError))
                 .addCase(condTrue, ctx.mkOr(cond.isApproximate(), trueBranch.isApproximate()))
@@ -1163,7 +1163,7 @@ final class CelZ3OperatorTranslator {
     if (Arrays.stream(args).allMatch(arg -> isConcrete(extractAstTypeOrDefault(arg, ast)))) {
       return ctx.mkFalse();
     }
-    return CelZ3TypeSystem.mkOrFlattened(
+    return CelZ3Exprs.mkOrFlattened(
         ctx,
         Arrays.stream(args)
             .map(arg -> typeSystem.hasTruncatedTypeConstraint(arg.z3Expr()))

@@ -112,7 +112,7 @@ final class CelAstToZ3Translator {
   }
 
   BoolExpr hasTruncation() {
-    return CelZ3TypeSystem.mkOrFlattened(ctx, truncationConditions);
+    return CelZ3Exprs.mkOrFlattened(ctx, truncationConditions);
   }
 
   CelZ3TypeSystem getTypeSystem() {
@@ -806,7 +806,7 @@ final class CelAstToZ3Translator {
     BoolExpr presence =
         (BoolExpr) ctx.mkSelect((ArrayExpr) typeSystem.getMapPresence(mapRef), mapFieldZ3Str);
     Expr<?> value = ctx.mkSelect((ArrayExpr) typeSystem.getMapValues(mapRef), mapFieldZ3Str);
-    constrainPresentValue(CelZ3TypeSystem.mkAndFlattened(ctx, typeGuard, presence), value);
+    constrainPresentValue(CelZ3Exprs.mkAndFlattened(ctx, typeGuard, presence), value);
     return new FieldAccess(presence, value);
   }
 
@@ -816,7 +816,7 @@ final class CelAstToZ3Translator {
     BoolExpr presence =
         (BoolExpr) ctx.mkSelect((ArrayExpr) typeSystem.getMsgPresence(msgRef), msgFieldZ3Str);
     Expr<?> value = ctx.mkSelect((ArrayExpr) typeSystem.getMsgValues(msgRef), msgFieldZ3Str);
-    constrainPresentValue(CelZ3TypeSystem.mkAndFlattened(ctx, typeGuard, presence), value);
+    constrainPresentValue(CelZ3Exprs.mkAndFlattened(ctx, typeGuard, presence), value);
     return new FieldAccess(presence, value);
   }
 
@@ -853,7 +853,7 @@ final class CelAstToZ3Translator {
       FieldAccess msgAcc = getMsgAccess(operand, field, isMessage);
 
       presenceResult =
-          CelZ3TypeSystem.SwitchBuilder.newBuilder(ctx)
+          CelZ3Exprs.SwitchBuilder.newBuilder(ctx)
               .addCase(isMessage, msgAcc.presence)
               .addCase(isMap, mapAcc.presence)
               .build(ctx.mkFalse());
@@ -863,7 +863,7 @@ final class CelAstToZ3Translator {
       Expr<?> mapRead = ctx.mkITE(mapAcc.presence, mapAcc.value, typeSystem.mkError());
 
       valueResult =
-          CelZ3TypeSystem.SwitchBuilder.newBuilder(ctx)
+          CelZ3Exprs.SwitchBuilder.newBuilder(ctx)
               .addCase(isMessage, msgRead)
               .addCase(isMap, mapRead)
               .build(typeSystem.mkError());
@@ -1060,7 +1060,7 @@ final class CelAstToZ3Translator {
     TranslatedValue resultTv =
         withScope(
             comp.accuVar(),
-            TranslatedValue.create(accu, typeSystem, CelZ3TypeSystem.mkOrFlattened(ctx, taints)),
+            TranslatedValue.create(accu, typeSystem, CelZ3Exprs.mkOrFlattened(ctx, taints)),
             () -> translateExpr(comp.result(), ast));
     Expr<?> result = resultTv.z3Expr();
     return TranslatedValue.create(
@@ -1152,7 +1152,7 @@ final class CelAstToZ3Translator {
                   seqMap);
     }
     constraints.add(ctx.mkImplies(isNotTruncated, ctx.mkEq(mapPresence, seqMap)));
-    return CelZ3TypeSystem.mkAndFlattened(ctx, constraints);
+    return CelZ3Exprs.mkAndFlattened(ctx, constraints);
   }
 
   private <T> T withIterationScope(
@@ -1301,8 +1301,7 @@ final class CelAstToZ3Translator {
     TranslatedValue resultTv =
         withScope(
             comp.accuVar(),
-            TranslatedValue.create(
-                chainedAccu, typeSystem, CelZ3TypeSystem.mkOrFlattened(ctx, taints)),
+            TranslatedValue.create(chainedAccu, typeSystem, CelZ3Exprs.mkOrFlattened(ctx, taints)),
             () -> translateExpr(comp.result(), ast));
 
     Expr<?> iterRangeExpr = iterRangeTv.z3Expr();
@@ -1313,10 +1312,10 @@ final class CelAstToZ3Translator {
     // result of any non-true condition, since the unrolled value ignores early exits.
     BoolExpr isConditionUnmodeled = ctx.mkBool(!isLiteralTrue(comp.loopCondition()));
     BoolExpr isAbstracted =
-        CelZ3TypeSystem.mkOrFlattened(ctx, rangeIsUnknown, isTruncated, isConditionUnmodeled);
+        CelZ3Exprs.mkOrFlattened(ctx, rangeIsUnknown, isTruncated, isConditionUnmodeled);
     // An error is not final when truncated: an unknown from a later iteration overrides it.
     Expr<?> finalResult =
-        CelZ3TypeSystem.SwitchBuilder.newBuilder(ctx)
+        CelZ3Exprs.SwitchBuilder.newBuilder(ctx)
             .addCase(rangeIsError, typeSystem.mkError())
             .addCase(isAbstracted, mkParameterizedUnknown(celExpr, ast))
             .build(resultTv.z3Expr());
@@ -1326,7 +1325,7 @@ final class CelAstToZ3Translator {
             ctx.mkITE(
                 ctx.mkOr(rangeIsError, rangeIsUnknown),
                 iterRangeTv.isApproximate(),
-                CelZ3TypeSystem.mkOrFlattened(
+                CelZ3Exprs.mkOrFlattened(
                     ctx, resultTv.isApproximate(), isTruncated, isConditionUnmodeled));
 
     return TranslatedValue.create(finalResult, celExpr, typeSystem, finalTaint);
@@ -1379,36 +1378,36 @@ final class CelAstToZ3Translator {
 
       BoolExpr isActive = iter.inBounds;
 
-      hasMatchList.add(CelZ3TypeSystem.mkAndFlattened(ctx, isActive, isMatch));
-      hasErrorList.add(CelZ3TypeSystem.mkAndFlattened(ctx, isActive, isE));
-      hasUnknownList.add(CelZ3TypeSystem.mkAndFlattened(ctx, isActive, isU));
+      hasMatchList.add(CelZ3Exprs.mkAndFlattened(ctx, isActive, isMatch));
+      hasErrorList.add(CelZ3Exprs.mkAndFlattened(ctx, isActive, isE));
+      hasUnknownList.add(CelZ3Exprs.mkAndFlattened(ctx, isActive, isU));
 
       hasSafeMatchList.add(
-          CelZ3TypeSystem.mkAndFlattened(
-              ctx, isActive, isMatch, CelZ3TypeSystem.mkNotFlattened(ctx, stepTv.isApproximate())));
+          CelZ3Exprs.mkAndFlattened(
+              ctx, isActive, isMatch, CelZ3Exprs.mkNotFlattened(ctx, stepTv.isApproximate())));
       hasSafeErrorList.add(
-          CelZ3TypeSystem.mkAndFlattened(
-              ctx, isActive, isE, CelZ3TypeSystem.mkNotFlattened(ctx, stepTv.isApproximate())));
+          CelZ3Exprs.mkAndFlattened(
+              ctx, isActive, isE, CelZ3Exprs.mkNotFlattened(ctx, stepTv.isApproximate())));
       hasSafeUnknownList.add(
-          CelZ3TypeSystem.mkAndFlattened(
-              ctx, isActive, isU, CelZ3TypeSystem.mkNotFlattened(ctx, stepTv.isApproximate())));
-      activeTaints.add(CelZ3TypeSystem.mkAndFlattened(ctx, isActive, stepTv.isApproximate()));
+          CelZ3Exprs.mkAndFlattened(
+              ctx, isActive, isU, CelZ3Exprs.mkNotFlattened(ctx, stepTv.isApproximate())));
+      activeTaints.add(CelZ3Exprs.mkAndFlattened(ctx, isActive, stepTv.isApproximate()));
     }
 
-    BoolExpr hasMatch = CelZ3TypeSystem.mkOrFlattened(ctx, hasMatchList);
-    BoolExpr hasError = CelZ3TypeSystem.mkOrFlattened(ctx, hasErrorList);
-    BoolExpr hasUnknown = CelZ3TypeSystem.mkOrFlattened(ctx, hasUnknownList);
+    BoolExpr hasMatch = CelZ3Exprs.mkOrFlattened(ctx, hasMatchList);
+    BoolExpr hasError = CelZ3Exprs.mkOrFlattened(ctx, hasErrorList);
+    BoolExpr hasUnknown = CelZ3Exprs.mkOrFlattened(ctx, hasUnknownList);
     BoolExpr rangeIsError = typeSystem.isError(iterRangeTv.z3Expr());
     BoolExpr rangeIsUnknown = typeSystem.isUnknown(iterRangeTv.z3Expr());
 
-    BoolExpr hasSafeMatch = CelZ3TypeSystem.mkOrFlattened(ctx, hasSafeMatchList);
-    BoolExpr hasSafeError = CelZ3TypeSystem.mkOrFlattened(ctx, hasSafeErrorList);
-    BoolExpr hasSafeUnknown = CelZ3TypeSystem.mkOrFlattened(ctx, hasSafeUnknownList);
-    BoolExpr anyActiveTaint = CelZ3TypeSystem.mkOrFlattened(ctx, activeTaints);
+    BoolExpr hasSafeMatch = CelZ3Exprs.mkOrFlattened(ctx, hasSafeMatchList);
+    BoolExpr hasSafeError = CelZ3Exprs.mkOrFlattened(ctx, hasSafeErrorList);
+    BoolExpr hasSafeUnknown = CelZ3Exprs.mkOrFlattened(ctx, hasSafeUnknownList);
+    BoolExpr anyActiveTaint = CelZ3Exprs.mkOrFlattened(ctx, activeTaints);
 
     Expr<?> comprehensionUnknown = mkParameterizedUnknown(compExpr, ast);
     Expr<?> result =
-        CelZ3TypeSystem.SwitchBuilder.newBuilder(ctx)
+        CelZ3Exprs.SwitchBuilder.newBuilder(ctx)
             .addCase(rangeIsError, typeSystem.mkError())
             .addCase(rangeIsUnknown, comprehensionUnknown)
             .addCase(hasMatch, typeSystem.mkBool(!isAll))
@@ -1416,13 +1415,12 @@ final class CelAstToZ3Translator {
             .addCase(hasError, typeSystem.mkError())
             .build(typeSystem.mkBool(isAll));
 
-    BoolExpr baseTaint =
-        CelZ3TypeSystem.mkOrFlattened(ctx, anyActiveTaint, iterRangeTv.isApproximate());
+    BoolExpr baseTaint = CelZ3Exprs.mkOrFlattened(ctx, anyActiveTaint, iterRangeTv.isApproximate());
 
     // Taint identically shadows the value flow's short-circuit control structure
     BoolExpr resultTaint =
         (BoolExpr)
-            CelZ3TypeSystem.SwitchBuilder.newBuilder(ctx)
+            CelZ3Exprs.SwitchBuilder.newBuilder(ctx)
                 .addCase(ctx.mkOr(rangeIsError, rangeIsUnknown), iterRangeTv.isApproximate())
                 .addCase(hasMatch, ctx.mkOr(iterRangeTv.isApproximate(), ctx.mkNot(hasSafeMatch)))
                 .addCase(
@@ -1562,7 +1560,7 @@ final class CelAstToZ3Translator {
         boundsAndTypes.add(ctx.mkImplies(validIndex, elemConstraint));
       }
 
-      return CelZ3TypeSystem.mkAndFlattened(ctx, boundsAndTypes);
+      return CelZ3Exprs.mkAndFlattened(ctx, boundsAndTypes);
     }
     if (type instanceof MapType) {
       // Do NOT emit a for-all quantifier over map keys or values here.
@@ -1614,7 +1612,7 @@ final class CelAstToZ3Translator {
         boundsAndTypes.add(ctx.mkImplies(validEntry, createTypeConstraintForType(mapVal, valType)));
       }
 
-      return CelZ3TypeSystem.mkAndFlattened(ctx, boundsAndTypes);
+      return CelZ3Exprs.mkAndFlattened(ctx, boundsAndTypes);
     }
     if (type.kind() == CelKind.STRUCT) {
       return ctx.mkAnd(

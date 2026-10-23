@@ -227,7 +227,7 @@ final class CelVerifierZ3Impl implements CelVerifier {
       // an unknown only by its attributes (e.g. `a && true` and `a` both yield unknown {a}). Two
       // distinct unknowns may thus still be equivalent.
       BoolExpr combinedTaint =
-          CelZ3TypeSystem.mkOrFlattened(
+          CelZ3Exprs.mkOrFlattened(
               ctx,
               tvA.isApproximate(),
               tvB.isApproximate(),
@@ -318,7 +318,7 @@ final class CelVerifierZ3Impl implements CelVerifier {
       BoolExpr violationCondition = ctx.mkAnd(assumeCondition, ctx.mkNot(assertCondition));
 
       BoolExpr combinedTaint =
-          CelZ3TypeSystem.mkOrFlattened(ctx, assumeTv.isApproximate(), assertTv.isApproximate());
+          CelZ3Exprs.mkOrFlattened(ctx, assumeTv.isApproximate(), assertTv.isApproximate());
       BoolExpr unknownCondition =
           ctx.mkOr(
               translator.getTypeSystem().isUnknown(assumeTv.z3Expr()),
