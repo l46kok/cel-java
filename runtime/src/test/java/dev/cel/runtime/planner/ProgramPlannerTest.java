@@ -562,6 +562,19 @@ public final class ProgramPlannerTest {
     ImmutableList<Object> result = (ImmutableList<Object>) program.eval();
 
     assertThat(result).containsExactly(1L, "foo", true, ImmutableList.of(2L, false)).inOrder();
+    assertThat(program.eval()).isSameInstanceAs(result);
+  }
+
+  @Test
+  @SuppressWarnings("unchecked") // test only
+  public void plan_createList_withVariable() throws Exception {
+    CelAbstractSyntaxTree ast = compile("[1, int_var]");
+    Program program = PLANNER.plan(ast);
+
+    ImmutableList<Object> result =
+        (ImmutableList<Object>) program.eval(ImmutableMap.of("int_var", 2L));
+
+    assertThat(result).containsExactly(1L, 2L).inOrder();
   }
 
   @Test
@@ -573,6 +586,40 @@ public final class ProgramPlannerTest {
     ImmutableMap<Object, Object> result = (ImmutableMap<Object, Object>) program.eval();
 
     assertThat(result).containsExactly("foo", 1L, true, "bar").inOrder();
+    assertThat(program.eval()).isSameInstanceAs(result);
+  }
+
+  @Test
+  @TestParameters({
+    "{expression: \"{'foo': 1, dyn_var: 2}\"}",
+    "{expression: \"{'foo': 1, 'bar': int_var}\"}"
+  })
+  @SuppressWarnings("unchecked") // test only
+  public void plan_createMap_withVariable(String expression) throws Exception {
+    CelAbstractSyntaxTree ast = compile(expression);
+    Program program = PLANNER.plan(ast);
+
+    ImmutableMap<Object, Object> result =
+        (ImmutableMap<Object, Object>)
+            program.eval(ImmutableMap.of("dyn_var", "bar", "int_var", 2L));
+
+    assertThat(result).containsExactly("foo", 1L, "bar", 2L).inOrder();
+  }
+
+  @Test
+  @TestParameters({
+    "{expression: '[?1]',"
+        + " expectedError: 'Cannot initialize optional list element from non-optional value 1'}",
+    "{expression: '{?1: \"one\"}',"
+        + " expectedError: \"Cannot initialize optional entry '1' from non-optional value one\"}"
+  })
+  public void plan_createContainer_optionalNonOptionalConstant_throwsAtEval(
+      String expression, String expectedError) throws Exception {
+    CelAbstractSyntaxTree ast = CEL_COMPILER.parse(expression).getAst();
+    Program program = PLANNER.plan(ast);
+
+    CelEvaluationException e = assertThrows(CelEvaluationException.class, program::eval);
+    assertThat(e).hasMessageThat().contains(expectedError);
   }
 
   @Test

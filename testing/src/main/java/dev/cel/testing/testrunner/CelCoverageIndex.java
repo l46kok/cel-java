@@ -257,7 +257,13 @@ final class CelCoverageIndex {
               nodeId, stats, exprText, precedingTabs, logUnencountered, reportBuilder);
     }
 
+    boolean propagateChildCoverage =
+        stats.covered.get()
+            && (node.getKind() == ExprKind.Kind.LIST || node.getKind() == ExprKind.Kind.MAP);
     for (CelNavigableExpr child : node.children().collect(toImmutableList())) {
+      if (propagateChildCoverage) {
+        statsMap.get(child.id()).covered.set(true);
+      }
       dotGraphBuilder.append(String.format("%d -> %d;\n", nodeId, child.id()));
       traverseAndCalculateCoverage(
           child, statsMap, logUnencountered, precedingTabs, reportBuilder, dotGraphBuilder);

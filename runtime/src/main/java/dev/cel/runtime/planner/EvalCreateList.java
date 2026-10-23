@@ -66,8 +66,18 @@ final class EvalCreateList extends PlannedInterpretable {
     return builder.build();
   }
 
-  static EvalCreateList create(CelExpr expr, PlannedInterpretable[] values, boolean[] isOptional) {
-    return new EvalCreateList(expr, values, isOptional);
+  static PlannedInterpretable create(
+      CelExpr expr, PlannedInterpretable[] values, boolean[] isOptional) {
+    for (int i = 0; i < values.length; i++) {
+      if (!(values[i] instanceof EvalConstant) || isOptional[i]) {
+        return new EvalCreateList(expr, values, isOptional);
+      }
+    }
+    ImmutableList.Builder<Object> builder = ImmutableList.builderWithExpectedSize(values.length);
+    for (PlannedInterpretable value : values) {
+      builder.add(((EvalConstant) value).constantValue());
+    }
+    return EvalConstant.create(expr, builder.build());
   }
 
   private EvalCreateList(CelExpr expr, PlannedInterpretable[] values, boolean[] isOptional) {

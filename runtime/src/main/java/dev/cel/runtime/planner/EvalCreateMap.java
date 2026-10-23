@@ -14,7 +14,8 @@
 
 package dev.cel.runtime.planner;
 
-import com.google.common.base.Preconditions;
+import static com.google.common.base.Preconditions.checkArgument;
+
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
 import com.google.common.primitives.UnsignedLong;
@@ -23,10 +24,10 @@ import dev.cel.common.ast.CelExpr;
 import dev.cel.common.exceptions.CelDuplicateKeyException;
 import dev.cel.common.exceptions.CelInvalidArgumentException;
 import dev.cel.runtime.AccumulatedUnknowns;
-import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.GlobalResolver;
 import java.util.HashSet;
 import java.util.Optional;
+import java.util.Set;
 
 @Immutable
 final class EvalCreateMap extends PlannedInterpretable {
@@ -44,7 +45,7 @@ final class EvalCreateMap extends PlannedInterpretable {
   private final boolean[] isOptional;
 
   @Override
-  Object evalInternal(GlobalResolver resolver, ExecutionFrame frame) throws CelEvaluationException {
+  Object evalInternal(GlobalResolver resolver, ExecutionFrame frame) {
     ImmutableMap.Builder<Object, Object> builder =
         ImmutableMap.builderWithExpectedSize(keys.length);
     HashSet<Object> keysSeen = Sets.newHashSetWithExpectedSize(keys.length);
@@ -52,37 +53,12 @@ final class EvalCreateMap extends PlannedInterpretable {
 
     for (int i = 0; i < keys.length; i++) {
       PlannedInterpretable keyInterpretable = keys[i];
-      Object key = keyInterpretable.eval(resolver, frame);
+      Object key = EvalHelpers.evalStrictly(keyInterpretable, resolver, frame);
 
       if (key instanceof AccumulatedUnknowns) {
         unknowns = AccumulatedUnknowns.maybeMerge(unknowns, key);
       } else {
-        if (!(key instanceof String
-            || key instanceof Long
-            || key instanceof UnsignedLong
-            || key instanceof Boolean)) {
-          throw new LocalizedEvaluationException(
-              new CelInvalidArgumentException("Unsupported key type: " + key),
-              keyInterpretable.expr().id());
-        }
-
-        boolean isDuplicate = !keysSeen.add(key);
-        if (!isDuplicate) {
-          if (key instanceof Long) {
-            long longVal = (Long) key;
-            if (longVal >= 0) {
-              isDuplicate = keysSeen.contains(UnsignedLong.valueOf(longVal));
-            }
-          } else if (key instanceof UnsignedLong) {
-            UnsignedLong ulongVal = (UnsignedLong) key;
-            isDuplicate = keysSeen.contains(ulongVal.longValue());
-          }
-        }
-
-        if (isDuplicate) {
-          throw new LocalizedEvaluationException(
-              CelDuplicateKeyException.of(key), keyInterpretable.expr().id());
-        }
+        validateAndTrackKey(keysSeen, keyInterpretable, key);
       }
 
       Object val = EvalHelpers.evalStrictly(values[i], resolver, frame);
@@ -119,12 +95,61 @@ final class EvalCreateMap extends PlannedInterpretable {
     return builder.buildOrThrow();
   }
 
-  static EvalCreateMap create(
+  private static void validateAndTrackKey(
+      Set<Object> keysSeen, PlannedInterpretable keyInterpretable, Object key) {
+    if (!(key instanceof String
+        || key instanceof Long
+        || key instanceof UnsignedLong
+        || key instanceof Boolean)) {
+      throw new LocalizedEvaluationException(
+          new CelInvalidArgumentException("Unsupported key type: " + key),
+          keyInterpretable.expr().id());
+    }
+
+    boolean isDuplicate = !keysSeen.add(key);
+    if (!isDuplicate) {
+      if (key instanceof Long) {
+        long longVal = (Long) key;
+        if (longVal >= 0) {
+          isDuplicate = keysSeen.contains(UnsignedLong.valueOf(longVal));
+        }
+      } else if (key instanceof UnsignedLong) {
+        UnsignedLong ulongVal = (UnsignedLong) key;
+        isDuplicate = keysSeen.contains(ulongVal.longValue());
+      }
+    }
+
+    if (isDuplicate) {
+      throw new LocalizedEvaluationException(
+          CelDuplicateKeyException.of(key), keyInterpretable.expr().id());
+    }
+  }
+
+  static PlannedInterpretable create(
       CelExpr expr,
       PlannedInterpretable[] keys,
       PlannedInterpretable[] values,
       boolean[] isOptional) {
-    return new EvalCreateMap(expr, keys, values, isOptional);
+    for (int i = 0; i < keys.length; i++) {
+      if (!(keys[i] instanceof EvalConstant)
+          || !(values[i] instanceof EvalConstant)
+          || isOptional[i]) {
+        return new EvalCreateMap(expr, keys, values, isOptional);
+      }
+    }
+    ImmutableMap.Builder<Object, Object> builder =
+        ImmutableMap.builderWithExpectedSize(keys.length);
+    HashSet<Object> keysSeen = Sets.newHashSetWithExpectedSize(keys.length);
+    try {
+      for (int i = 0; i < keys.length; i++) {
+        Object key = ((EvalConstant) keys[i]).constantValue();
+        validateAndTrackKey(keysSeen, keys[i], key);
+        builder.put(key, ((EvalConstant) values[i]).constantValue());
+      }
+    } catch (LocalizedEvaluationException e) {
+      return new EvalCreateMap(expr, keys, values, isOptional);
+    }
+    return EvalConstant.create(expr, builder.buildOrThrow());
   }
 
   private EvalCreateMap(
@@ -133,8 +158,8 @@ final class EvalCreateMap extends PlannedInterpretable {
       PlannedInterpretable[] values,
       boolean[] isOptional) {
     super(expr);
-    Preconditions.checkArgument(keys.length == values.length);
-    Preconditions.checkArgument(keys.length == isOptional.length);
+    checkArgument(keys.length == values.length);
+    checkArgument(keys.length == isOptional.length);
     this.keys = keys;
     this.values = values;
     this.isOptional = isOptional;

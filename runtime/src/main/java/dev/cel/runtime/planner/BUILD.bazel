@@ -170,6 +170,7 @@ java_library(
     name = "eval_create_list",
     srcs = ["EvalCreateList.java"],
     deps = [
+        ":eval_const",
         ":eval_helpers",
         ":planned_interpretable",
         "//common/ast",
@@ -184,6 +185,7 @@ java_library(
     name = "eval_create_map",
     srcs = ["EvalCreateMap.java"],
     deps = [
+        ":eval_const",
         ":eval_helpers",
         ":localized_evaluation_exception",
         ":planned_interpretable",
@@ -191,7 +193,6 @@ java_library(
         "//common/exceptions:duplicate_key",
         "//common/exceptions:invalid_argument",
         "//runtime:accumulated_unknowns",
-        "//runtime:evaluation_exception",
         "//runtime:interpretable",
         "@maven//:com_google_errorprone_error_prone_annotations",
         "@maven//:com_google_guava_guava",
@@ -840,6 +841,7 @@ cel_android_library(
     name = "eval_create_list_android",
     srcs = ["EvalCreateList.java"],
     deps = [
+        ":eval_const_android",
         ":eval_helpers_android",
         ":planned_interpretable_android",
         "//common/ast:ast_android",
@@ -854,13 +856,13 @@ cel_android_library(
     name = "eval_create_map_android",
     srcs = ["EvalCreateMap.java"],
     deps = [
+        ":eval_const_android",
         ":eval_helpers_android",
         ":localized_evaluation_exception_android",
         ":planned_interpretable_android",
         "//common/ast:ast_android",
         "//common/exceptions:duplicate_key",
         "//common/exceptions:invalid_argument",
-        "//runtime:evaluation_exception",
         "//runtime:interpretable_android",
         "//runtime/src/main/java/dev/cel/runtime:accumulated_unknowns_android",
         "@maven//:com_google_errorprone_error_prone_annotations",

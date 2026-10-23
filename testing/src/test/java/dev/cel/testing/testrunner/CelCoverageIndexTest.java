@@ -178,4 +178,22 @@ public final class CelCoverageIndexTest {
     assertThat(report.unencounteredNodes()).isEmpty();
     assertThat(report.unencounteredBranches()).isEmpty();
   }
+
+  @Test
+  public void getCoverageReport_constantContainers_propagatesCoverageToEvaluatedBranchesOnly()
+      throws Exception {
+    Cel cel = CelFactory.plannerCelBuilder().addVar("x", SimpleType.INT).build();
+    CelAbstractSyntaxTree ast = cel.compile("x > 1 ? {'a': 1}['a'] == 1 : [1, 2][0] == 1").getAst();
+    CelRuntime.Program program = cel.createProgram(ast);
+    CelCoverageIndex coverageIndex = new CelCoverageIndex();
+    coverageIndex.init(ast);
+    CelEvaluationListener listener = coverageIndex.newEvaluationListener();
+
+    program.trace(ImmutableMap.of("x", 2L), listener);
+    CoverageReport report = coverageIndex.generateCoverageReport();
+
+    assertThat(report.coveredNodes()).isEqualTo(11);
+    assertThat(report.nodes()).isEqualTo(18);
+    assertThat(report.unencounteredNodes()).containsExactly("Expression ID 18 ('[1, 2][0] == 1')");
+  }
 }
