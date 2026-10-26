@@ -140,6 +140,15 @@ public class RuntimeEquality {
     if (celOptions.disableCelStandardEquality()) {
       return Objects.equals(x, y);
     }
+    if (x instanceof Optional) {
+      if (!(y instanceof Optional)) {
+        return false;
+      }
+      Optional<?> xOpt = (Optional<?>) x;
+      Optional<?> yOpt = (Optional<?>) y;
+      return xOpt.isPresent() == yOpt.isPresent()
+          && (!xOpt.isPresent() || objectEquals(xOpt.get(), yOpt.get()));
+    }
     if (x == y && !isNan(x)) {
       return true;
     }
@@ -233,6 +242,9 @@ public class RuntimeEquality {
 
     if (celOptions.disableCelStandardEquality()) {
       return Objects.hashCode(object);
+    }
+    if (object instanceof Optional) {
+      return ((Optional<?>) object).map(this::hashCode).orElse(0);
     }
 
     object = runtimeHelpers.adaptValue(object);

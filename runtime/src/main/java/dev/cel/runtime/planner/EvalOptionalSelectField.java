@@ -37,8 +37,8 @@ final class EvalOptionalSelectField extends PlannedInterpretable {
   @Override
   Object evalInternal(GlobalResolver resolver, ExecutionFrame frame) {
     Object operandValue = EvalHelpers.evalStrictly(operand, resolver, frame);
-
-    if (operandValue instanceof Optional) {
+    boolean isOptionalOperand = operandValue instanceof Optional;
+    if (isOptionalOperand) {
       Optional<?> opt = (Optional<?>) operandValue;
       if (!opt.isPresent()) {
         return Optional.empty();
@@ -71,15 +71,13 @@ final class EvalOptionalSelectField extends PlannedInterpretable {
 
     Object resultValue = EvalHelpers.evalStrictly(selectAttribute, resolver, frame);
 
-    if (resultValue instanceof Optional) {
-      return resultValue;
-    }
-
     if (resultValue instanceof AccumulatedUnknowns) {
       return resultValue;
     }
 
-    return Optional.of(resultValue);
+    // When the operand is Optional, selectAttribute traverses OptionalValue, which already wraps
+    // the selected field value in Optional.
+    return isOptionalOperand ? resultValue : Optional.of(resultValue);
   }
 
   static EvalOptionalSelectField create(

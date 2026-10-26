@@ -620,6 +620,34 @@ public class CelOptionalLibraryTest {
   }
 
   @Test
+  @TestParameters("{source: \"{'a': optional.none()}.?a\"}")
+  @TestParameters("{source: \"optional.of({'a': optional.none()}).?a\"}")
+  @TestParameters("{source: \"optional.of({'a': optional.none()}).a\"}")
+  public void optionalFieldSelection_onMapWithEmptyOptionalValue_returnsNestedOptionalEmpty(
+      String source) throws Exception {
+    Cel cel = newCelBuilder().build();
+    CelAbstractSyntaxTree ast = compile(cel, source);
+
+    Optional<Optional<?>> result = (Optional<Optional<?>>) cel.createProgram(ast).eval();
+
+    assertThat(result).hasValue(Optional.empty());
+  }
+
+  @Test
+  @TestParameters("{source: \"{'a': optional.of(1)}.?a\"}")
+  @TestParameters("{source: \"optional.of({'a': optional.of(1)}).?a\"}")
+  @TestParameters("{source: \"optional.of({'a': optional.of(1)}).a\"}")
+  public void optionalFieldSelection_onMapWithPresentOptionalValue_returnsNestedOptionalValue(
+      String source) throws Exception {
+    Cel cel = newCelBuilder().build();
+    CelAbstractSyntaxTree ast = compile(cel, source);
+
+    Optional<Optional<Long>> result = (Optional<Optional<Long>>) cel.createProgram(ast).eval();
+
+    assertThat(result).hasValue(Optional.of(1L));
+  }
+
+  @Test
   public void optionalFieldSelection_onProtoMessage_returnsOptionalEmpty() throws Exception {
     Cel cel =
         newCelBuilder()

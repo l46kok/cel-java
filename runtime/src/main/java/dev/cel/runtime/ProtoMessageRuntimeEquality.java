@@ -45,9 +45,6 @@ public final class ProtoMessageRuntimeEquality extends RuntimeEquality {
     if (celOptions.disableCelStandardEquality()) {
       return Objects.equals(x, y);
     }
-    if (x == y) {
-      return true;
-    }
 
     if (celOptions.enableProtoDifferencerEquality()) {
       x = runtimeHelpers.adaptValue(x);

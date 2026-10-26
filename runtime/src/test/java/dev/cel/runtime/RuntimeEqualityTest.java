@@ -24,6 +24,7 @@ import com.google.testing.junit.testparameterinjector.TestParameterInjector;
 import dev.cel.common.CelOptions;
 import dev.cel.common.values.ProtoMessageLiteValueProvider;
 import dev.cel.expr.conformance.proto2.TestAllTypes;
+import java.util.Optional;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -47,6 +48,8 @@ public final class RuntimeEqualityTest {
         runtimeEquality,
         ImmutableMap.of("a", 1, "b", 2),
         ImmutableMap.of("a", 1L, "b", UnsignedLong.valueOf(2)));
+    assertEqualityAndHashCode(runtimeEquality, Optional.empty(), Optional.empty());
+    assertEqualityAndHashCode(runtimeEquality, Optional.of(1), Optional.of(1.0));
   }
 
   private void assertEqualityAndHashCode(RuntimeEquality runtimeEquality, Object obj1, Object obj2) {
@@ -105,7 +108,9 @@ public final class RuntimeEqualityTest {
     RuntimeEquality runtimeEquality =
         RuntimeEquality.create(RuntimeHelpers.create(), CelOptions.DEFAULT);
     Double nan = Double.NaN;
+    Optional<Double> optNan = Optional.of(nan);
 
     assertThat(runtimeEquality.objectEquals(nan, nan)).isFalse();
+    assertThat(runtimeEquality.objectEquals(optNan, optNan)).isFalse();
   }
 }

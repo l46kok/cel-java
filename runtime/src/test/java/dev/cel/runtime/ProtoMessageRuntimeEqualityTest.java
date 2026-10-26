@@ -52,6 +52,7 @@ import dev.cel.common.internal.ProtoTimeUtils;
 import dev.cel.common.values.CelByteString;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.junit.Assert;
 import org.junit.Test;
@@ -288,6 +289,7 @@ public final class ProtoMessageRuntimeEqualityTest {
 
           // Double tests.
           {1.0, 1.0, Result.alwaysTrue()},
+          {Double.NaN, Double.NaN, Result.alwaysFalse()},
           {Double.valueOf(1.0), 1.0, Result.alwaysTrue()},
           {DoubleValue.of(42.5), 42.5, Result.alwaysTrue()},
           // Floats are unwrapped to double types.
@@ -345,6 +347,13 @@ public final class ProtoMessageRuntimeEqualityTest {
             NullValue.NULL_VALUE,
             Result.alwaysTrue()
           },
+
+          // Optional tests.
+          {Optional.empty(), Optional.empty(), Result.alwaysTrue()},
+          {Optional.of(1), 1, Result.alwaysFalse()},
+          {Optional.of(Double.NaN), Optional.of(Double.NaN), Result.alwaysFalse()},
+          {Optional.of(Int32Value.of(1)), Optional.of(1L), Result.alwaysTrue()},
+          {Optional.of(Optional.empty()), Optional.empty(), Result.alwaysFalse()},
 
           // String tests.
           {"", "", Result.alwaysTrue()},
