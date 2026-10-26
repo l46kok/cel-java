@@ -369,6 +369,22 @@ public class SubexpressionOptimizerTest {
   }
 
   @Test
+  @TestParameters("{source: '[cel.bind(x, x, x + 1), cel.bind(x, x, x + 1)]', expected: '[6, 6]'}")
+  @TestParameters(
+      "{source: '[[1, 2].map(k, cel.bind(k, k, k + x)), [1, 2].map(k, cel.bind(k, k, k + x))]',"
+          + " expected: '[[6, 7], [6, 7]]'}")
+  public void cse_bindInitReferencesOuterVariable_evaluatesCorrectly(String source, String expected)
+      throws Exception {
+    CelAbstractSyntaxTree ast = cel.compile(source).getAst();
+    CelOptimizer celOptimizer = newCseOptimizer(SubexpressionOptimizerOptions.newBuilder().build());
+
+    CelAbstractSyntaxTree optimizedAst = celOptimizer.optimize(ast);
+
+    assertThat(cel.createProgram(optimizedAst).eval(ImmutableMap.of("x", 5L)))
+        .isEqualTo(cel.createProgram(cel.compile(expected).getAst()).eval());
+  }
+
+  @Test
   public void celBlock_astExtensionTagged() throws Exception {
     CelAbstractSyntaxTree ast = cel.compile("size(x) + size(x)").getAst();
     CelOptimizer optimizer =
